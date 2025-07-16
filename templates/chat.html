@@ -30,9 +30,11 @@
 
     <hr>
     <form method="POST" class="note-form">
-        <p>Or send a custom note to your nurse:</p>
-        <textarea name="custom_note" rows="3" placeholder="Type your message here..."></textarea>
-        <button type="submit" name="action" value="send_note">Send Note</button>
+        <!-- Find the old form section and replace it with this -->
+    <form method="POST" action="{{ url_for('chatbot') }}" class="note-form">
+    <textarea name="custom_note" placeholder="{{ button_data.custom_note_placeholder }}"></textarea>
+    <button type="submit" name="action" value="send_note">{{ button_data.send_note_button }}</button>
+</form>
     </form>
 
 </main>
