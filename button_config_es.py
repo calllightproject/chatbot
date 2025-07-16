@@ -1,6 +1,8 @@
 # button_config_es.py
 button_data = {
     "greeting": "¡Hola! ¿Cómo puedo ayudarle?",
+    "custom_note_placeholder": "Escribe tu nota para la enfermera aquí...",
+    "send_note_button": "Enviar Nota",
     "back_text": "⬅ Regresar",
     "cna_notification": "✅ Se ha notificado al asistente de enfermería.",
     "nurse_notification": "✅ Se ha notificado a la enfermera.",
