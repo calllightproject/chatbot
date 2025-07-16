@@ -2,7 +2,7 @@
 
 INTENT_KEYWORDS = {
     "nurse": ["dolor", "náusea", "medicamento", "enferma", "picazón", "sangrado", "medicina"],
-    "cna": ["agua", "hielo", "baño", "ducha", "ayuda", "limpiar", "almohada"],
+    "cna": ["agua", "hielo", "baño", "ducha", "ayuda", "limpiar", "almohada", "al asistente de enfermería"],
     "education": ["pregunta", "qué es", "cómo", "puedo", "cuando"],
     "urgent": ["emergencia", "dolor de pecho", "no puedo respirar", "ayúdenme ahora"],
 }
