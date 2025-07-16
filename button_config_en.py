@@ -1,6 +1,8 @@
 # button_config_en.py
 button_data = {
     "greeting": "Hello! How can I help you?",
+    "custom_note_placeholder": "Type your note to the nurse here...",
+    "send_note_button": "Send Note",
     "cna_notification": "✅ CNA has been notified.",
     "nurse_notification": "✅ Nurse has been notified.",
     "main_buttons": [
