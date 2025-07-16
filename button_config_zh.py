@@ -3,6 +3,7 @@
 
 button_data = {
     "greeting": "您好！我能为您做些什么？",
+    "back_text": "⬅ 返回",
     "cna_notification": "✅ 已通知CNA（护理助理）。",
     "nurse_notification": "✅ 已通知护士。",
     "main_buttons": [
