@@ -10,16 +10,17 @@ from flask_socketio import SocketIO
 
 # --- App Configuration ---
 app = Flask(__name__, template_folder='templates')
-# THIS IS THE FIX: We are temporarily setting the secret key directly in the code
-# to bypass the broken PyCharm setting.
 app.secret_key = "a-very-long-and-random-secret-key-that-does-not-need-to-be-changed"
 socketio = SocketIO(app)
 
 
 # --- Helper Functions ---
 def log_request(filename, user_input, category, reply):
+    # --- FIX FOR RENDER DEPLOYMENT ---
+    # Write log files to the /tmp directory, which is writeable on Render
+    log_path = os.path.join('/tmp', filename)
     room = session.get("room_number", "Unknown Room")
-    with open(filename, "a", newline="", encoding="utf-8") as f:
+    with open(log_path, "a", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         if f.tell() == 0:
             writer.writerow(["Timestamp", "Room", "User Input", "Category", "Reply"])
@@ -27,11 +28,10 @@ def log_request(filename, user_input, category, reply):
 
 
 def send_email_alert(to, subject, body):
-    # This will now use the environment variables from your Run Configuration
     sender_email = os.getenv("EMAIL_USER")
     sender_password = os.getenv("EMAIL_PASSWORD")
     if not sender_email or not sender_password:
-        print("ERROR: Email credentials not set in the Run Configuration.")
+        print("ERROR: Email credentials not set in Environment Variables.")
         return
     msg = EmailMessage()
     msg["Subject"] = f"Room {session.get('room_number', 'N/A')} - {subject}"
