@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Postpartum Chatbot</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<main class="chat-box">
+    <div class="header">
+        <h2>Postpartum Chatbot</h2>
+        <a href="{{ url_for('reset_language') }}" class="language-link">Change Language</a>
+    </div>
+
+    <div class="bot-reply-container" aria-live="polite">
+        {% if reply %}
+            <div class="bot-reply">
+                <p>{{ reply }}</p>
+            </div>
+        {% endif %}
+    </div>
+
+    {% if options %}
+    <form method="POST" class="options">
+        {% for option in options %}
+            <button type="submit" name="user_input" value="{{ option }}">{{ option }}</button>
+        {% endfor %}
+    </form>
+    {% endif %}
+
+    <hr>
+    <form method="POST" class="note-form">
+        <p>Or send a custom note to your nurse:</p>
+        <textarea name="custom_note" rows="3" placeholder="Type your message here..."></textarea>
+        <button type="submit" name="action" value="send_note">Send Note</button>
+    </form>
+
+</main>
+</body>
+</html>
