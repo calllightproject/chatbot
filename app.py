@@ -190,7 +190,7 @@ def bereavement_chatbot():
             reply = notify_and_log("nurse", "Nurse Request", user_input, notification_text)
         options = button_data["main_buttons"]
 
-    return render_template("chat.html", reply=reply, options=options)
+    return render_template("chat.html", reply=reply, options=options, button_data=button_data)
 
 
 @app.route("/dashboard")
