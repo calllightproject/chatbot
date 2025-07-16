@@ -1,0 +1,145 @@
+/* Color Palette based on Banner Health Design System
+    - Core Blue: #00205b
+    - Accent Blue: #007eb4
+    - Neutral Gray Text: #303235
+    - Light Gray Background: #f5f5f5
+    - White: #ffffff
+*/
+
+/* General body and layout styles */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    padding: 20px;
+    background-color: #f5f5f5; /* Light Gray Background */
+    color: #303235; /* Neutral Gray Text */
+}
+
+/* Chatbot and Dashboard Containers */
+.chat-box, .dashboard-container {
+    max-width: 900px;
+    margin: 20px auto;
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+.chat-box {
+    max-width: 500px;
+}
+
+/* Header with title and language link */
+.header {
+    position: relative;
+    text-align: center;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #e1e1e2;
+    margin-bottom: 20px;
+}
+.header h2 {
+    color: #00205b;
+    margin: 0;
+}
+
+.language-link {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    text-decoration: none;
+    color: #007eb4;
+    font-size: 14px;
+}
+
+/* Bot reply bubble */
+.bot-reply {
+    background-color: #ebf0fa;
+    padding: 15px;
+    margin-top: 10px;
+    border-radius: 8px;
+    line-height: 1.5;
+}
+
+/* Option buttons */
+.options button {
+    display: block;
+    width: 100%;
+    margin: 8px 0;
+    padding: 12px;
+    border: 1px solid #00205b;
+    border-radius: 5px;
+    background-color: #00205b;
+    color: #ffffff;
+    cursor: pointer;
+    font-size: 16px;
+    text-align: left;
+    transition: background-color 0.3s;
+}
+.options button:hover, .options button:focus {
+    background-color: #093582;
+}
+
+/* Dashboard Specific Styles */
+#requests-list {
+    list-style-type: none;
+    padding: 0;
+}
+.request-item {
+    display: flex; /* This is the key line that arranges items horizontally */
+    align-items: center;
+    border: 1px solid #ddd;
+    padding: 15px;
+    margin-bottom: 10px;
+    border-radius: 5px;
+    background-color: #fff;
+}
+.request-item.cna { border-left: 5px solid #007eb4; } /* Accent Blue for CNA */
+.request-item.nurse { border-left: 5px solid #d43f27; } /* Accent Red for Nurse */
+
+.request-item p {
+    margin: 0;
+    font-size: 1.1em;
+    flex-grow: 1; /* Allows the text to take up available space */
+}
+.request-item span {
+    font-size: 0.9em;
+    color: #555;
+    margin-left: 15px;
+}
+.request-item button {
+    margin-left: 20px;
+    padding: 8px 12px;
+    border: none;
+    color: white;
+    border-radius: 5px;
+    cursor: pointer;
+    background-color: #6c757d;
+}
+
+/* Language selection page styling */
+.language-form button, .language-form button:focus {
+    display: block;
+    width: 100%;
+    max-width: 300px;
+    margin: 15px auto;
+    padding: 15px;
+    font-size: 18px;
+    border: 1px solid #00205b;
+    border-radius: 5px;
+    background-color: #00205b;
+    color: #ffffff;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+.language-form button:hover {
+    background-color: #093582;
+}
+
+.container {
+    text-align: center;
+}
+
+/* Style for keyboard focus on buttons */
+.options button:focus,
+.language-form button:focus {
+    outline: 3px solid #007eb4;
+    outline-offset: 2px;
+}
