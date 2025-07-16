@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ title }}</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #ccc; padding: 8px; }
+        th { background-color: #f0f0f0; }
+        button { margin-bottom: 15px; padding: 8px 12px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h2>{{ title }}</h2>
+
+    <form method="POST" action="{{ url_for('clear_log', log_type=log_type) }}">
+        <button type="submit">🗑️ Clear Log</button>
+    </form>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>User Input</th>
+                <th>Category</th>
+                <th>Reply</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in logs %}
+            <tr>
+                <td>{{ row[0] }}</td>
+                <td>{{ row[1] }}</td>
+                <td>{{ row[2] }}</td>
+                <td>{{ row[3] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>
