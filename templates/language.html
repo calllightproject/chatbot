@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Select Language</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Select Your Language</h1>
+        <form method="POST" class="language-form">
+            <button type="submit" name="language" value="en">English</button>
+            <button type="submit" name="language" value="es">Español</button>
+            <button type="submit" name="language" value="zh">中文 (Mandarin)</button>
+        </form>
+    </div>
+</body>
+</html>
