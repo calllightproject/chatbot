@@ -1,34 +1,34 @@
-# chat_logic_en.py
-from education_library_en import education_data, education_keywords
+# This file should contain your logic for classifying messages and providing educational answers.
+# The 'education_data' is imported from your education library file.
 
-INTENT_KEYWORDS = {
-    "nurse": ["pain", "nausea", "medication", "sick", "itchy", "bleeding", "medicine", "dizzy"],
-    "cna": ["water", "ice", "bathroom", "shower", "help", "clean", "pillow", "walk"],
-    "education": ["question", "what about", "tell me about", "how do", "can i", "when"],
-    "urgent": ["emergency", "chest pain", "can't breathe", "help me now", "bleeding heavily"],
-}
+from education_library_en import education_data
 
-
-def classify_message(message):
-    """ Classifies the user's message into a category based on keywords. """
-    message = message.lower()
-    for category, keywords in INTENT_KEYWORDS.items():
-        if any(keyword in message for keyword in keywords):
-            return category
-    # If no category keywords are found, check for education keywords
-    for keyword in education_keywords:
-        if keyword in message:
-            return "education"
+def classify_message(user_input):
+    """
+    A simplified function to classify user messages based on keywords.
+    A real implementation might use more advanced NLP.
+    """
+    user_input_lower = user_input.lower()
+    if any(keyword in user_input_lower for keyword in ["pain", "bleeding", "dizzy", "help", "fever"]):
+        return "urgent"
+    if any(keyword in user_input_lower for keyword in ["water", "ice", "snack", "food", "pillow", "blanket"]):
+        return "cna"
+    if any(keyword in user_input_lower for keyword in ["medication", "prescription", "doctor", "discharge"]):
+        return "nurse"
+    # Check if the input matches any key in the education library
+    if any(key in user_input_lower for key in education_data.keys()):
+        return "education"
     return "unknown"
 
+def get_education_response(user_input):
+    """
+    Searches the education library for a response matching the user's input.
+    This is the function that was missing.
+    """
+    user_input_lower = user_input.lower()
+    for key, value in education_data.items():
+        if key in user_input_lower:
+            return value
+    return "I'm sorry, I don't have information on that topic. A nurse will be notified."
 
-def get_education_response(message):
-    """ Finds a relevant educational response from the library. """
-    message = message.lower()
-    # Search for a keyword from the user's message in our education_keywords dictionary
-    for keyword, topic_key in education_keywords.items():
-        if keyword in message:
-            return education_data[topic_key]
-
-    # A default response if no specific topic is found
     return "That's a great question. I'll have your nurse come by to talk with you about it."
