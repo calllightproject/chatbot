@@ -26,7 +26,7 @@ button_data = {
 
     "Azúcar en la sangre": {
         "question": "¿Es para la mamá o para el/la bebé?",
-        "options": ["Mamá", "Bebé (azúcar en la sangre)"]
+        "options": ["Mamá (azúcar en la sangre)", "Bebé (azúcar en la sangre)"]
     },
     "Mamá": {"action": "Notify CNA"},
     "Bebé (azúcar en la sangre)": {"action": "Notify Nurse"},
