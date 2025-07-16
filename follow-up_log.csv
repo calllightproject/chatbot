@@ -1,0 +1,46 @@
+2025-06-30 16:09:54.462461,can i get a pad,follow-up,Would you like more peri pads or assistance changing them?
+2025-06-30 16:10:13.584075,can i get my binder,follow-up,Do you need help putting on your abdominal binder?
+2025-06-30 16:10:19.648685,i need help to the bathroom,follow-up,Do you need assistance walking to the bathroom or help wiping?
+2025-06-30 16:15:26.910038,ice pack,follow-up,"Do you need an ice pack for your bottom, C section incision or for your breasts?"
+2025-06-30 16:41:10.155005,i need pads,follow-up,Do you want the big blue pads or the smaller white pads?
+2025-06-30 18:46:48.582381,i need formula,follow-up,"What formula are you using? Similac Total Comfort(purple label), Similac 360(blue label), Similac Neosure(yellow label), Enfamil Newborn(yellow label) or Enfamil Gentlease(purple label)?"
+2025-06-30 18:51:04.449634,i need pads,follow-up,Do you want the big blue pads or the smaller white pads?
+2025-06-30 18:51:18.330018,ice pack,follow-up,"Do you need an ice pack for your bottom, C section incision or for your breasts?"
+2025-06-30 18:51:22.538039,formula,follow-up,"What formula are you using? Similac Total Comfort(purple label), Similac 360(blue label), Similac Neosure(yellow label), Enfamil Newborn(yellow label) or Enfamil Gentlease(purple label)?"
+2025-06-30 18:53:19.371167,similac,follow-up,"What formula are you using? Similac Total Comfort(purple label), Similac 360(blue label), Similac Neosure(yellow label), Enfamil Newborn(yellow label) or Enfamil Gentlease(purple label)?"
+2025-06-30 18:55:24.351016,i need formula,follow-up,Thanks! We'll let your nurse know you're using i need formula.
+2025-06-30 18:56:17.712436,i need formula,follow-up,"What formula are you using? Similac Total Comfort(purple label), Similac 360(blue label), Similac Neosure(yellow label), Enfamil Newborn(yellow label) or Enfamil Gentlease(purple label)?"
+2025-06-30 18:56:23.696855,i need similac,follow-up,Can you tell me which formula you're using?
+2025-06-30 18:56:31.128835,i need similac 360,follow-up,"What formula are you using? Similac Total Comfort(purple label), Similac 360(blue label), Similac Neosure(yellow label), Enfamil Newborn(yellow label) or Enfamil Gentlease(purple label)?"
+2025-06-30 18:57:26.801858,similac 360,follow-up,Thanks! We'll let your nurse know you're using Similac 360 (blue label).
+2025-07-03 12:59:48.991432,i need pads,follow-up,Do you want the big blue pads or the smaller white pads?
+2025-07-03 12:59:50.046252,i need pads,follow-up,Thanks! We'll bring you the i need pads pads. CNA has been notified.
+2025-07-03 12:59:50.630056,i need pads,follow-up,Do you want the big blue pads or the smaller white pads?
+2025-07-03 12:59:51.158534,i need pads,follow-up,Thanks! We'll bring you the i need pads pads. CNA has been notified.
+2025-07-03 12:59:51.830416,i need pads,follow-up,Do you want the big blue pads or the smaller white pads?
+2025-07-03 13:15:38.344775,i need pads,follow-up,Thanks! We'll bring you the i need pads pads. ✅ CNA has been notified.
+2025-07-04 11:54:28.263264,Formula,follow-up,"What formula are you using? Similac Total Comfort (purple), Similac 360 (blue), Similac Neosure (yellow), Enfamil Newborn (yellow), or Enfamil Gentlease (purple)?"
+2025-07-04 11:56:14.034014,I need supplies,follow-up,Thanks! We'll let your nurse know you're using i need supplies.
+2025-07-04 11:56:17.971316,Formula,follow-up,"{'question': 'What formula are you using?', 'options': ['Similac Total Comfort (purple)', 'Similac 360 (blue)', 'Similac Neosure (yellow)', 'Enfamil Newborn (yellow)', 'Enfamil Gentlease (purple)'], 'type': 'formula_type'}"
+2025-07-04 11:59:29.236327,Formula,follow-up,What formula are you using?
+2025-07-04 11:59:30.868656,Similac Total Comfort (purple),follow-up,Thanks! We'll let your nurse know you're using similac total comfort (purple).
+2025-07-04 12:02:54.384053,Formula,follow-up,What formula are you using?
+2025-07-04 12:02:55.256262,Similac Total Comfort (purple),follow-up,Thanks! We'll let your CNA know you're using similac total comfort (purple). ✅ CNA has been notified.
+2025-07-04 17:03:33.539721,Formula,follow-up,What formula are you using?
+2025-07-04 17:03:34.174375,Similac Total Comfort (purple),follow-up,Thanks! We'll let your CNA know you're using similac total comfort (purple). ✅ CNA has been notified.
+2025-07-07 10:46:28.558402,Formula,follow-up,What formula are you using?
+2025-07-07 10:46:29.430509,Similac Total Comfort (purple),follow-up,Thanks! We'll let your CNA know you're using similac total comfort (purple). ✅ CNA has been notified.
+2025-07-07 11:21:45.460252,Formula,follow-up,What formula are you using?
+2025-07-07 11:21:46.180888,Similac Total Comfort (purple),follow-up,Thanks! We'll let your CNA know you're using similac total comfort (purple). ✅ CNA has been notified.
+2025-07-07 11:22:00.109674,Pads,follow-up,Do you want the big blue pads or the smaller white pads?
+2025-07-07 11:22:01.709204,Big blue pads,follow-up,Thanks! We'll bring you the big blue pads pads. ✅ CNA has been notified.
+2025-07-07 11:22:06.597858,Pads,follow-up,Do you want the big blue pads or the smaller white pads?
+2025-07-07 11:22:07.724988,Small white pads,follow-up,Thanks! We'll bring you the small white pads pads. ✅ CNA has been notified.
+2025-07-07 11:22:17.821235,Ice pack,follow-up,"Do you need an ice pack for your bottom, C section incision or for your breasts?"
+2025-07-07 11:22:22.389627,Bottom,follow-up,Got it — an ice pack for your bottom will be brought to you. ✅ CNA has been notified.
+2025-07-07 11:22:25.621783,Ice pack,follow-up,"Do you need an ice pack for your bottom, C section incision or for your breasts?"
+2025-07-07 11:22:26.461824,C section,follow-up,Got it — an ice pack for your c section will be brought to you. ✅ CNA has been notified.
+2025-07-07 11:22:31.918473,Ice pack,follow-up,"Do you need an ice pack for your bottom, C section incision or for your breasts?"
+2025-07-07 11:22:32.653763,Breasts,follow-up,Got it — an ice pack for your breasts will be brought to you. ✅ CNA has been notified.
+2025-07-07 11:22:40.766111,Ice pack,follow-up,"Do you need an ice pack for your bottom, C section incision or for your breasts?"
+2025-07-07 11:22:41.703278,Breasts,follow-up,Got it — an ice pack for your breasts will be brought to you. ✅ CNA has been notified.
