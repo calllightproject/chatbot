@@ -9,7 +9,7 @@ from flask import Flask, render_template, request, session, redirect, url_for
 from flask_socketio import SocketIO
 
 # --- App Configuration ---
-app = Flask(__name__)
+app = Flask(__name__, template_folder='templates')
 # THIS IS THE FIX: We are temporarily setting the secret key directly in the code
 # to bypass the broken PyCharm setting.
 app.secret_key = "a-very-long-and-random-secret-key-that-does-not-need-to-be-changed"
