@@ -1,7 +1,7 @@
 # button_config_es.py
 button_data = {
     "greeting": "¡Hola! ¿Cómo puedo ayudarle?",
-    "cna_notification": "✅ Se ha notificado al CNA.",
+    "cna_notification": "✅ Se ha notificado al asistente de enfermería.",
     "nurse_notification": "✅ Se ha notificado a la enfermera.",
     "main_buttons": [
         "Tengo una emergencia",
@@ -24,14 +24,14 @@ button_data = {
     },
 
     "Azúcar en la sangre": {
-        "question": "¿Es para la mamá o para el bebé?",
+        "question": "¿Es para la mamá o para el/la bebé?",
         "options": ["Mamá", "Bebé (azúcar en la sangre)"]
     },
     "Mamá": {"action": "Notify CNA"},
     "Bebé (azúcar en la sangre)": {"action": "Notify Nurse"},
 
     "Necesito suministros": {
-        "question": "¿Para el bebé o para la mamá?",
+        "question": "¿Para el/la bebé o para la mamá?",
         "options": ["Artículos para bebé", "Artículos para mamá"]
     },
 
@@ -104,7 +104,7 @@ button_data = {
             "No consigo sacar leche cuando uso el sacaleches. ¿Es normal?"
         ]
     },
-    "Preguntas sobre el bebé": {
+    "Preguntas sobre el/la bebé": {
         "note": "Si su pregunta no está en la lista, su enfermera vendrá tan pronto como sea posible.",
         "options": [
             "¿Cómo de seguido debo alimentar a mi bebé?",
