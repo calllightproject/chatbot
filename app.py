@@ -9,6 +9,7 @@ from flask import Flask, render_template, request, session, redirect, url_for
 from flask_socketio import SocketIO
 
 # --- App Configuration ---
+# THIS IS THE FIX: Explicitly setting the template_folder
 app = Flask(__name__, template_folder='templates')
 app.secret_key = "a-very-long-and-random-secret-key-that-does-not-need-to-be-changed"
 socketio = SocketIO(app)
@@ -16,7 +17,6 @@ socketio = SocketIO(app)
 
 # --- Helper Functions ---
 def log_request(filename, user_input, category, reply):
-    # --- FIX FOR RENDER DEPLOYMENT ---
     # Write log files to the /tmp directory, which is writeable on Render
     log_path = os.path.join('/tmp', filename)
     room = session.get("room_number", "Unknown Room")
