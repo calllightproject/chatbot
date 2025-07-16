@@ -48,7 +48,8 @@ def send_email_alert(to, subject, body):
 
 
 def notify_and_log(role, subject, user_input, reply_message):
-    recipient = f"{role}@example.com"
+    # --- THIS IS THE FIX: All alerts now go to your specified email ---
+    recipient = "call.light.project@gmail.com"
     send_email_alert(recipient, subject, user_input)
     log_request(f"{role}_log.csv", user_input, role, reply_message)
     socketio.emit('new_request', {
