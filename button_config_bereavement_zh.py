@@ -1,12 +1,11 @@
-# button_config_bereavement_zh.py
 # -*- coding: utf-8 -*-
 
+# button_config_bereavement_zh.py
 button_data = {
     "greeting": "您好。我们在此支持您。",
-    "custom_note_placeholder": "在此处输入给护士的留言...",
-    "send_note_button": "发送留言",
-    "back_text": "⬅ 返回",
+    "cna_notification": "✅ 已通知护理助理。", # 更正：将“护士”更改为“护理助理”以匹配CNA
     "nurse_notification": "✅ 已通知护士。",
+    "back_text": "⬅ 返回",
     "main_buttons": [
         "我有紧急情况",
         "我需要用品",
@@ -53,7 +52,7 @@ button_data = {
     "恶心/呕吐": {"action": "Notify Nurse"},
     "瘙痒": {"action": "Notify Nurse"},
     "胀气痛": {"action": "Notify Nurse"},
-    "便秘": {"action": "Notify Nurse"},
+    "便秘": {"action": "Notify Nurse"}, # <-- 此处缺少了一个逗号
 
     "我有问题": {
         "note": "如果您的问题不在列表中，您的护士会尽快过来。",
