@@ -52,7 +52,7 @@ button_data = {
     "Náuseas/Vómitos": {"action": "Notify Nurse"},
     "Picazón": {"action": "Notify Nurse"},
     "Dolor por gases": {"action": "Notify Nurse"},
-    "Estreñimiento": {"action": "Notify Nurse"},
+    "Estreñimiento": {"action": "Notify Nurse"}, # <-- The comma was missing here
 
     "Tengo preguntas": {
         "note": "Si su pregunta no está en la lista, su enfermera vendrá tan pronto como sea posible.",
