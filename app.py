@@ -136,8 +136,13 @@ def chatbot():
         return redirect(url_for("language_selector"))
 
     lang = session.get("language", "en")
-    button_config = importlib.import_module(f"button_config_{lang}")
-    button_data = button_config.button_data
+    try:
+        button_config = importlib.import_module(f"button_config_{lang}")
+        button_data = button_config.button_data
+    except (ImportError, AttributeError):
+        # Fallback if a language config file is missing or broken
+        return "Error: Language configuration file is missing or invalid. Please contact support."
+
 
     if request.method == "GET":
         return render_template("chat.html", reply=button_data["greeting"], options=button_data["main_buttons"], button_data=button_data)
@@ -174,7 +179,7 @@ def chatbot():
             reply = notify_and_log(role, subject, user_input, notification_text)
             options = button_data["main_buttons"] # After action, return to main menu
     else:
-        # Fallback for unexpected inputs (should not happen with button interface)
+        # Fallback for unexpected inputs (e.g., if user tries to type something)
         reply = "I'm sorry, I didn't understand that. Please use the buttons provided."
         options = button_data["main_buttons"]
 
@@ -188,8 +193,11 @@ def bereavement_chatbot():
         return redirect(url_for("language_selector"))
 
     lang = session.get("language", "en")
-    button_config = importlib.import_module(f"button_config_bereavement_{lang}")
-    button_data = button_config.button_data
+    try:
+        button_config = importlib.import_module(f"button_config_bereavement_{lang}")
+        button_data = button_config.button_data
+    except (ImportError, AttributeError):
+        return "Error: Bereavement language configuration file is missing or invalid."
 
     if request.method == "GET":
         return render_template("chat.html", reply=button_data["greeting"], options=button_data["main_buttons"], button_data=button_data)
@@ -200,10 +208,12 @@ def bereavement_chatbot():
 
     button_info = button_data.get(user_input, {})
     reply = button_info.get("note") or button_info.get("question", "")
-    options = button_info.get("options", button_data["main_buttons"])
+    options = button_info.get("options", [])
     
-    if "question" in button_info or "options" in button_info:
-        options += [button_data.get("back_text", "⬅ Back")]
+    if button_info.get("options"): # Add back button only if there are sub-options
+        options.append(button_data.get("back_text", "⬅ Back"))
+    else:
+        options = button_data["main_buttons"]
 
     if "action" in button_info:
         role = "cna" if button_info["action"] == "Notify CNA" else "nurse"
@@ -232,7 +242,6 @@ def analytics():
     try:
         with engine.connect() as connection:
             # --- Query 1: Get counts for each request category ---
-            # CORRECTED: Changed 'request_type' to 'category' to match the table schema.
             top_requests_result = connection.execute(text(
                 "SELECT category, COUNT(id) FROM requests GROUP BY category ORDER BY COUNT(id) DESC;"
             ))
@@ -250,7 +259,7 @@ def analytics():
             """))
             requests_by_hour_data = requests_by_hour_result.fetchall()
 
-            # Process data to ensure all 24 hours are represented, even if they have 0 requests
+            # Process data to ensure all 24 hours are represented
             hourly_counts = defaultdict(int)
             for hour, count in requests_by_hour_data:
                 hourly_counts[int(hour)] = count
@@ -279,11 +288,9 @@ def handle_defer_request(data):
     socketio.emit('request_deferred', data)
 
 # --- App Startup ---
-# Use 'with app.app_context()' to ensure the application context is available for setup.
 with app.app_context():
     setup_database()
 
 if __name__ == "__main__":
-    # use_reloader=False is important for production environments with Gunicorn/Uvicorn
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
 
