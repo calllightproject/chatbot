@@ -7,23 +7,57 @@ import importlib
 
 from flask import Flask, render_template, request, session, redirect, url_for
 from flask_socketio import SocketIO
+from sqlalchemy import create_engine, text
 
 # --- App Configuration ---
 app = Flask(__name__, template_folder='templates')
 app.secret_key = "a-very-long-and-random-secret-key-that-does-not-need-to-be-changed"
 socketio = SocketIO(app)
 
+# --- Database Configuration ---
+# Get the database connection URL from the environment variables set on Render
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    # This provides a fallback for local testing if the environment variable isn't set
+    print("WARNING: DATABASE_URL not found. Using a local SQLite database for testing.")
+    DATABASE_URL = "sqlite:///local_test.db"
+
+engine = create_engine(DATABASE_URL)
+
+# --- Create the database table if it doesn't exist ---
+def setup_database():
+    with engine.connect() as connection:
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS requests (
+                id SERIAL PRIMARY KEY,
+                timestamp TIMESTAMP WITHOUT TIME ZONE,
+                room VARCHAR(255),
+                user_input TEXT,
+                category VARCHAR(255),
+                reply TEXT
+            );
+        """))
+        connection.commit()
 
 # --- Helper Functions ---
 def log_request(filename, user_input, category, reply):
-    # Write log files to the /tmp directory, which is writeable on Render
-    log_path = os.path.join('/tmp', filename)
+    # This function is now rewritten to use the database
     room = session.get("room_number", "Unknown Room")
-    with open(log_path, "a", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        if f.tell() == 0:
-            writer.writerow(["Timestamp", "Room", "User Input", "Category", "Reply"])
-        writer.writerow([datetime.now(), room, user_input, category, reply])
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("""
+                INSERT INTO requests (timestamp, room, user_input, category, reply)
+                VALUES (:timestamp, :room, :user_input, :category, :reply);
+            """), {
+                "timestamp": datetime.now(),
+                "room": room,
+                "user_input": user_input,
+                "category": category,
+                "reply": reply
+            })
+            connection.commit()
+    except Exception as e:
+        print(f"Error logging to database: {e}")
 
 
 def send_email_alert(to, subject, body):
@@ -48,7 +82,8 @@ def send_email_alert(to, subject, body):
 def notify_and_log(role, subject, user_input, reply_message):
     recipient = "call.light.project@gmail.com"
     send_email_alert(recipient, subject, user_input)
-    log_request(f"{role}_log.csv", user_input, role, reply_message)
+    # The first parameter of log_request is no longer a filename, but we can keep it for category consistency
+    log_request(f"{role}_log", user_input, role, reply_message)
     socketio.emit('new_request', {
         'room': session.get('room_number', 'N/A'),
         'request': user_input,
@@ -91,6 +126,7 @@ def reset_language():
     session.pop("language", None)
     return redirect(url_for("language_selector"))
 
+
 @app.route("/chat", methods=["GET", "POST"])
 def chatbot():
     pathway = session.get("pathway", "standard")
@@ -99,26 +135,20 @@ def chatbot():
 
     lang = session.get("language", "en")
     button_config = importlib.import_module(f"button_config_{lang}")
-    chat_logic = importlib.import_module(f"chat_logic_{lang}")
     button_data = button_config.button_data
     
-    # --- THIS IS THE NEW LOGIC FOR MULTI-SELECT ---
     if request.method == "POST":
-        # Handle custom note form separately
         if request.form.get("action") == "send_note":
             note_text = request.form.get("custom_note")
             reply = notify_and_log("nurse", "Custom Patient Note", note_text,
                                    button_data["nurse_notification"]) if note_text else "Please type a message in the box."
             return render_template("chat.html", reply=reply, options=button_data["main_buttons"], button_data=button_data)
 
-        # Get the list of all checked items
         selected_requests = request.form.getlist("user_requests")
         
         if not selected_requests:
-            # If nothing was selected, just reload the page with a small prompt
             return render_template("chat.html", reply=button_data.get("selection_prompt", "Please select one or more items."), options=button_data["main_buttons"], button_data=button_data)
 
-        # Loop through each selected request and process it
         for user_input in selected_requests:
             if user_input in button_data:
                 button_info = button_data[user_input]
@@ -130,12 +160,12 @@ def chatbot():
                     elif action == "Notify Nurse":
                         notify_and_log("nurse", "Nurse Request", user_input, notification_text)
         
-        # After processing all requests, show a confirmation message
         confirmation_reply = button_data.get("confirmation_message", "Your requests have been sent.")
         return render_template("chat.html", reply=confirmation_reply, options=button_data["main_buttons"], button_data=button_data)
 
-    # This is for the initial GET request to load the page
     return render_template("chat.html", reply=button_data["greeting"], options=button_data["main_buttons"], button_data=button_data)
+
+
 @app.route("/bereavement-chat", methods=["GET", "POST"])
 def bereavement_chatbot():
     pathway = session.get("pathway", "standard")
@@ -146,8 +176,6 @@ def bereavement_chatbot():
     button_config = importlib.import_module(f"button_config_bereavement_{lang}")
     button_data = button_config.button_data
 
-    # --- THIS IS THE FIX ---
-    # We now pass button_data to the template on the initial GET request
     if request.method == "GET":
         return render_template("chat.html", reply=button_data["greeting"], options=button_data["main_buttons"], button_data=button_data)
 
@@ -184,6 +212,9 @@ def dashboard():
 def handle_defer_request(data):
     socketio.emit('request_deferred', data)
 
+# --- Run setup on startup ---
+with app.app_context():
+    setup_database()
 
 # --- Run Application ---
 if __name__ == "__main__":
