@@ -6,37 +6,47 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-<main class="chat-box">
-    <div class="header">
-        <h2>Postpartum Chatbot</h2>
-        <a href="{{ url_for('reset_language') }}" class="language-link">Change Language</a>
-    </div>
+    <main class="chat-box">
+        <div class="header">
+            <h2>Postpartum Chatbot</h2>
+            <a href="{{ url_for('reset_language') }}" class="language-link">Change Language</a>
+        </div>
 
-    <div class="bot-reply-container" aria-live="polite">
-        {% if reply %}
+        <div class="bot-reply-container" aria-live="polite">
+            {% if reply %}
             <div class="bot-reply">
                 <p>{{ reply }}</p>
             </div>
-        {% endif %}
-    </div>
+            {% endif %}
+        </div>
 
-    {% if options %}
-    <form method="POST" class="options">
-        {% for option in options %}
-            <button type="submit" name="user_input" value="{{ option }}">{{ option }}</button>
-        {% endfor %}
-    </form>
-    {% endif %}
+        <!-- This is the main form for submitting requests -->
+        <form method="POST" class="options-form">
+            <div class="options">
+                {% for option in options %}
+                <div class="checkbox-wrapper">
+                    <input type="checkbox" id="option_{{ loop.index }}" name="user_requests" value="{{ option }}">
+                    <label for="option_{{ loop.index }}">{{ option }}</label>
+                </div>
+                {% endfor %}
+            </div>
 
-    <hr>
-    <form method="POST" class="note-form">
-        <!-- Find the old form section and replace it with this -->
-    <form method="POST" action="{{ url_for('chatbot') }}" class="note-form">
-    <textarea name="custom_note" placeholder="{{ button_data.custom_note_placeholder }}"></textarea>
-    <button type="submit" name="action" value="send_note">{{ button_data.send_note_button }}</button>
-</form>
-    </form>
+            <!-- Only show the submit button if there are options -->
+            {% if options %}
+            <div class="submit-container">
+                <button type="submit" class="submit-btn">{{ button_data.get("submit_button", "Submit") }}</button>
+            </div>
+            {% endif %}
+        </form>
 
-</main>
+        <hr>
+
+        <!-- This is the separate form for sending a custom note -->
+        <form method="POST" action="{{ url_for('chatbot') }}" class="note-form">
+            <textarea name="custom_note" placeholder="{{ button_data.custom_note_placeholder }}"></textarea>
+            <button type="submit" name="action" value="send_note">{{ button_data.send_note_button }}</button>
+        </form>
+
+    </main>
 </body>
 </html>
