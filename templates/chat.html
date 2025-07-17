@@ -20,26 +20,15 @@
             {% endif %}
         </div>
 
-        <!-- This is the main form for submitting requests -->
-        <form method="POST" class="options-form">
-            <div class="options">
-                {% for option in options %}
-                <div class="checkbox-wrapper">
-                    <input type="checkbox" id="option_{{ loop.index }}" name="user_requests" value="{{ option }}">
-                    <label for="option_{{ loop.index }}">{{ option }}</label>
-                </div>
-                {% endfor %}
-            </div>
-
-            <!-- Only show the submit button if there are options -->
-            {% if options %}
-            <div class="submit-container">
-                <button type="submit" class="submit-btn">{{ button_data.get("submit_button", "Submit") }}</button>
-            </div>
-            {% endif %}
-        </form>
-
-        <hr>
+        <!-- This is the original, simple form for single-click buttons -->
+<form method="POST" class="options-form">
+    <div class="options">
+        {% for option in options %}
+            <button type="submit" name="user_input" value="{{ option }}">{{ option }}</button>
+        {% endfor %}
+    </div>
+</form>
+      <hr>
 
         <!-- This is the separate form for sending a custom note -->
         <form method="POST" action="{{ url_for('chatbot') }}" class="note-form">
