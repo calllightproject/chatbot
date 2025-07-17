@@ -12,9 +12,8 @@ from sqlalchemy import create_engine, text
 
 # --- App Configuration ---
 app = Flask(__name__, template_folder='templates')
-# IMPORTANT: For production, generate a truly random secret key.
-# You can use: import secrets; secrets.token_hex(16)
-app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-fallback-secret-key-for-local-dev")
+# SECURITY BEST PRACTICE: Load secret key from environment variables.
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-strong-fallback-secret-key-for-local-development")
 socketio = SocketIO(app)
 
 # --- Database Configuration ---
@@ -46,9 +45,9 @@ def setup_database():
     except Exception as e:
         print(f"CRITICAL ERROR during database setup: {e}")
 
-# --- Helper Functions ---
-def log_request(category, user_input, reply):
-    """Logs a request to the PostgreSQL database."""
+# --- Core Helper Functions ---
+def log_request_to_db(category, user_input, reply):
+    """Logs a specific request to the PostgreSQL database."""
     room = session.get("room_number", "Unknown Room")
     try:
         with engine.connect() as connection:
@@ -73,7 +72,7 @@ def send_email_alert(subject, body):
     recipient_email = os.getenv("RECIPIENT_EMAIL", "call.light.project@gmail.com")
 
     if not sender_email or not sender_password:
-        print("WARNING: Email credentials (EMAIL_USER, EMAIL_PASSWORD) not set. Cannot send email.")
+        print("WARNING: Email credentials not set. Cannot send email.")
         return
 
     msg = EmailMessage()
@@ -89,10 +88,10 @@ def send_email_alert(subject, body):
     except Exception as e:
         print(f"ERROR: Email failed to send: {e}")
 
-def notify_and_log(role, subject, user_input, reply_message):
-    """A central function to handle logging, emailing, and socket emissions for a request."""
+def process_request(role, subject, user_input, reply_message):
+    """Central function to handle logging, emailing, and socket emissions for a request."""
     send_email_alert(subject, user_input)
-    log_request(role, user_input, reply_message)
+    log_request_to_db(role, user_input, reply_message)
     socketio.emit('new_request', {
         'room': session.get('room_number', 'N/A'),
         'request': user_input,
@@ -100,7 +99,7 @@ def notify_and_log(role, subject, user_input, reply_message):
     })
     return reply_message
 
-# --- Main Application Routes ---
+# --- Pathway and Language Setup Routes ---
 @app.route("/room/<room_id>")
 def set_room(room_id):
     """Sets the room number and standard pathway in the session."""
@@ -119,107 +118,64 @@ def set_bereavement_room(room_id):
 
 @app.route("/", methods=["GET", "POST"])
 def language_selector():
-    """Displays the language selection page and redirects to the correct chatbot."""
+    """Displays the language selection page and redirects to the main chatbot."""
     if request.method == "POST":
         session["language"] = request.form.get("language")
-        pathway = session.get("pathway", "standard")
-        if pathway == "bereavement":
-            return redirect(url_for("bereavement_chatbot"))
-        else:
-            return redirect(url_for("chatbot"))
+        return redirect(url_for("handle_chat"))
     return render_template("language.html")
 
+# --- REFACTORED: Unified Chatbot Route ---
 @app.route("/chat", methods=["GET", "POST"])
-def chatbot():
-    """Handles the main chatbot logic for standard patient requests."""
-    if session.get("pathway") != "standard":
-        return redirect(url_for("language_selector"))
-
+def handle_chat():
+    """
+    Handles all chatbot logic for both standard and bereavement pathways.
+    This single function replaces the previous two separate chatbot routes.
+    """
+    pathway = session.get("pathway", "standard")
     lang = session.get("language", "en")
+    
+    config_module_name = f"button_config_bereavement_{lang}" if pathway == "bereavement" else f"button_config_{lang}"
+    
     try:
-        button_config = importlib.import_module(f"button_config_{lang}")
+        button_config = importlib.import_module(config_module_name)
         button_data = button_config.button_data
-    except (ImportError, AttributeError):
-        # Fallback if a language config file is missing or broken
-        return "Error: Language configuration file is missing or invalid. Please contact support."
+    except (ImportError, AttributeError) as e:
+        print(f"ERROR: Could not load configuration module '{config_module_name}'. Error: {e}")
+        return f"Error: Configuration file '{config_module_name}.py' is missing or invalid. Please contact support."
 
-
+    # --- Handle GET request (initial page load) ---
     if request.method == "GET":
         return render_template("chat.html", reply=button_data["greeting"], options=button_data["main_buttons"], button_data=button_data)
 
-    # Handle all POST requests (button clicks, form submissions)
+    # --- Handle POST request (user interaction) ---
     user_input = request.form.get("user_input", "").strip()
     
-    # Handle custom note submission
     if request.form.get("action") == "send_note":
         note_text = request.form.get("custom_note")
-        reply = notify_and_log("nurse", "Custom Patient Note", note_text, button_data["nurse_notification"]) if note_text else "Please type a message in the box."
+        reply = process_request("nurse", "Custom Patient Note", note_text, button_data["nurse_notification"]) if note_text else "Please type a message in the box."
         return render_template("chat.html", reply=reply, options=button_data["main_buttons"], button_data=button_data)
 
-    # Handle back button
     if user_input == button_data.get("back_text", "⬅ Back"):
-        return redirect(url_for('chatbot'))
+        return redirect(url_for('handle_chat'))
 
-    # Process button clicks from config file
     if user_input in button_data:
         button_info = button_data[user_input]
         reply = button_info.get("question") or button_info.get("note", "")
         options = button_info.get("options", [])
         
-        if options: # If there are sub-options, add a back button
-             options.append(button_data.get("back_text", "⬅ Back"))
-        else: # Otherwise, it's a main action, so show main buttons
+        if options:
+            options.append(button_data.get("back_text", "⬅ Back"))
+        else:
             options = button_data["main_buttons"]
 
         if "action" in button_info:
             action = button_info["action"]
             role = "cna" if action == "Notify CNA" else "nurse"
             subject = f"{role.upper()} Request"
-            notification_text = reply or button_data[f"{role}_notification"]
-            reply = notify_and_log(role, subject, user_input, notification_text)
-            options = button_data["main_buttons"] # After action, return to main menu
+            reply = process_request(role, subject, user_input, button_data[f"{role}_notification"])
+            options = button_data["main_buttons"]
     else:
-        # Fallback for unexpected inputs (e.g., if user tries to type something)
         reply = "I'm sorry, I didn't understand that. Please use the buttons provided."
-        options = button_data["main_buttons"]
-
-    return render_template("chat.html", reply=reply, options=options, button_data=button_data)
-
-
-@app.route("/bereavement-chat", methods=["GET", "POST"])
-def bereavement_chatbot():
-    """Handles the separate chatbot logic for bereavement support."""
-    if session.get("pathway") != "bereavement":
-        return redirect(url_for("language_selector"))
-
-    lang = session.get("language", "en")
-    try:
-        button_config = importlib.import_module(f"button_config_bereavement_{lang}")
-        button_data = button_config.button_data
-    except (ImportError, AttributeError):
-        return "Error: Bereavement language configuration file is missing or invalid."
-
-    if request.method == "GET":
-        return render_template("chat.html", reply=button_data["greeting"], options=button_data["main_buttons"], button_data=button_data)
-
-    user_input = request.form.get("user_input", "").strip()
-    if user_input == button_data.get("back_text", "⬅ Back"):
-        return redirect(url_for('bereavement_chatbot'))
-
-    button_info = button_data.get(user_input, {})
-    reply = button_info.get("note") or button_info.get("question", "")
-    options = button_info.get("options", [])
-    
-    if button_info.get("options"): # Add back button only if there are sub-options
-        options.append(button_data.get("back_text", "⬅ Back"))
-    else:
-        options = button_data["main_buttons"]
-
-    if "action" in button_info:
-        role = "cna" if button_info["action"] == "Notify CNA" else "nurse"
-        subject = f"{role.upper()} Request"
-        notification_text = reply or button_data[f"{role}_notification"]
-        reply = notify_and_log(role, subject, user_input, notification_text)
         options = button_data["main_buttons"]
 
     return render_template("chat.html", reply=reply, options=options, button_data=button_data)
@@ -241,16 +197,13 @@ def analytics():
     """The analytics dashboard to show trends and key metrics."""
     try:
         with engine.connect() as connection:
-            # --- Query 1: Get counts for each request category ---
             top_requests_result = connection.execute(text(
                 "SELECT category, COUNT(id) FROM requests GROUP BY category ORDER BY COUNT(id) DESC;"
             ))
             top_requests_data = top_requests_result.fetchall()
-            
             top_requests_labels = [row[0] for row in top_requests_data]
             top_requests_values = [row[1] for row in top_requests_data]
 
-            # --- Query 2: Get request counts by hour of the day ---
             requests_by_hour_result = connection.execute(text("""
                 SELECT EXTRACT(HOUR FROM timestamp) as hour, COUNT(id) 
                 FROM requests 
@@ -259,7 +212,6 @@ def analytics():
             """))
             requests_by_hour_data = requests_by_hour_result.fetchall()
 
-            # Process data to ensure all 24 hours are represented
             hourly_counts = defaultdict(int)
             for hour, count in requests_by_hour_data:
                 hourly_counts[int(hour)] = count
@@ -269,7 +221,6 @@ def analytics():
 
     except Exception as e:
         print(f"ERROR fetching analytics data: {e}")
-        # Provide empty data to prevent the page from crashing
         top_requests_labels, top_requests_values = [], []
         requests_by_hour_labels, requests_by_hour_values = [], []
 
