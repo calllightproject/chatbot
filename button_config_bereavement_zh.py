@@ -3,7 +3,9 @@
 
 button_data = {
     "greeting": "您好。我们在此支持您。",
-    "cna_notification": "✅ 已通知CNA（护理助理）。",
+    "custom_note_placeholder": "在此处输入给护士的留言...",
+    "send_note_button": "发送留言",
+    "back_text": "⬅ 返回",
     "nurse_notification": "✅ 已通知护士。",
     "main_buttons": [
         "我有紧急情况",
