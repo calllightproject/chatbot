@@ -9,31 +9,37 @@
     <style>
         body {
             font-family: 'Inter', sans-serif;
+            background-color: #f4f7f9; /* A light, professional gray background */
+        }
+        /* Defining the specific Banner Health blue color */
+        .bg-banner-blue {
+            background-color: #005b94;
+        }
+        .hover\:bg-banner-blue-dark:hover {
+            background-color: #004a7c; /* A slightly darker shade for hover */
         }
     </style>
 </head>
-<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+<body class="flex items-center justify-center min-h-screen">
     <div class="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg text-center">
         <div>
+            <!-- You could potentially place a logo here in the future -->
             <h1 class="text-3xl font-bold text-gray-800">Welcome</h1>
             <p class="text-gray-600 mt-2">Please select your language.</p>
         </div>
         
-        <!-- CORRECTED: The form action now points to the correct 'handle_chat' endpoint -->
         <form method="POST" action="{{ url_for('handle_chat') }}" class="space-y-4">
-            <!-- ACCESSIBILITY ADDED: aria-label provides a description for screen readers -->
-            <button type="submit" name="language" value="en" aria-label="Select English" class="w-full px-4 py-3 text-lg font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-colors">
+            <button type="submit" name="language" value="en" aria-label="Select English" class="w-full px-4 py-3 text-lg font-semibold text-white bg-banner-blue rounded-lg hover:bg-banner-blue-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#005b94] transition-colors">
                 English
             </button>
-            <!-- ACCESSIBILITY ADDED: aria-label provides a description for screen readers -->
-            <button type="submit" name="language" value="es" aria-label="Select Spanish" class="w-full px-4 py-3 text-lg font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 transition-colors">
+            <button type="submit" name="language" value="es" aria-label="Select Spanish" class="w-full px-4 py-3 text-lg font-semibold text-white bg-banner-blue rounded-lg hover:bg-banner-blue-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#005b94] transition-colors">
                 Español
             </button>
-            <!-- ACCESSIBILITY ADDED: aria-label provides a description for screen readers -->
-            <button type="submit" name="language" value="zh" aria-label="Select Chinese" class="w-full px-4 py-3 text-lg font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 transition-colors">
+            <button type="submit" name="language" value="zh" aria-label="Select Chinese" class="w-full px-4 py-3 text-lg font-semibold text-white bg-banner-blue rounded-lg hover:bg-banner-blue-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#005b94] transition-colors">
                 中文
             </button>
         </form>
     </div>
 </body>
 </html>
+
