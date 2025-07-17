@@ -91,7 +91,6 @@ def reset_language():
     session.pop("language", None)
     return redirect(url_for("language_selector"))
 
-
 @app.route("/chat", methods=["GET", "POST"])
 def chatbot():
     pathway = session.get("pathway", "standard")
@@ -102,60 +101,41 @@ def chatbot():
     button_config = importlib.import_module(f"button_config_{lang}")
     chat_logic = importlib.import_module(f"chat_logic_{lang}")
     button_data = button_config.button_data
-    classify_message = chat_logic.classify_message
-    get_education_response = chat_logic.get_education_response
+    
+    # --- THIS IS THE NEW LOGIC FOR MULTI-SELECT ---
+    if request.method == "POST":
+        # Handle custom note form separately
+        if request.form.get("action") == "send_note":
+            note_text = request.form.get("custom_note")
+            reply = notify_and_log("nurse", "Custom Patient Note", note_text,
+                                   button_data["nurse_notification"]) if note_text else "Please type a message in the box."
+            return render_template("chat.html", reply=reply, options=button_data["main_buttons"], button_data=button_data)
 
-    # --- THIS IS THE FIX ---
-    # We now pass button_data to the template on the initial GET request
-    if request.method == "GET":
-        return render_template("chat.html", reply=button_data["greeting"], options=button_data["main_buttons"], button_data=button_data)
+        # Get the list of all checked items
+        selected_requests = request.form.getlist("user_requests")
+        
+        if not selected_requests:
+            # If nothing was selected, just reload the page with a small prompt
+            return render_template("chat.html", reply=button_data.get("selection_prompt", "Please select one or more items."), options=button_data["main_buttons"], button_data=button_data)
 
-    # --- Logic for POST requests (user submitting a form) ---
-    if request.form.get("action") == "send_note":
-        note_text = request.form.get("custom_note")
-        reply = notify_and_log("nurse", "Custom Patient Note", note_text,
-                               button_data["nurse_notification"]) if note_text else "Please type a message in the box."
-        return render_template("chat.html", reply=reply, options=button_data["main_buttons"], button_data=button_data)
+        # Loop through each selected request and process it
+        for user_input in selected_requests:
+            if user_input in button_data:
+                button_info = button_data[user_input]
+                if "action" in button_info:
+                    action = button_info["action"]
+                    notification_text = button_info.get("note", user_input)
+                    if action == "Notify CNA":
+                        notify_and_log("cna", "CNA Request", user_input, notification_text)
+                    elif action == "Notify Nurse":
+                        notify_and_log("nurse", "Nurse Request", user_input, notification_text)
+        
+        # After processing all requests, show a confirmation message
+        confirmation_reply = button_data.get("confirmation_message", "Your requests have been sent.")
+        return render_template("chat.html", reply=confirmation_reply, options=button_data["main_buttons"], button_data=button_data)
 
-    user_input = request.form.get("user_input", "").strip()
-    if user_input == button_data.get("back_text", "⬅ Back"):
-        return redirect(url_for('chatbot'))
-
-    reply = ""
-    options = button_data["main_buttons"]
-
-    if user_input in button_data:
-        button_info = button_data[user_input]
-        if "question" in button_info:
-            reply = button_info["question"]
-            options = button_info.get("options", []) + [button_data.get("back_text", "⬅ Back")]
-        elif "note" in button_info:
-            reply = button_info["note"]
-            if "options" in button_info:
-                options = button_info.get("options", []) + [button_data.get("back_text", "⬅ Back")]
-
-        if "action" in button_info:
-            action = button_info["action"]
-            notification_text = reply or (
-                button_data["nurse_notification"] if action == "Notify Nurse" else button_data["cna_notification"])
-            if action == "Notify CNA":
-                reply = notify_and_log("cna", "CNA Request", user_input, notification_text)
-            elif action == "Notify Nurse":
-                reply = notify_and_log("nurse", "Nurse Request", user_input, notification_text)
-            options = button_data["main_buttons"]
-    else:
-        category = classify_message(user_input)
-        if category == "education":
-            reply = get_education_response(user_input)
-        else:
-            role = "nurse" if category == "urgent" else category if category in ["nurse", "cna"] else "nurse"
-            subject = f"{category.upper()} Request" if category != "unknown" else "Unknown Request"
-            reply = notify_and_log(role, subject, user_input, button_data[f"{role}_notification"])
-        options = button_data["main_buttons"]
-
-    return render_template("chat.html", reply=reply, options=options, button_data=button_data)
-
-
+    # This is for the initial GET request to load the page
+    return render_template("chat.html", reply=button_data["greeting"], options=button_data["main_buttons"], button_data=button_data)
 @app.route("/bereavement-chat", methods=["GET", "POST"])
 def bereavement_chatbot():
     pathway = session.get("pathway", "standard")
