@@ -12,7 +12,6 @@ from sqlalchemy import create_engine, text
 
 # --- App Configuration ---
 app = Flask(__name__, template_folder='templates')
-# SECURITY BEST PRACTICE: Load secret key from environment variables.
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-strong-fallback-secret-key-for-local-development")
 socketio = SocketIO(app)
 
@@ -22,7 +21,6 @@ if not DATABASE_URL:
     print("WARNING: DATABASE_URL environment variable not found. Using a local SQLite database.")
     DATABASE_URL = "sqlite:///local_call_light.db"
 
-# Create a single, reusable database engine
 engine = create_engine(DATABASE_URL)
 
 # --- Database Setup ---
@@ -47,7 +45,6 @@ def setup_database():
 
 # --- Core Helper Functions ---
 def log_request_to_db(category, user_input, reply):
-    """Logs a specific request to the PostgreSQL database."""
     room = session.get("room_number", "Unknown Room")
     try:
         with engine.connect() as connection:
@@ -66,7 +63,6 @@ def log_request_to_db(category, user_input, reply):
         print(f"ERROR logging to database: {e}")
 
 def send_email_alert(subject, body):
-    """Sends an email alert for a new request."""
     sender_email = os.getenv("EMAIL_USER")
     sender_password = os.getenv("EMAIL_PASSWORD")
     recipient_email = os.getenv("RECIPIENT_EMAIL", "call.light.project@gmail.com")
@@ -89,7 +85,6 @@ def send_email_alert(subject, body):
         print(f"ERROR: Email failed to send: {e}")
 
 def process_request(role, subject, user_input, reply_message):
-    """Central function to handle logging, emailing, and socket emissions for a request."""
     send_email_alert(subject, user_input)
     log_request_to_db(role, user_input, reply_message)
     socketio.emit('new_request', {
@@ -102,7 +97,6 @@ def process_request(role, subject, user_input, reply_message):
 # --- Pathway and Language Setup Routes ---
 @app.route("/room/<room_id>")
 def set_room(room_id):
-    """Sets the room number and standard pathway in the session."""
     session.clear()
     session["room_number"] = room_id
     session["pathway"] = "standard"
@@ -110,7 +104,6 @@ def set_room(room_id):
 
 @app.route("/bereavement/<room_id>")
 def set_bereavement_room(room_id):
-    """Sets the room number and bereavement pathway in the session."""
     session.clear()
     session["room_number"] = room_id
     session["pathway"] = "bereavement"
@@ -118,18 +111,15 @@ def set_bereavement_room(room_id):
 
 @app.route("/", methods=["GET", "POST"])
 def language_selector():
-    """Displays the language selection page and redirects to the main chatbot."""
     if request.method == "POST":
         session["language"] = request.form.get("language")
+        # CORRECTED: This now points to the correct 'handle_chat' function
         return redirect(url_for("handle_chat"))
     return render_template("language.html")
 
 # --- REFACTORED: Unified Chatbot Route ---
 @app.route("/chat", methods=["GET", "POST"])
 def handle_chat():
-    """
-    Handles all chatbot logic for both standard and bereavement pathways.
-    """
     pathway = session.get("pathway", "standard")
     lang = session.get("language", "en")
     
@@ -179,31 +169,25 @@ def handle_chat():
 
 @app.route("/reset-language")
 def reset_language():
-    """Allows changing the language by clearing it from the session."""
     session.pop("language", None)
     return redirect(url_for("language_selector"))
 
 # --- Staff-Facing Routes ---
 @app.route("/dashboard")
 def dashboard():
-    """The real-time dashboard for staff to see incoming requests."""
     return render_template("dashboard.html")
 
 @app.route('/analytics')
 def analytics():
-    """The analytics dashboard to show trends and key metrics."""
     try:
         with engine.connect() as connection:
-            # Query 1: Get counts for each request category
             top_requests_result = connection.execute(text(
                 "SELECT category, COUNT(id) FROM requests GROUP BY category ORDER BY COUNT(id) DESC;"
             ))
             top_requests_data = top_requests_result.fetchall()
-            
             top_requests_labels = [row[0] for row in top_requests_data]
             top_requests_values = [row[1] for row in top_requests_data]
 
-            # Query 2: Get request counts by hour of the day
             requests_by_hour_result = connection.execute(text("""
                 SELECT EXTRACT(HOUR FROM timestamp) as hour, COUNT(id) 
                 FROM requests 
@@ -221,7 +205,6 @@ def analytics():
 
     except Exception as e:
         print(f"ERROR fetching analytics data: {e}")
-        # Provide empty data to prevent the page from crashing
         top_requests_labels, top_requests_values = [], []
         requests_by_hour_labels, requests_by_hour_values = [], []
 
@@ -236,7 +219,6 @@ def analytics():
 # --- SocketIO Event Handlers ---
 @socketio.on('defer_request')
 def handle_defer_request(data):
-    """Handles the 'defer' event from the staff dashboard."""
     socketio.emit('request_deferred', data)
 
 # --- App Startup ---
@@ -245,4 +227,3 @@ with app.app_context():
 
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
-
