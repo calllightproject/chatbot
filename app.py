@@ -9,7 +9,6 @@ from flask import Flask, render_template, request, session, redirect, url_for
 from flask_socketio import SocketIO
 
 # --- App Configuration ---
-# This version includes the template_folder fix
 app = Flask(__name__, template_folder='templates')
 app.secret_key = "a-very-long-and-random-secret-key-that-does-not-need-to-be-changed"
 socketio = SocketIO(app)
@@ -17,7 +16,7 @@ socketio = SocketIO(app)
 
 # --- Helper Functions ---
 def log_request(filename, user_input, category, reply):
-    # This version includes the fix to write logs to the /tmp directory
+    # Write log files to the /tmp directory, which is writeable on Render
     log_path = os.path.join('/tmp', filename)
     room = session.get("room_number", "Unknown Room")
     with open(log_path, "a", newline="", encoding="utf-8") as f:
@@ -28,7 +27,6 @@ def log_request(filename, user_input, category, reply):
 
 
 def send_email_alert(to, subject, body):
-    # This version correctly uses environment variables for secrets
     sender_email = os.getenv("EMAIL_USER")
     sender_password = os.getenv("EMAIL_PASSWORD")
     if not sender_email or not sender_password:
@@ -48,7 +46,6 @@ def send_email_alert(to, subject, body):
 
 
 def notify_and_log(role, subject, user_input, reply_message):
-    # --- THIS IS THE FIX: All alerts now go to your specified email ---
     recipient = "call.light.project@gmail.com"
     send_email_alert(recipient, subject, user_input)
     log_request(f"{role}_log.csv", user_input, role, reply_message)
@@ -108,18 +105,20 @@ def chatbot():
     classify_message = chat_logic.classify_message
     get_education_response = chat_logic.get_education_response
 
+    # --- THIS IS THE FIX ---
+    # We now pass button_data to the template on the initial GET request
     if request.method == "GET":
-        return render_template("chat.html", reply=button_data["greeting"], options=button_data["main_buttons"])
+        return render_template("chat.html", reply=button_data["greeting"], options=button_data["main_buttons"], button_data=button_data)
 
     # --- Logic for POST requests (user submitting a form) ---
     if request.form.get("action") == "send_note":
         note_text = request.form.get("custom_note")
         reply = notify_and_log("nurse", "Custom Patient Note", note_text,
                                button_data["nurse_notification"]) if note_text else "Please type a message in the box."
-        return render_template("chat.html", reply=reply, options=button_data["main_buttons"])
+        return render_template("chat.html", reply=reply, options=button_data["main_buttons"], button_data=button_data)
 
     user_input = request.form.get("user_input", "").strip()
-    if user_input == "⬅ Back":
+    if user_input == button_data.get("back_text", "⬅ Back"):
         return redirect(url_for('chatbot'))
 
     reply = ""
@@ -129,11 +128,11 @@ def chatbot():
         button_info = button_data[user_input]
         if "question" in button_info:
             reply = button_info["question"]
-            options = button_info.get("options", []) + ["⬅ Back"]
+            options = button_info.get("options", []) + [button_data.get("back_text", "⬅ Back")]
         elif "note" in button_info:
             reply = button_info["note"]
             if "options" in button_info:
-                options = button_info.get("options", []) + ["⬅ Back"]
+                options = button_info.get("options", []) + [button_data.get("back_text", "⬅ Back")]
 
         if "action" in button_info:
             action = button_info["action"]
@@ -154,7 +153,7 @@ def chatbot():
             reply = notify_and_log(role, subject, user_input, button_data[f"{role}_notification"])
         options = button_data["main_buttons"]
 
-    return render_template("chat.html", reply=reply, options=options)
+    return render_template("chat.html", reply=reply, options=options, button_data=button_data)
 
 
 @app.route("/bereavement-chat", methods=["GET", "POST"])
@@ -167,18 +166,20 @@ def bereavement_chatbot():
     button_config = importlib.import_module(f"button_config_bereavement_{lang}")
     button_data = button_config.button_data
 
+    # --- THIS IS THE FIX ---
+    # We now pass button_data to the template on the initial GET request
     if request.method == "GET":
-        return render_template("chat.html", reply=button_data["greeting"], options=button_data["main_buttons"])
+        return render_template("chat.html", reply=button_data["greeting"], options=button_data["main_buttons"], button_data=button_data)
 
     user_input = request.form.get("user_input", "").strip()
-    if user_input == "⬅ Back":
+    if user_input == button_data.get("back_text", "⬅ Back"):
         return redirect(url_for('bereavement_chatbot'))
 
     button_info = button_data.get(user_input, {})
     reply = button_info.get("note") or button_info.get("question", "")
     options = button_info.get("options", button_data["main_buttons"])
     if "question" in button_info or "options" in button_info:
-        options += ["⬅ Back"]
+        options += [button_data.get("back_text", "⬅ Back")]
 
     if "action" in button_info:
         action = button_info["action"]
