@@ -98,7 +98,7 @@ button_data = {
     # --- Questions Category ---
     "Tengo preguntas": {
         "question": "¿Preguntas sobre la mamá o el bebé?",
-        "options": ["Preguntas sobre la mamá", "Preguntas sobre el/la bebé"] # CORRECTED: Changed "el bebé" to "el/la bebé" to match key
+        "options": ["Preguntas sobre la mamá", "Preguntas sobre el bebé"]
     },
     # Questions -> Mom
     "Preguntas sobre la mamá": {
@@ -112,7 +112,7 @@ button_data = {
         ]
     },
     # Questions -> Baby
-    "Preguntas sobre el/la bebé": {
+    "Preguntas sobre el bebé": {
         "note": "Si su pregunta no está en la lista, su enfermera vendrá tan pronto como sea posible.",
         "options": [
             "¿Cómo de seguido debo alimentar a mi bebé?",
