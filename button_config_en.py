@@ -73,7 +73,7 @@ button_data = {
             "Similac Neosure (yellow label)", "Enfamil Newborn (yellow label)",
             "Enfamil Gentlease (purple label)"
         ]
-    }, # <-- COMMA WAS MISSING HERE
+    },
     "Similac Total Comfort (purple label)": {"action": "Notify CNA"},
     "Similac 360 (blue label)": {"action": "Notify CNA"},
     "Similac Neosure (yellow label)": {"action": "Notify CNA"},
@@ -85,7 +85,7 @@ button_data = {
         "question": "What is your main symptom?",
         "options": ["Pain", "Nausea/Vomiting", "Itchy", "Gas pain", "Constipation"]
     },
-    "Pain": {"action": "Notify Nurse"}, # <-- THIS ENTIRE LINE WAS MISSING
+    "Pain": {"action": "Notify Nurse"},
     "Nausea/Vomiting": {"action": "Notify Nurse"},
     "Itchy": {"action": "Notify Nurse"},
     "Gas pain": {"action": "Notify Nurse"},
