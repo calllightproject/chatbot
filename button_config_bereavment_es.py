@@ -1,7 +1,10 @@
 # button_config_bereavement_es.py
 button_data = {
     "greeting": "Hola. Estamos aquí para apoyarle.",
-    "cna_notification": "✅ Se ha notificado al CNA.",
+    "custom_note_placeholder": "Escribe tu nota para la enfermera aquí...",
+    "send_note_button": "Enviar Nota",
+    "back_text": "⬅ Regresar",
+    "cna_notification": "✅ Se ha notificado al asistente de enfermería.",
     "nurse_notification": "✅ Se ha notificado a la enfermera.",
     "main_buttons": [
         "Tengo una emergencia",
