@@ -1,11 +1,14 @@
+# button_config_bereavement_zh.py
 # -*- coding: utf-8 -*-
 
-# button_config_bereavement_zh.py
 button_data = {
+    # --- Core Notifications & Text ---
     "greeting": "您好。我们在此支持您。",
-    "cna_notification": "✅ 已通知护理助理。", # 更正：将“护士”更改为“护理助理”以匹配CNA
+    "cna_notification": "✅ 已通知护理助理。",
     "nurse_notification": "✅ 已通知护士。",
     "back_text": "⬅ 返回",
+
+    # --- Main Menu Options ---
     "main_buttons": [
         "我有紧急情况",
         "我需要用品",
@@ -17,12 +20,13 @@ button_data = {
         "为我检查血糖"
     ],
 
+    # --- Direct Actions & Simple Sub-menus ---
     "我有紧急情况": {"action": "Notify Nurse"},
     "我需要帮助去卫生间": {"action": "Notify CNA"},
     "我需要包裹我的静脉输液管以便洗澡": {"action": "Notify CNA"},
-
     "为我检查血糖": {"action": "Notify CNA"},
 
+    # --- Supplies Category ---
     "我需要用品": {
         "question": "您需要什么？",
         "options": ["卫生巾", "网眼内裤", "冰袋"]
@@ -33,7 +37,6 @@ button_data = {
     },
     "蓝色卫生巾": {"action": "Notify CNA"},
     "白色卫生巾": {"action": "Notify CNA"},
-
     "冰袋": {
         "question": "您需要在哪里使用冰袋？",
         "options": ["用于会阴部", "用于剖腹产切口", "用于乳房"]
@@ -41,9 +44,9 @@ button_data = {
     "用于会阴部": {"action": "Notify CNA"},
     "用于剖腹产切口": {"action": "Notify CNA"},
     "用于乳房": {"action": "Notify CNA"},
-
     "网眼内裤": {"action": "Notify CNA"},
 
+    # --- Medication Category ---
     "我需要药物": {
         "question": "您的主要症状是什么？",
         "options": ["疼痛", "恶心/呕吐", "瘙痒", "胀气痛", "便秘"]
@@ -52,8 +55,9 @@ button_data = {
     "恶心/呕吐": {"action": "Notify Nurse"},
     "瘙痒": {"action": "Notify Nurse"},
     "胀气痛": {"action": "Notify Nurse"},
-    "便秘": {"action": "Notify Nurse"}, # <-- 此处缺少了一个逗号
+    "便秘": {"action": "Notify Nurse"},
 
+    # --- Questions Category ---
     "我有问题": {
         "note": "如果您的问题不在列表中，您的护士会尽快过来。",
         "options": [
@@ -72,6 +76,7 @@ button_data = {
         "note": "每2-4小时或在湿透时更换一次。如果您在不到1小时内湿透一张大卫生巾，或有比高尔夫球还大的血块，请告知护士。"
     },
 
+    # --- Going Home Category ---
     "我想了解出院信息": {
         "question": "您想了解哪方面的信息？",
         "options": ["顺产出院", "剖腹产出院", "我什么时候能拿到出院文件？", "我必须坐轮椅吗？"]
