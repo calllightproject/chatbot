@@ -1,6 +1,5 @@
 # button_config_zh.py
 # -*- coding: utf-8 -*-
-
 button_data = {
     # --- Core Notifications & Text ---
     "greeting": "您好！我能为您做些什么？",
@@ -60,7 +59,7 @@ button_data = {
             "Enfamil Newborn (黄色标签)",
             "Enfamil Gentlease (紫色标签)"
         ]
-    }, # <-- THE COMMA WAS MISSING HERE
+    },
     "Similac Total Comfort (紫色标签)": {"action": "Notify CNA"},
     "Similac 360 (蓝色标签)": {"action": "Notify CNA"},
     "Similac Neosure (黄色标签)": {"action": "Notify CNA"},
