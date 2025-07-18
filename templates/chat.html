@@ -3,72 +3,135 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Patient Assistance</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <title>Postpartum Chatbot</title>
     <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f4f7f9; /* A light, professional gray background */
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            margin: 0; 
+            padding: 20px; 
+            background-color: #f0f2f5; 
         }
-        /* Defining the specific Banner Health blue color */
-        .bg-banner-blue {
-            background-color: #005b94;
+        .container { 
+            max-width: 600px; 
+            margin: auto; 
+            background: white; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
         }
-        .hover\:bg-banner-blue-dark:hover {
-            background-color: #004a7c; /* A slightly darker shade for hover */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #e5e7eb;
+            margin-bottom: 20px;
         }
-        .focus\:ring-banner-blue:focus {
-            --tw-ring-color: #005b94;
+        .header h1 {
+            font-size: 24px;
+            font-weight: bold;
+            color: #111827;
         }
-        .border-banner-blue {
-            border-color: #005b94;
-        }
-        .text-banner-blue {
+        .header a {
+            font-size: 14px;
             color: #005b94;
+            text-decoration: none;
+        }
+        .header a:hover {
+            text-decoration: underline;
+        }
+        .reply-box { 
+            margin-bottom: 20px; 
+            padding: 20px; 
+            background-color: #eef2f6; 
+            border-radius: 8px; 
+            min-height: 60px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            text-align: center;
+            font-size: 18px;
+            color: #1f2937;
+        }
+        
+        .options-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .options-container button, .note-form button { 
+            width: 100%; 
+            padding: 15px; 
+            font-size: 16px; 
+            border: none; 
+            border-radius: 8px; 
+            background-color: #005b94; /* Banner Health Blue */
+            color: white; 
+            cursor: pointer; 
+            transition: background-color 0.2s;
+            text-align: left;
+        }
+
+        .options-container button:hover, .note-form button:hover { 
+            background-color: #004a7c; /* Darker Banner Blue */
+        }
+
+        .note-section { 
+            margin-top: 20px; 
+            border-top: 1px solid #e5e7eb; 
+            padding-top: 20px; 
+        }
+        .note-label {
+            font-size: 14px;
+            color: #4b5563;
+            margin-bottom: 10px;
+        }
+        .note-form {
+            display: flex;
+            gap: 10px;
+        }
+        .note-form textarea { 
+            flex-grow: 1;
+            padding: 10px; 
+            border-radius: 8px; 
+            border: 1px solid #d1d5db; 
+            box-sizing: border-box;
+            resize: vertical;
+        }
+        .note-form button {
+            flex-shrink: 0; /* Prevent button from shrinking */
+            text-align: center;
         }
     </style>
 </head>
-<body class="bg-gray-100">
-    <div class="container mx-auto max-w-lg p-4 min-h-screen flex flex-col">
-        <!-- Message Display Area -->
-        <div class="bg-white p-6 rounded-xl shadow-lg mb-4 flex-grow flex items-center justify-center">
-            <p class="text-gray-800 text-lg text-center">{{ reply }}</p>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Postpartum Chatbot</h1>
+            <a href="{{ url_for('reset_language') }}">Change Language</a>
         </div>
 
-        <!-- Buttons & Forms Area -->
-        <div class="bg-white p-6 rounded-xl shadow-lg">
-            <!-- Main Options Form -->
-            <form method="POST" action="{{ url_for('handle_chat') }}" class="grid grid-cols-2 gap-3">
+        <div class="reply-box">
+            <p>{{ reply }}</p>
+        </div>
+
+        <div class="options-container">
+            <form method="POST" action="{{ url_for('handle_chat') }}" style="display: contents;">
                 {% for option in options %}
-                    <button type="submit" name="user_input" value="{{ option }}"
-                            class="w-full p-4 text-center bg-banner-blue text-white rounded-lg hover:bg-banner-blue-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-banner-blue transition-colors">
-                        {{ option }}
-                    </button>
+                    <button type="submit" name="user_input" value="{{ option }}">{{ option }}</button>
                 {% endfor %}
             </form>
-
-            <!-- Custom Note Form -->
-            <div class="mt-6 border-t pt-6">
-                <form method="POST" action="{{ url_for('handle_chat') }}">
-                    <input type="hidden" name="action" value="send_note">
-                    <label for="custom_note" class="block text-sm font-medium text-gray-700 mb-2">
-                        {{ button_data.get('custom_note_placeholder', 'Send a note to your nurse:') }}
-                    </label>
-                    <textarea id="custom_note" name="custom_note" rows="3"
-                              class="w-full p-2 border border-gray-300 rounded-lg focus:ring-banner-blue focus:border-banner-blue"></textarea>
-                    <button type="submit"
-                            class="w-full mt-3 p-3 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors">
-                        {{ button_data.get('send_note_button', 'Send Note') }}
-                    </button>
-                </form>
-            </div>
         </div>
 
-        <!-- Footer Links -->
-        <footer class="text-center py-4">
-            <a href="{{ url_for('reset_language') }}" class="text-sm text-banner-blue hover:underline">Change Language</a>
-        </footer>
+        <div class="note-section">
+            <p class="note-label">{{ button_data.get('custom_note_placeholder', 'Or send a custom note to your nurse:') }}</p>
+            <form method="POST" action="{{ url_for('handle_chat') }}" class="note-form">
+                <input type="hidden" name="action" value="send_note">
+                <textarea id="custom_note" name="custom_note" rows="2" placeholder="Type your message here..."></textarea>
+                <button type="submit">{{ button_data.get('send_note_button', 'Send Note') }}</button>
+            </form>
+        </div>
     </div>
 </body>
 </html>
