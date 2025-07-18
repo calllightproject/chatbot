@@ -6,7 +6,6 @@
     <title>Postpartum Chatbot</title>
     <style>
         /* Your provided CSS starts here */
-        /* Color Palette based on Banner Health Design System */
         :root {
             --core-blue: #00205b;
             --accent-blue: #007eb4;
@@ -15,7 +14,6 @@
             --white: #ffffff;
         }
 
-        /* General body and layout styles */
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
             padding: 20px;
@@ -23,7 +21,6 @@
             color: var(--neutral-gray-text);
         }
 
-        /* Chatbot Container */
         .chat-box {
             max-width: 500px;
             margin: 20px auto;
@@ -33,7 +30,6 @@
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }
 
-        /* Header with title and language link */
         .header {
             position: relative;
             text-align: center;
@@ -56,7 +52,6 @@
             font-size: 14px;
         }
 
-        /* Bot reply bubble */
         .bot-reply {
             background-color: #ebf0fa;
             padding: 15px;
@@ -70,7 +65,6 @@
             justify-content: center;
         }
 
-        /* Option buttons */
         .options button {
             display: block;
             width: 100%;
@@ -90,7 +84,6 @@
             background-color: #093582;
         }
 
-        /* Note Form Section */
         .note-section {
             border-top: 1px solid #e1e1e2;
             padding-top: 20px;
@@ -105,6 +98,7 @@
         .note-form {
             display: flex;
             gap: 10px;
+            align-items: flex-start;
         }
         .note-form textarea {
             flex-grow: 1;
@@ -112,6 +106,7 @@
             border: 1px solid #ccc;
             padding: 10px;
             font-size: 14px;
+            resize: vertical;
         }
         .note-form button {
             flex-shrink: 0;
@@ -150,14 +145,12 @@
         </div>
 
         <div class="note-section">
-            <form method="POST" action="{{ url_for('handle_chat') }}" class="note-form">
+            <form method="POST" action="{{ url_for('handle_chat') }}" class="note-form-container">
                 <input type="hidden" name="action" value="send_note">
-                <div>
-                    <label for="custom_note" class="note-label">{{ button_data.get('custom_note_placeholder', 'Or send a custom note to your nurse:') }}</label>
-                    <div class="note-form">
-                        <textarea id="custom_note" name="custom_note" rows="2" placeholder="Type your message here..."></textarea>
-                        <button type="submit">{{ button_data.get('send_note_button', 'Send Note') }}</button>
-                    </div>
+                <label for="custom_note" class="note-label">{{ button_data.get('custom_note_placeholder', 'Or send a custom note to your nurse:') }}</label>
+                <div class="note-form">
+                    <textarea id="custom_note" name="custom_note" rows="2" placeholder="Type your message here..."></textarea>
+                    <button type="submit">{{ button_data.get('send_note_button', 'Send Note') }}</button>
                 </div>
             </form>
         </div>
