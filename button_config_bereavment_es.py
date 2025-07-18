@@ -1,11 +1,14 @@
 # button_config_bereavement_es.py
 button_data = {
+    # --- Core Notifications & Text ---
     "greeting": "Hola. Estamos aquí para apoyarle.",
     "custom_note_placeholder": "Escribe tu nota para la enfermera aquí...",
     "send_note_button": "Enviar Nota",
     "back_text": "⬅ Regresar",
     "cna_notification": "✅ Se ha notificado al asistente de enfermería.",
     "nurse_notification": "✅ Se ha notificado a la enfermera.",
+
+    # --- Main Menu Options ---
     "main_buttons": [
         "Tengo una emergencia",
         "Necesito suministros",
@@ -17,12 +20,13 @@ button_data = {
         "Control de azúcar en la sangre para mí"
     ],
 
+    # --- Direct Actions & Simple Sub-menus ---
     "Tengo una emergencia": {"action": "Notify Nurse"},
     "Necesito ayuda para ir al baño": {"action": "Notify CNA"},
     "Necesito cubrir mi vía IV para ducharme": {"action": "Notify CNA"},
-
     "Control de azúcar en la sangre para mí": {"action": "Notify CNA"},
 
+    # --- Supplies Category ---
     "Necesito suministros": {
         "question": "¿Qué necesita?",
         "options": ["Toallas sanitarias", "Ropa interior de malla", "Compresa de hielo"]
@@ -33,7 +37,6 @@ button_data = {
     },
     "Toallas azules": {"action": "Notify CNA"},
     "Toallas blancas": {"action": "Notify CNA"},
-
     "Compresa de hielo": {
         "question": "¿Dónde necesita la compresa de hielo?",
         "options": ["Para el perineo", "Para la incisión de la cesárea", "Para los senos"]
@@ -41,9 +44,9 @@ button_data = {
     "Para el perineo": {"action": "Notify CNA"},
     "Para la incisión de la cesárea": {"action": "Notify CNA"},
     "Para los senos": {"action": "Notify CNA"},
-
     "Ropa interior de malla": {"action": "Notify CNA"},
 
+    # --- Medication Category ---
     "Necesito medicamentos": {
         "question": "¿Cuál es su síntoma principal?",
         "options": ["Dolor", "Náuseas/Vómitos", "Picazón", "Dolor por gases", "Estreñimiento"]
@@ -52,8 +55,9 @@ button_data = {
     "Náuseas/Vómitos": {"action": "Notify Nurse"},
     "Picazón": {"action": "Notify Nurse"},
     "Dolor por gases": {"action": "Notify Nurse"},
-    "Estreñimiento": {"action": "Notify Nurse"}, # <-- The comma was missing here
+    "Estreñimiento": {"action": "Notify Nurse"},
 
+    # --- Questions Category ---
     "Tengo preguntas": {
         "note": "Si su pregunta no está en la lista, su enfermera vendrá tan pronto como sea posible.",
         "options": [
@@ -72,6 +76,7 @@ button_data = {
         "note": "Cambie su toalla cada 2-4 horas o cuando esté saturada. Informe a su enfermera si está empapando una toalla grande en menos de 1 hora o si tiene coágulos más grandes que una pelota de golf."
     },
 
+    # --- Going Home Category ---
     "Quiero saber sobre el alta": {
         "question": "¿Qué le gustaría saber?",
         "options": ["Parto vaginal", "Parto por cesárea", "¿Cuándo recibiré mis papeles de alta?",
