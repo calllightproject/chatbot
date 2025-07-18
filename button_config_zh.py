@@ -60,7 +60,7 @@ button_data = {
             "Enfamil Newborn (黄色标签)",
             "Enfamil Gentlease (紫色标签)"
         ]
-    },
+    }, # <-- THE COMMA WAS MISSING HERE
     "Similac Total Comfort (紫色标签)": {"action": "Notify CNA"},
     "Similac 360 (蓝色标签)": {"action": "Notify CNA"},
     "Similac Neosure (黄色标签)": {"action": "Notify CNA"},
