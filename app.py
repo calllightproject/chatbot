@@ -121,7 +121,7 @@ def handle_chat():
     config_module_name = f"button_config_bereavement_{lang}" if pathway == "bereavement" else f"button_config_{lang}"
     
     try:
-        button_config = importlib..import_module(config_module_name)
+        button_config = importlib.import_module(config_module_name)
         button_data = button_config.button_data
     except (ImportError, AttributeError) as e:
         print(f"ERROR: Could not load configuration module '{config_module_name}'. Error: {e}")
