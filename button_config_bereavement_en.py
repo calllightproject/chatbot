@@ -1,6 +1,5 @@
 # button_config_bereavement_en.py
-button_data = {
-    "greeting": "Hello! We are here to support you.",  # Changed greeting to be more sensitive
+"greeting": "Hello! We are here to support you.",  # Changed greeting to be more sensitive
     "cna_notification": "✅ CNA has been notified.",
     "nurse_notification": "✅ Nurse has been notified.",
     "back_text": "⬅ Back",
@@ -50,7 +49,7 @@ button_data = {
     "Nausea/Vomiting": {"action": "Notify Nurse"},
     "Itchy": {"action": "Notify Nurse"},
     "Gas pain": {"action": "Notify Nurse"},
-    "Constipation": {"action": "Notify Nurse"}, # <-- The comma was missing here
+    "Constipation": {"action": "Notify Nurse"},
 
     "I have questions": {
         "note": "If your question is not listed, your nurse will be in as soon as possible.",
