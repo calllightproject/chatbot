@@ -52,7 +52,7 @@ button_data = {
         "options": ["疼痛", "恶心/呕吐", "瘙痒", "胀气痛", "便秘"]
     },
     "疼痛": {"action": "Notify Nurse"},
-    "恶心/呕吐": {"action": "Notify Nurse"},
+    "恶心/呕-吐": {"action": "Notify Nurse"},
     "瘙痒": {"action": "Notify Nurse"},
     "胀气痛": {"action": "Notify Nurse"},
     "便秘": {"action": "Notify Nurse"},
