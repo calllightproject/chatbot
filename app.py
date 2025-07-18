@@ -120,19 +120,24 @@ def handle_chat():
     
     config_module_name = f"button_config_bereavement_{lang}" if pathway == "bereavement" else f"button_config_{lang}"
     
+    # THIS IS THE NEW DEBUGGING LINE
+    print(f"--- Attempting to load language config: {config_module_name} ---")
+
     try:
         button_config = importlib.import_module(config_module_name)
         button_data = button_config.button_data
     except (ImportError, AttributeError) as e:
         print(f"ERROR: Could not load configuration module '{config_module_name}'. Error: {e}")
-        return f"Error: Configuration file '{config_module_name}.py' is missing or invalid. Please contact support."
+        # Fallback to English if the selected language file is broken or missing
+        lang = "en"
+        config_module_name = f"button_config_bereavement_{lang}" if pathway == "bereavement" else f"button_config_{lang}"
+        button_config = importlib.import_module(config_module_name)
+        button_data = button_config.button_data
 
-    # THIS IS THE CRITICAL FIX FOR THE GREETING
-    # If it's a GET request, or a POST that doesn't have a user_input (like from the language page), show the greeting.
+
     if request.method == "GET" or 'user_input' not in request.form:
         return render_template("chat.html", reply=button_data["greeting"], options=button_data["main_buttons"], button_data=button_data)
 
-    # --- Handle POST request from within the chat page ---
     user_input = request.form.get("user_input", "").strip()
     
     if request.form.get("action") == "send_note":
