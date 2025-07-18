@@ -25,7 +25,6 @@ engine = create_engine(DATABASE_URL)
 
 # --- Database Setup ---
 def setup_database():
-    """Creates the 'requests' table in the database if it doesn't already exist."""
     try:
         with engine.connect() as connection:
             connection.execute(text("""
@@ -66,17 +65,14 @@ def send_email_alert(subject, body):
     sender_email = os.getenv("EMAIL_USER")
     sender_password = os.getenv("EMAIL_PASSWORD")
     recipient_email = os.getenv("RECIPIENT_EMAIL", "call.light.project@gmail.com")
-
     if not sender_email or not sender_password:
         print("WARNING: Email credentials not set. Cannot send email.")
         return
-
     msg = EmailMessage()
     msg["Subject"] = f"Room {session.get('room_number', 'N/A')} - {subject}"
     msg["From"] = sender_email
     msg["To"] = recipient_email
     msg.set_content(body)
-
     try:
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
             smtp.login(sender_email, sender_password)
@@ -113,7 +109,6 @@ def set_bereavement_room(room_id):
 def language_selector():
     if request.method == "POST":
         session["language"] = request.form.get("language")
-        # CORRECTED: This now points to the correct 'handle_chat' function
         return redirect(url_for("handle_chat"))
     return render_template("language.html")
 
@@ -126,15 +121,18 @@ def handle_chat():
     config_module_name = f"button_config_bereavement_{lang}" if pathway == "bereavement" else f"button_config_{lang}"
     
     try:
-        button_config = importlib.import_module(config_module_name)
+        button_config = importlib..import_module(config_module_name)
         button_data = button_config.button_data
     except (ImportError, AttributeError) as e:
         print(f"ERROR: Could not load configuration module '{config_module_name}'. Error: {e}")
         return f"Error: Configuration file '{config_module_name}.py' is missing or invalid. Please contact support."
 
-    if request.method == "GET":
+    # THIS IS THE CRITICAL FIX FOR THE GREETING
+    # If it's a GET request, or a POST that doesn't have a user_input (like from the language page), show the greeting.
+    if request.method == "GET" or 'user_input' not in request.form:
         return render_template("chat.html", reply=button_data["greeting"], options=button_data["main_buttons"], button_data=button_data)
 
+    # --- Handle POST request from within the chat page ---
     user_input = request.form.get("user_input", "").strip()
     
     if request.form.get("action") == "send_note":
