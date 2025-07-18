@@ -1,5 +1,6 @@
 # button_config_bereavement_en.py
-"greeting": "Hello! We are here to support you.",  # Changed greeting to be more sensitive
+button_data = {
+    "greeting": "Hello! We are here to support you.",  # Changed greeting to be more sensitive
     "cna_notification": "✅ CNA has been notified.",
     "nurse_notification": "✅ Nurse has been notified.",
     "back_text": "⬅ Back",
@@ -49,7 +50,7 @@
     "Nausea/Vomiting": {"action": "Notify Nurse"},
     "Itchy": {"action": "Notify Nurse"},
     "Gas pain": {"action": "Notify Nurse"},
-    "Constipation": {"action": "Notify Nurse"},
+    "Constipation": {"action": "Notify Nurse"}, # <-- THIS COMMA WAS MISSING
 
     "I have questions": {
         "note": "If your question is not listed, your nurse will be in as soon as possible.",
@@ -87,3 +88,4 @@
         "note": "If you delivered by C-section, the minimum stay is 48 hours. The OB-GYN will give the discharge order if appropriate. Typically, as long as your pain, blood pressure, and bleeding are normal, you will be discharged."
     }
 }
+
