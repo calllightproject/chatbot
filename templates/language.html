@@ -71,7 +71,8 @@
             <h2>Please select your language.</h2>
         </div>
         
-        <form method="POST" action="{{ url_for('handle_chat') }}" class="language-form">
+        <!-- CORRECTED: The form action now correctly points to 'language_selector' -->
+        <form method="POST" action="{{ url_for('language_selector') }}" class="language-form">
             <button type="submit" name="language" value="en" aria-label="Select English">
                 English
             </button>
