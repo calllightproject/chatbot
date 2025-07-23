@@ -2,7 +2,7 @@ import os
 import json
 import smtplib
 import importlib
-from datetime import datetime
+from datetime import datetime, date
 from collections import defaultdict
 from email.message import EmailMessage
 
@@ -56,7 +56,6 @@ def setup_database():
         print(f"CRITICAL ERROR during database setup: {e}")
 
 # --- Core Helper Functions ---
-# ... (log_request_to_db, send_email_alert, process_request functions remain the same) ...
 def log_request_to_db(request_id, category, user_input, reply):
     room = session.get("room_number", "Unknown Room")
     is_first_baby = session.get("is_first_baby", None)
@@ -111,7 +110,6 @@ def process_request(role, subject, user_input, reply_message):
 
 
 # --- App Routes ---
-# ... (set_room, set_bereavement_room, language_selector, demographics, handle_chat, reset_language routes remain the same) ...
 @app.route("/room/<room_id>")
 def set_room(room_id):
     session.clear()
@@ -250,15 +248,26 @@ def analytics():
 
     return render_template('analytics.html', top_requests_labels=json.dumps(top_requests_labels), top_requests_values=json.dumps(top_requests_values), requests_by_hour_labels=json.dumps(requests_by_hour_labels), requests_by_hour_values=json.dumps(requests_by_hour_values))
 
-# NEW: Route for the assignment interface
+# MODIFIED: Route for the assignment interface now saves to the database
 @app.route('/assignments', methods=['GET', 'POST'])
 def assignments():
     if request.method == 'POST':
-        # Logic to save assignments will go here later
-        # For now, just print the form data to the console to confirm it works
-        print("Received assignment form data:")
-        for key, value in request.form.items():
-            print(f"{key}: {value}")
+        today = date.today()
+        with engine.connect() as connection:
+            # Use a transaction to handle all updates at once
+            with connection.begin():
+                for key, nurse_name in request.form.items():
+                    if key.startswith('nurse_for_room_'):
+                        room_number = key.replace('nurse_for_room_', '')
+                        # This is an "UPSERT" operation: it updates if the record exists, or inserts if it doesn't.
+                        # This is specific to PostgreSQL.
+                        connection.execute(text("""
+                            INSERT INTO assignments (assignment_date, room_number, nurse_name)
+                            VALUES (:date, :room, :nurse)
+                            ON CONFLICT (assignment_date, room_number)
+                            DO UPDATE SET nurse_name = EXCLUDED.nurse_name;
+                        """), {"date": today, "room": room_number, "nurse": nurse_name})
+            print("Assignments saved successfully.")
         return redirect(url_for('dashboard'))
 
     # For a GET request, just show the page
@@ -266,7 +275,6 @@ def assignments():
 
 
 # --- SocketIO Event Handlers ---
-# ... (join, acknowledge_request, defer_request, complete_request handlers remain the same) ...
 @socketio.on('join')
 def on_join(data):
     room = data['room']
