@@ -62,8 +62,9 @@
         <p class="question-text">{{ question_text }}</p>
         
         <form method="POST" action="{{ url_for('demographics') }}" class="options-form">
-            <button type="submit" name="is_first_baby" value="yes">{{ yes_text }}</button>
-            <button type="submit" name="is_first_baby" value="no">{{ no_text }}</button>
+            <!-- ACCESSIBILITY ADDED: aria-label provides a clear description for screen readers -->
+            <button type="submit" name="is_first_baby" value="yes" aria-label="Answer Yes to the question: {{ question_text }}">{{ yes_text }}</button>
+            <button type="submit" name="is_first_baby" value="no" aria-label="Answer No to the question: {{ question_text }}">{{ no_text }}</button>
         </form>
     </div>
 </body>
