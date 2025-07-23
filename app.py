@@ -40,9 +40,18 @@ def setup_database():
                     is_first_baby BOOLEAN
                 );
             """))
-            # We will add a table for assignments later
+            # NEW: Create a table to store staff assignments
+            connection.execute(text("""
+                CREATE TABLE IF NOT EXISTS assignments (
+                    id SERIAL PRIMARY KEY,
+                    assignment_date DATE NOT NULL,
+                    room_number VARCHAR(255) NOT NULL,
+                    nurse_name VARCHAR(255) NOT NULL,
+                    UNIQUE(assignment_date, room_number)
+                );
+            """))
             connection.commit()
-        print("Database setup complete. 'requests' table is ready.")
+        print("Database setup complete. Tables are ready.")
     except Exception as e:
         print(f"CRITICAL ERROR during database setup: {e}")
 
