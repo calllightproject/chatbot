@@ -8,7 +8,7 @@ from email.message import EmailMessage
 
 from flask import Flask, render_template, request, session, redirect, url_for
 from flask_socketio import SocketIO, join_room
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 
 # --- App Configuration ---
 app = Flask(__name__, template_folder='templates')
@@ -80,13 +80,12 @@ def send_email_alert(subject, body):
     except Exception as e:
         print(f"ERROR: Email failed to send: {e}")
 
-# MODIFIED: When a new request is processed, we now include a unique ID
 def process_request(role, subject, user_input, reply_message):
     request_id = 'req_' + str(datetime.now().timestamp()).replace('.', '')
     send_email_alert(subject, user_input)
     log_request_to_db(role, user_input, reply_message)
     socketio.emit('new_request', {
-        'id': request_id, # Unique ID for this request
+        'id': request_id,
         'room': session.get('room_number', 'N/A'),
         'request': user_input,
         'role': role
@@ -115,7 +114,7 @@ def language_selector():
         return redirect(url_for("handle_chat"))
     return render_template("language.html")
 
-# --- REFACTORED: Unified Chatbot Route ---
+# --- Unified Chatbot Route ---
 @app.route("/chat", methods=["GET", "POST"])
 def handle_chat():
     pathway = session.get("pathway", "standard")
@@ -179,19 +178,12 @@ def dashboard():
 def analytics():
     try:
         with engine.connect() as connection:
-            top_requests_result = connection.execute(text(
-                "SELECT category, COUNT(id) FROM requests GROUP BY category ORDER BY COUNT(id) DESC;"
-            ))
+            top_requests_result = connection.execute(text("SELECT category, COUNT(id) FROM requests GROUP BY category ORDER BY COUNT(id) DESC;"))
             top_requests_data = top_requests_result.fetchall()
             top_requests_labels = [row[0] for row in top_requests_data]
             top_requests_values = [row[1] for row in top_requests_data]
 
-            requests_by_hour_result = connection.execute(text("""
-                SELECT EXTRACT(HOUR FROM timestamp) as hour, COUNT(id) 
-                FROM requests 
-                GROUP BY hour 
-                ORDER BY hour;
-            """))
+            requests_by_hour_result = connection.execute(text("SELECT EXTRACT(HOUR FROM timestamp) as hour, COUNT(id) FROM requests GROUP BY hour ORDER BY hour;"))
             requests_by_hour_data = requests_by_hour_result.fetchall()
 
             hourly_counts = defaultdict(int)
@@ -206,27 +198,19 @@ def analytics():
         top_requests_labels, top_requests_values = [], []
         requests_by_hour_labels, requests_by_hour_values = [], []
 
-    return render_template(
-        'analytics.html',
-        top_requests_labels=json.dumps(top_requests_labels),
-        top_requests_values=json.dumps(top_requests_values),
-        requests_by_hour_labels=json.dumps(requests_by_hour_labels),
-        requests_by_hour_values=json.dumps(requests_by_hour_values)
-    )
+    return render_template('analytics.html', top_requests_labels=json.dumps(top_requests_labels), top_requests_values=json.dumps(top_requests_values), requests_by_hour_labels=json.dumps(requests_by_hour_labels), requests_by_hour_values=json.dumps(requests_by_hour_values))
 
 # --- SocketIO Event Handlers ---
 @socketio.on('join')
 def on_join(data):
     room = data['room']
     join_room(room)
-    print(f"Client has joined room: {room}")
 
 @socketio.on('acknowledge_request')
 def handle_acknowledge(data):
     room = data['room']
     message = data['message']
     socketio.emit('status_update', {'message': message}, to=room)
-    print(f"Sent acknowledgement to room {room}: {message}")
 
 @socketio.on('defer_request')
 def handle_defer_request(data):
