@@ -8,6 +8,9 @@ button_data = {
     "back_text": "⬅ 返回",
     "cna_notification": "✅ 已通知CNA（护理助理）。",
     "nurse_notification": "✅ 已通知护士。",
+    "demographic_question": "这是您的第一个宝宝吗？",
+    "demographic_yes": "是",
+    "demographic_no": "否",
 
     # --- Main Menu Options ---
     "main_buttons": [
