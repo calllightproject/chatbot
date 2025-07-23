@@ -1,9 +1,12 @@
 # button_config_bereavement_en.py
 button_data = {
-    "greeting": "Hello! We are here to support you.",  # Changed greeting to be more sensitive
+    # --- Core Notifications & Text ---
+    "greeting": "Hello! We are here to support you.",
     "cna_notification": "✅ CNA has been notified.",
     "nurse_notification": "✅ Nurse has been notified.",
     "back_text": "⬅ Back",
+
+    # --- Main Menu Options ---
     "main_buttons": [
         "I'm having an emergency",
         "I need supplies",
@@ -15,12 +18,13 @@ button_data = {
         "Blood sugar check for me"
     ],
 
+    # --- Direct Actions & Simple Sub-menus ---
     "I'm having an emergency": {"action": "Notify Nurse"},
     "I need help to the bathroom": {"action": "Notify CNA"},
     "I need my IV covered to shower": {"action": "Notify CNA"},
-
     "Blood sugar check for me": {"action": "Notify CNA"},
 
+    # --- Supplies Category ---
     "I need supplies": {
         "question": "What do you need?",
         "options": ["Pads", "Mesh underwear", "Ice pack"]
@@ -31,7 +35,6 @@ button_data = {
     },
     "Blue pads": {"action": "Notify CNA"},
     "White pads": {"action": "Notify CNA"},
-
     "Ice pack": {
         "question": "Where do you need the ice pack?",
         "options": ["Bottom", "C-section incision", "Breasts"]
@@ -39,9 +42,9 @@ button_data = {
     "Bottom": {"action": "Notify CNA"},
     "C-section incision": {"action": "Notify CNA"},
     "Breasts": {"action": "Notify CNA"},
-
     "Mesh underwear": {"action": "Notify CNA"},
 
+    # --- Medication Category ---
     "I need medication": {
         "question": "What is your main symptom?",
         "options": ["Pain", "Nausea/Vomiting", "Itchy", "Gas pain", "Constipation"]
@@ -50,8 +53,9 @@ button_data = {
     "Nausea/Vomiting": {"action": "Notify Nurse"},
     "Itchy": {"action": "Notify Nurse"},
     "Gas pain": {"action": "Notify Nurse"},
-    "Constipation": {"action": "Notify Nurse"}, # <-- THIS COMMA WAS MISSING
+    "Constipation": {"action": "Notify Nurse"},
 
+    # --- Questions Category ---
     "I have questions": {
         "note": "If your question is not listed, your nurse will be in as soon as possible.",
         "options": [
@@ -70,6 +74,7 @@ button_data = {
         "note": "Change your pad every 2–4 hours or when it becomes saturated. Let your nurse know if you’re soaking the big pad in less than 1 hour or clots bigger than a golf ball."
     },
 
+    # --- Going Home Category ---
     "I want to know about going home": {
         "question": "What would you like to know?",
         "options": ["Vaginal delivery", "C-section delivery", "When will I get my discharge paperwork?",
@@ -88,4 +93,3 @@ button_data = {
         "note": "If you delivered by C-section, the minimum stay is 48 hours. The OB-GYN will give the discharge order if appropriate. Typically, as long as your pain, blood pressure, and bleeding are normal, you will be discharged."
     }
 }
-
