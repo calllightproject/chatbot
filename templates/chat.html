@@ -31,6 +31,7 @@
         }
 
         .header {
+            position: relative;
             text-align: center;
             padding-bottom: 15px;
             border-bottom: 1px solid #e1e1e2;
@@ -42,11 +43,25 @@
             font-size: 24px;
         }
 
-        /* This class is now used in the footer */
         .language-link {
+            position: absolute;
+            top: 5px;
+            right: 5px;
             text-decoration: none;
             color: var(--accent-blue);
             font-size: 14px;
+        }
+
+        /* NEW: Style for the status update box */
+        .status-update {
+            background-color: #d4edda; /* Light green */
+            color: #155724; /* Dark green text */
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            text-align: center;
+            display: none; /* Hidden by default */
+            font-size: 16px;
         }
 
         .bot-reply {
@@ -117,22 +132,17 @@
         .note-form button:hover {
             background-color: #093582;
         }
-        
-        /* New footer style */
-        .footer {
-            text-align: center;
-            padding-top: 20px;
-            margin-top: 20px;
-            border-top: 1px solid #e1e1e2;
-        }
     </style>
 </head>
 <body>
     <div class="chat-box">
         <div class="header">
             <h2>Postpartum Chatbot</h2>
-            <!-- The link has been moved from here -->
+            <a href="{{ url_for('reset_language') }}" class="language-link">Change Language</a>
         </div>
+
+        <!-- NEW: A box to show status updates from staff -->
+        <div id="status-box" class="status-update"></div>
 
         <div class="bot-reply">
             <p>{{ reply }}</p>
@@ -147,7 +157,7 @@
         </div>
 
         <div class="note-section">
-            <form method="POST" action="{{ url_for('handle_chat') }}" class="note-form-container">
+            <form method="POST" action="{{ url_for('handle_chat') }}">
                 <input type="hidden" name="action" value="send_note">
                 <label for="custom_note" class="note-label">{{ button_data.get('custom_note_placeholder', 'Or send a custom note to your nurse:') }}</label>
                 <div class="note-form">
@@ -156,11 +166,31 @@
                 </div>
             </form>
         </div>
-
-        <!-- The link has been moved to this new footer section -->
-        <div class="footer">
-            <a href="{{ url_for('reset_language') }}" class="language-link">Change Language</a>
-        </div>
     </div>
+
+    <!-- NEW: Add Socket.IO client and script -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script>
+        const roomNumber = "{{ session.get('room_number', 'unknown') }}";
+
+        if (roomNumber !== 'unknown') {
+            const socket = io();
+
+            socket.on('connect', function() {
+                socket.emit('join', { room: roomNumber });
+            });
+
+            socket.on('status_update', function(data) {
+                const statusBox = document.getElementById('status-box');
+                statusBox.textContent = data.message;
+                statusBox.style.display = 'block';
+                
+                // Optional: Hide the message after a few seconds
+                setTimeout(() => {
+                    statusBox.style.display = 'none';
+                }, 10000); // Hides after 10 seconds
+            });
+        }
+    </script>
 </body>
 </html>
