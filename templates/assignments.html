@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Staff Assignments</title>
+    <style>
+        :root {
+            --core-blue: #00205b;
+            --accent-blue: #007eb4;
+            --neutral-gray-text: #303235;
+            --light-gray-background: #f5f5f5;
+            --white: #ffffff;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            padding: 20px;
+            background-color: var(--light-gray-background);
+            color: var(--neutral-gray-text);
+        }
+        .container {
+            max-width: 700px;
+            margin: 20px auto;
+            background: var(--white);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: var(--core-blue);
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .assignment-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        .assignment-table th, .assignment-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e1e1e2;
+        }
+        .assignment-table th {
+            font-weight: bold;
+            color: var(--neutral-gray-text);
+        }
+        .assignment-table select {
+            width: 100%;
+            padding: 8px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            font-size: 16px;
+        }
+        .save-button {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            font-size: 18px;
+            border: none;
+            border-radius: 5px;
+            background-color: var(--core-blue);
+            color: var(--white);
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .save-button:hover {
+            background-color: #093582;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .footer a {
+            color: var(--accent-blue);
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Staff Assignments</h1>
+        
+        <!-- In a real version, the rooms and nurses would be loaded from the database -->
+        <form method="POST" action="{{ url_for('assignments') }}">
+            <table class="assignment-table">
+                <thead>
+                    <tr>
+                        <th>Room Number</th>
+                        <th>Assigned Nurse</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- This is a placeholder loop. We will make this dynamic later. -->
+                    {% for room in ['201', '202', '203', '204', '205', '206'] %}
+                    <tr>
+                        <td>{{ room }}</td>
+                        <td>
+                            <select name="nurse_for_room_{{ room }}">
+                                <option value="unassigned">Unassigned</option>
+                                <option value="Nurse Jackie">Nurse Jackie</option>
+                                <option value="Nurse Carol">Nurse Carol</option>
+                                <option value="Nurse John">Nurse John</option>
+                                <option value="Nurse Maria">Nurse Maria</option>
+                            </select>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <button type="submit" class="save-button">Save Assignments</button>
+        </form>
+        
+        <div class="footer">
+            <a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+        </div>
+    </div>
+</body>
+</html>
