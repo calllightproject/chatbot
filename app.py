@@ -30,11 +30,14 @@ def setup_database():
             connection.execute(text("""
                 CREATE TABLE IF NOT EXISTS requests (
                     id SERIAL PRIMARY KEY,
+                    request_id VARCHAR(255) UNIQUE,
                     timestamp TIMESTAMP WITHOUT TIME ZONE,
+                    completion_timestamp TIMESTAMP WITHOUT TIME ZONE,
                     room VARCHAR(255),
                     user_input TEXT,
                     category VARCHAR(255),
-                    reply TEXT
+                    reply TEXT,
+                    is_first_baby BOOLEAN
                 );
             """))
             connection.commit()
@@ -43,19 +46,22 @@ def setup_database():
         print(f"CRITICAL ERROR during database setup: {e}")
 
 # --- Core Helper Functions ---
-def log_request_to_db(category, user_input, reply):
+def log_request_to_db(request_id, category, user_input, reply):
     room = session.get("room_number", "Unknown Room")
+    is_first_baby = session.get("is_first_baby", None)
     try:
         with engine.connect() as connection:
             connection.execute(text("""
-                INSERT INTO requests (timestamp, room, category, user_input, reply)
-                VALUES (:timestamp, :room, :category, :user_input, :reply);
+                INSERT INTO requests (request_id, timestamp, room, category, user_input, reply, is_first_baby)
+                VALUES (:request_id, :timestamp, :room, :category, :user_input, :reply, :is_first_baby);
             """), {
+                "request_id": request_id,
                 "timestamp": datetime.now(),
                 "room": room,
                 "category": category,
                 "user_input": user_input,
-                "reply": reply
+                "reply": reply,
+                "is_first_baby": is_first_baby
             })
             connection.commit()
     except Exception as e:
@@ -83,7 +89,7 @@ def send_email_alert(subject, body):
 def process_request(role, subject, user_input, reply_message):
     request_id = 'req_' + str(datetime.now().timestamp()).replace('.', '')
     send_email_alert(subject, user_input)
-    log_request_to_db(role, user_input, reply_message)
+    log_request_to_db(request_id, role, user_input, reply_message)
     socketio.emit('new_request', {
         'id': request_id,
         'room': session.get('room_number', 'N/A'),
@@ -111,6 +117,8 @@ def set_bereavement_room(room_id):
 def language_selector():
     if request.method == "POST":
         session["language"] = request.form.get("language")
+        is_first_baby_response = request.form.get("is_first_baby")
+        session["is_first_baby"] = True if is_first_baby_response == 'yes' else False
         return redirect(url_for("handle_chat"))
     return render_template("language.html")
 
@@ -147,7 +155,6 @@ def handle_chat():
         reply = button_info.get("question") or button_info.get("note", "")
         options = button_info.get("options", [])
         
-        # THIS IS THE FIX: Only add a back button if there are options AND a back button isn't already there.
         back_text = button_data.get("back_text", "⬅ Back")
         if options and back_text not in options:
             options.append(back_text)
@@ -202,6 +209,7 @@ def analytics():
         requests_by_hour_labels, requests_by_hour_values = [], []
 
     return render_template('analytics.html', top_requests_labels=json.dumps(top_requests_labels), top_requests_values=json.dumps(top_requests_values), requests_by_hour_labels=json.dumps(requests_by_hour_labels), requests_by_hour_values=json.dumps(requests_by_hour_values))
+    
 
 # --- SocketIO Event Handlers ---
 @socketio.on('join')
@@ -218,6 +226,22 @@ def handle_acknowledge(data):
 @socketio.on('defer_request')
 def handle_defer_request(data):
     socketio.emit('request_deferred', data)
+
+@socketio.on('complete_request')
+def handle_complete_request(data):
+    request_id = data.get('request_id')
+    if request_id:
+        try:
+            with engine.connect() as connection:
+                connection.execute(text("""
+                    UPDATE requests 
+                    SET completion_timestamp = :now 
+                    WHERE request_id = :request_id;
+                """), {"now": datetime.now(), "request_id": request_id})
+                connection.commit()
+            print(f"Request {request_id} marked as complete.")
+        except Exception as e:
+            print(f"ERROR updating completion timestamp: {e}")
 
 # --- App Startup ---
 with app.app_context():
