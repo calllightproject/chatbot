@@ -1,4 +1,3 @@
-import os
 import json
 import smtplib
 import importlib
@@ -16,7 +15,8 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-strong-fallback-secret-key-for
 socketio = SocketIO(app)
 
 # --- Database Configuration ---
-DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL = osimport os
+.getenv("DATABASE_URL")
 if not DATABASE_URL:
     print("WARNING: DATABASE_URL environment variable not found. Using a local SQLite database.")
     DATABASE_URL = "sqlite:///local_call_light.db"
@@ -98,7 +98,7 @@ def process_request(role, subject, user_input, reply_message):
     })
     return reply_message
 
-# --- Pathway and Language Setup Routes ---
+# --- App Routes ---
 @app.route("/room/<room_id>")
 def set_room(room_id):
     session.clear()
@@ -117,12 +117,38 @@ def set_bereavement_room(room_id):
 def language_selector():
     if request.method == "POST":
         session["language"] = request.form.get("language")
+        pathway = session.get("pathway", "standard")
+        
+        if pathway == "bereavement":
+            session["is_first_baby"] = None
+            return redirect(url_for("handle_chat"))
+        else:
+            return redirect(url_for("demographics"))
+            
+    return render_template("language.html")
+
+@app.route("/demographics", methods=["GET", "POST"])
+def demographics():
+    lang = session.get("language", "en")
+    config_module_name = f"button_config_{lang}"
+    
+    try:
+        button_config = importlib.import_module(config_module_name)
+        button_data = button_config.button_data
+    except (ImportError, AttributeError):
+        return "Error: Language configuration file is missing or invalid."
+
+    if request.method == "POST":
         is_first_baby_response = request.form.get("is_first_baby")
         session["is_first_baby"] = True if is_first_baby_response == 'yes' else False
         return redirect(url_for("handle_chat"))
-    return render_template("language.html")
 
-# --- Unified Chatbot Route ---
+    question_text = button_data.get("demographic_question", "Is this your first baby?")
+    yes_text = button_data.get("demographic_yes", "Yes")
+    no_text = button_data.get("demographic_no", "No")
+    
+    return render_template("demographics.html", question_text=question_text, yes_text=yes_text, no_text=no_text)
+
 @app.route("/chat", methods=["GET", "POST"])
 def handle_chat():
     pathway = session.get("pathway", "standard")
@@ -176,10 +202,9 @@ def handle_chat():
 
 @app.route("/reset-language")
 def reset_language():
-    session.pop("language", None)
+    session.clear()
     return redirect(url_for("language_selector"))
 
-# --- Staff-Facing Routes ---
 @app.route("/dashboard")
 def dashboard():
     return render_template("dashboard.html")
@@ -210,8 +235,6 @@ def analytics():
 
     return render_template('analytics.html', top_requests_labels=json.dumps(top_requests_labels), top_requests_values=json.dumps(top_requests_values), requests_by_hour_labels=json.dumps(requests_by_hour_labels), requests_by_hour_values=json.dumps(requests_by_hour_values))
     
-
-# --- SocketIO Event Handlers ---
 @socketio.on('join')
 def on_join(data):
     room = data['room']
@@ -243,7 +266,6 @@ def handle_complete_request(data):
         except Exception as e:
             print(f"ERROR updating completion timestamp: {e}")
 
-# --- App Startup ---
 with app.app_context():
     setup_database()
 
