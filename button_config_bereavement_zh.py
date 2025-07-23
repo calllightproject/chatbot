@@ -3,11 +3,9 @@
 button_data = {
     # --- Core Notifications & Text ---
     "greeting": "您好。我们在此支持您。",
-    "custom_note_placeholder": "在此处输入给护士的留言...",
-    "send_note_button": "发送留言",
-    "back_text": "⬅ 返回",
     "cna_notification": "✅ 已通知护理助理。",
     "nurse_notification": "✅ 已通知护士。",
+    "back_text": "⬅ 返回",
 
     # --- Main Menu Options ---
     "main_buttons": [
