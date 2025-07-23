@@ -8,6 +8,7 @@ from email.message import EmailMessage
 
 from flask import Flask, render_template, request, session, redirect, url_for
 from flask_socketio import SocketIO, join_room
+from sqlalchemy import create_engine
 
 # --- App Configuration ---
 app = Flask(__name__, template_folder='templates')
