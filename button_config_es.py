@@ -7,6 +7,9 @@ button_data = {
     "back_text": "⬅ Regresar",
     "cna_notification": "✅ Se ha notificado al asistente de enfermería.",
     "nurse_notification": "✅ Se ha notificado a la enfermera.",
+    "demographic_question": "¿Es este su primer bebé?",
+    "demographic_yes": "Sí",
+    "demographic_no": "No",
 
     # --- Main Menu Options ---
     "main_buttons": [
