@@ -2,11 +2,9 @@
 button_data = {
     # --- Core Notifications & Text ---
     "greeting": "Hola. Estamos aquí para apoyarle.",
-    "custom_note_placeholder": "Escribe tu nota para la enfermera aquí...",
-    "send_note_button": "Enviar Nota",
-    "back_text": "⬅ Regresar",
     "cna_notification": "✅ Se ha notificado al asistente de enfermería.",
     "nurse_notification": "✅ Se ha notificado a la enfermera.",
+    "back_text": "⬅ Regresar",
 
     # --- Main Menu Options ---
     "main_buttons": [
