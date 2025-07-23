@@ -1,3 +1,4 @@
+import os
 import json
 import smtplib
 import importlib
@@ -15,8 +16,7 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-strong-fallback-secret-key-for
 socketio = SocketIO(app)
 
 # --- Database Configuration ---
-DATABASE_URL = osimport os
-.getenv("DATABASE_URL")
+DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     print("WARNING: DATABASE_URL environment variable not found. Using a local SQLite database.")
     DATABASE_URL = "sqlite:///local_call_light.db"
