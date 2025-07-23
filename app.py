@@ -147,16 +147,19 @@ def handle_chat():
         reply = button_info.get("question") or button_info.get("note", "")
         options = button_info.get("options", [])
         
-        if options:
-            options.append(button_data.get("back_text", "⬅ Back"))
-        else:
+        # THIS IS THE FIX: Only add a back button if there are options AND a back button isn't already there.
+        back_text = button_data.get("back_text", "⬅ Back")
+        if options and back_text not in options:
+            options.append(back_text)
+        elif not options:
             options = button_data["main_buttons"]
 
         if "action" in button_info:
             action = button_info["action"]
             role = "cna" if action == "Notify CNA" else "nurse"
             subject = f"{role.upper()} Request"
-            reply = process_request(role, subject, user_input, button_data[f"{role}_notification"])
+            notification_message = button_info.get("note", button_data[f"{role}_notification"])
+            reply = process_request(role, subject, user_input, notification_message)
             options = button_data["main_buttons"]
     else:
         reply = "I'm sorry, I didn't understand that. Please use the buttons provided."
