@@ -7,8 +7,7 @@ from collections import defaultdict
 from email.message import EmailMessage
 
 from flask import Flask, render_template, request, session, redirect, url_for
-from flask_socketio import SocketIO
-from sqlalchemy import create_engine, text
+from flask_socketio import SocketIO, join_room
 
 # --- App Configuration ---
 app = Flask(__name__, template_folder='templates')
@@ -38,13 +37,7 @@ def setup_database():
                 );
             """))
             connection.commit()
-            try:
-                connection.execute(text("ALTER TABLE requests ADD COLUMN completion_timestamp TIMESTAMP WITHOUT TIME ZONE;"))
-                connection.commit()
-                print("SUCCESS: Added 'completion_timestamp' column.")
-            except Exception:
-                print("INFO: 'completion_timestamp' column already exists.")
-        print("Database setup complete.")
+        print("Database setup complete. 'requests' table is ready.")
     except Exception as e:
         print(f"CRITICAL ERROR during database setup: {e}")
 
@@ -53,26 +46,26 @@ def log_request_to_db(category, user_input, reply):
     room = session.get("room_number", "Unknown Room")
     try:
         with engine.connect() as connection:
-            result = connection.execute(text("""
+            connection.execute(text("""
                 INSERT INTO requests (timestamp, room, category, user_input, reply)
-                VALUES (:timestamp, :room, :category, :user_input, :reply) RETURNING id;
+                VALUES (:timestamp, :room, :category, :user_input, :reply);
             """), {
-                "timestamp": datetime.now(), "room": room, "category": category,
-                "user_input": user_input, "reply": reply
+                "timestamp": datetime.now(),
+                "room": room,
+                "category": category,
+                "user_input": user_input,
+                "reply": reply
             })
-            new_id = result.fetchone()[0]
             connection.commit()
-            return new_id
     except Exception as e:
         print(f"ERROR logging to database: {e}")
-        return None
 
 def send_email_alert(subject, body):
     sender_email = os.getenv("EMAIL_USER")
     sender_password = os.getenv("EMAIL_PASSWORD")
     recipient_email = os.getenv("RECIPIENT_EMAIL", "call.light.project@gmail.com")
     if not sender_email or not sender_password:
-        print("WARNING: Email credentials not set.")
+        print("WARNING: Email credentials not set. Cannot send email.")
         return
     msg = EmailMessage()
     msg["Subject"] = f"Room {session.get('room_number', 'N/A')} - {subject}"
@@ -86,13 +79,17 @@ def send_email_alert(subject, body):
     except Exception as e:
         print(f"ERROR: Email failed to send: {e}")
 
+# MODIFIED: When a new request is processed, we now include a unique ID
 def process_request(role, subject, user_input, reply_message):
-    request_id = log_request_to_db(role, user_input, reply_message)
-    socketio.emit('new_request', {
-        'id': request_id, 'room': session.get('room_number', 'N/A'),
-        'request': user_input, 'role': role
-    })
+    request_id = 'req_' + str(datetime.now().timestamp()).replace('.', '')
     send_email_alert(subject, user_input)
+    log_request_to_db(role, user_input, reply_message)
+    socketio.emit('new_request', {
+        'id': request_id, # Unique ID for this request
+        'room': session.get('room_number', 'N/A'),
+        'request': user_input,
+        'role': role
+    })
     return reply_message
 
 # --- Pathway and Language Setup Routes ---
@@ -113,22 +110,15 @@ def set_bereavement_room(room_id):
 @app.route("/", methods=["GET", "POST"])
 def language_selector():
     if request.method == "POST":
-        language_choice = request.form.get("language")
-        session["language"] = language_choice
-        # --- NEW DEBUGGING LINE ---
-        print(f"--- Language SET in session: {language_choice} ---")
+        session["language"] = request.form.get("language")
         return redirect(url_for("handle_chat"))
     return render_template("language.html")
 
 # --- REFACTORED: Unified Chatbot Route ---
 @app.route("/chat", methods=["GET", "POST"])
 def handle_chat():
-    # --- NEW DEBUGGING LINE ---
-    retrieved_lang = session.get("language")
-    print(f"--- Language READ from session: {retrieved_lang} ---")
-    
-    lang = session.get("language", "en")
     pathway = session.get("pathway", "standard")
+    lang = session.get("language", "en")
     
     config_module_name = f"button_config_bereavement_{lang}" if pathway == "bereavement" else f"button_config_{lang}"
     
@@ -136,11 +126,8 @@ def handle_chat():
         button_config = importlib.import_module(config_module_name)
         button_data = button_config.button_data
     except (ImportError, AttributeError) as e:
-        print(f"ERROR: Could not load config '{config_module_name}'. Falling back to English. Error: {e}")
-        lang = "en"
-        config_module_name = f"button_config_bereavement_{lang}" if pathway == "bereavement" else f"button_config_{lang}"
-        button_config = importlib.import_module(config_module_name)
-        button_data = button_config.button_data
+        print(f"ERROR: Could not load configuration module '{config_module_name}'. Error: {e}")
+        return f"Error: Configuration file '{config_module_name}.py' is missing or invalid. Please contact support."
 
     if request.method == "GET" or 'user_input' not in request.form:
         return render_template("chat.html", reply=button_data["greeting"], options=button_data["main_buttons"], button_data=button_data)
@@ -191,28 +178,58 @@ def dashboard():
 def analytics():
     try:
         with engine.connect() as connection:
-            # ... (analytics queries) ...
-            pass
+            top_requests_result = connection.execute(text(
+                "SELECT category, COUNT(id) FROM requests GROUP BY category ORDER BY COUNT(id) DESC;"
+            ))
+            top_requests_data = top_requests_result.fetchall()
+            top_requests_labels = [row[0] for row in top_requests_data]
+            top_requests_values = [row[1] for row in top_requests_data]
+
+            requests_by_hour_result = connection.execute(text("""
+                SELECT EXTRACT(HOUR FROM timestamp) as hour, COUNT(id) 
+                FROM requests 
+                GROUP BY hour 
+                ORDER BY hour;
+            """))
+            requests_by_hour_data = requests_by_hour_result.fetchall()
+
+            hourly_counts = defaultdict(int)
+            for hour, count in requests_by_hour_data:
+                hourly_counts[int(hour)] = count
+            
+            requests_by_hour_labels = [f"{h}:00" for h in range(24)]
+            requests_by_hour_values = [hourly_counts[h] for h in range(24)]
+
     except Exception as e:
         print(f"ERROR fetching analytics data: {e}")
-    return render_template('analytics.html', top_requests_labels='[]', top_requests_values='[]', requests_by_hour_labels='[]', requests_by_hour_values='[]')
+        top_requests_labels, top_requests_values = [], []
+        requests_by_hour_labels, requests_by_hour_values = [], []
+
+    return render_template(
+        'analytics.html',
+        top_requests_labels=json.dumps(top_requests_labels),
+        top_requests_values=json.dumps(top_requests_values),
+        requests_by_hour_labels=json.dumps(requests_by_hour_labels),
+        requests_by_hour_values=json.dumps(requests_by_hour_values)
+    )
 
 # --- SocketIO Event Handlers ---
+@socketio.on('join')
+def on_join(data):
+    room = data['room']
+    join_room(room)
+    print(f"Client has joined room: {room}")
+
+@socketio.on('acknowledge_request')
+def handle_acknowledge(data):
+    room = data['room']
+    message = data['message']
+    socketio.emit('status_update', {'message': message}, to=room)
+    print(f"Sent acknowledgement to room {room}: {message}")
+
 @socketio.on('defer_request')
 def handle_defer_request(data):
     socketio.emit('request_deferred', data)
-
-@socketio.on('mark_complete')
-def handle_mark_complete(data):
-    request_id = data.get('id')
-    if request_id:
-        try:
-            with engine.connect() as connection:
-                connection.execute(text("UPDATE requests SET completion_timestamp = :now WHERE id = :id;"), {"now": datetime.now(), "id": request_id})
-                connection.commit()
-                print(f"Request {request_id} marked as complete.")
-        except Exception as e:
-            print(f"Error updating request {request_id}: {e}")
 
 # --- App Startup ---
 with app.app_context():
