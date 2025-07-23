@@ -2,7 +2,7 @@ import os
 import json
 import smtplib
 import importlib
-from datetime import datetime, date
+from datetime import datetime
 from collections import defaultdict
 from email.message import EmailMessage
 
@@ -40,7 +40,6 @@ def setup_database():
                     is_first_baby BOOLEAN
                 );
             """))
-            # NEW: Create a table to store staff assignments
             connection.execute(text("""
                 CREATE TABLE IF NOT EXISTS assignments (
                     id SERIAL PRIMARY KEY,
@@ -107,7 +106,6 @@ def process_request(role, subject, user_input, reply_message):
         'role': role
     })
     return reply_message
-
 
 # --- App Routes ---
 @app.route("/room/<room_id>")
@@ -216,8 +214,6 @@ def reset_language():
     session.clear()
     return redirect(url_for("language_selector"))
 
-
-# --- Staff-Facing Routes ---
 @app.route("/dashboard")
 def dashboard():
     return render_template("dashboard.html")
@@ -247,34 +243,7 @@ def analytics():
         requests_by_hour_labels, requests_by_hour_values = [], []
 
     return render_template('analytics.html', top_requests_labels=json.dumps(top_requests_labels), top_requests_values=json.dumps(top_requests_values), requests_by_hour_labels=json.dumps(requests_by_hour_labels), requests_by_hour_values=json.dumps(requests_by_hour_values))
-
-# MODIFIED: Route for the assignment interface now saves to the database
-@app.route('/assignments', methods=['GET', 'POST'])
-def assignments():
-    if request.method == 'POST':
-        today = date.today()
-        with engine.connect() as connection:
-            # Use a transaction to handle all updates at once
-            with connection.begin():
-                for key, nurse_name in request.form.items():
-                    if key.startswith('nurse_for_room_'):
-                        room_number = key.replace('nurse_for_room_', '')
-                        # This is an "UPSERT" operation: it updates if the record exists, or inserts if it doesn't.
-                        # This is specific to PostgreSQL.
-                        connection.execute(text("""
-                            INSERT INTO assignments (assignment_date, room_number, nurse_name)
-                            VALUES (:date, :room, :nurse)
-                            ON CONFLICT (assignment_date, room_number)
-                            DO UPDATE SET nurse_name = EXCLUDED.nurse_name;
-                        """), {"date": today, "room": room_number, "nurse": nurse_name})
-            print("Assignments saved successfully.")
-        return redirect(url_for('dashboard'))
-
-    # For a GET request, just show the page
-    return render_template('assignments.html')
-
-
-# --- SocketIO Event Handlers ---
+    
 @socketio.on('join')
 def on_join(data):
     room = data['room']
@@ -306,8 +275,6 @@ def handle_complete_request(data):
         except Exception as e:
             print(f"ERROR updating completion timestamp: {e}")
 
-
-# --- App Startup ---
 with app.app_context():
     setup_database()
 
