@@ -7,6 +7,10 @@ button_data = {
     "cna_notification": "✅ CNA has been notified.",
     "nurse_notification": "✅ Nurse has been notified.",
     "back_text": "⬅ Back",
+    "demographic_question": "Is this your first baby?",
+    "demographic_yes": "Yes",
+    "demographic_no": "No",
+
 
     # --- Main Menu Options ---
     "main_buttons": [
