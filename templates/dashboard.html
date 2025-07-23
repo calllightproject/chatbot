@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Real-Time Request Dashboard</title>
     <style>
-        /* Your provided CSS starts here */
+        /* CSS from your provided stylesheet */
         :root {
             --core-blue: #00205b;
             --accent-blue: #007eb4;
@@ -29,17 +29,17 @@
             border-radius: 8px;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }
-        
+
         h1 {
             color: var(--core-blue);
             text-align: center;
-            margin-bottom: 20px;
         }
 
         #requests-list {
             list-style-type: none;
             padding: 0;
         }
+
         .request-item {
             display: flex;
             align-items: center;
@@ -47,24 +47,25 @@
             padding: 15px;
             margin-bottom: 10px;
             border-radius: 5px;
-            background-color: var(--white);
-            gap: 15px; /* Adds space between items */
+            background-color: #fff;
+            gap: 15px;
         }
-        .request-item.cna { border-left: 5px solid var(--accent-blue); } /* Accent Blue for CNA */
-        .request-item.nurse { border-left: 5px solid #d43f27; } /* Accent Red for Nurse */
+
+        .request-item.cna { border-left: 5px solid var(--accent-blue); }
+        .request-item.nurse { border-left: 5px solid #d43f27; }
 
         .request-item p {
             margin: 0;
             font-size: 1.1em;
-            flex-grow: 1; /* Allows the text to take up available space */
+            flex-grow: 1;
         }
+
         .request-item span {
             font-size: 0.9em;
             color: #555;
-            white-space: nowrap; /* Prevents text from wrapping */
+            white-space: nowrap;
         }
-        
-        /* Styles for all buttons within a request item */
+
         .request-item button {
             padding: 8px 12px;
             border: none;
@@ -74,7 +75,7 @@
             font-size: 14px;
             transition: opacity 0.3s;
         }
-        
+
         .ack-button { background-color: #ffc107; color: black; }
         .omw-button { background-color: #28a745; }
         .complete-btn { background-color: #6c757d; }
@@ -116,7 +117,7 @@
         const item = document.createElement('li');
         const requestTime = new Date();
 
-        item.id = data.id; // Use the unique ID from the server
+        item.id = data.id;
         item.className = `request-item ${data.role}`;
 
         let deferButtonHtml = '';
@@ -137,14 +138,12 @@
 
         list.prepend(item);
 
-        // --- Set up all buttons for this new item ---
         const ackButton = item.querySelector('.ack-button');
         const omwButton = item.querySelector('.omw-button');
         const deferButton = item.querySelector('.defer-btn');
         const completeButton = item.querySelector('.complete-btn');
         const ackButtons = [ackButton, omwButton, deferButton].filter(btn => btn);
 
-        // Acknowledge Button Logic
         ackButton.addEventListener('click', function() {
             socket.emit('acknowledge_request', {
                 room: data.room,
@@ -153,7 +152,6 @@
             ackButtons.forEach(btn => btn.disabled = true);
         });
 
-        // On My Way Button Logic
         omwButton.addEventListener('click', function() {
             socket.emit('acknowledge_request', {
                 room: data.room,
@@ -162,7 +160,6 @@
             ackButtons.forEach(btn => btn.disabled = true);
         });
 
-        // Defer Button Logic
         if (deferButton) {
             deferButton.addEventListener('click', function() {
                 socket.emit('defer_request', { id: item.id });
@@ -170,7 +167,6 @@
             });
         }
         
-        // Timestamp update interval
         const intervalId = setInterval(() => {
             const minutes = Math.round((new Date() - requestTime) / 60000);
             const timestampSpan = item.querySelector('.timestamp');
@@ -179,8 +175,8 @@
             }
         }, 60000);
 
-        // Complete Button Logic
         completeButton.addEventListener('click', function() {
+            socket.emit('complete_request', { request_id: data.id });
             clearInterval(intervalId);
             item.remove();
         });
