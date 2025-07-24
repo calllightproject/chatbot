@@ -2,7 +2,7 @@ import os
 import json
 import smtplib
 import importlib
-from datetime import datetime
+from datetime import datetime, date
 from collections import defaultdict
 from email.message import EmailMessage
 
@@ -103,7 +103,8 @@ def process_request(role, subject, user_input, reply_message):
         'id': request_id,
         'room': session.get('room_number', 'N/A'),
         'request': user_input,
-        'role': role
+        'role': role,
+        'timestamp': datetime.now().isoformat()
     })
     return reply_message
 
@@ -214,9 +215,31 @@ def reset_language():
     session.clear()
     return redirect(url_for("language_selector"))
 
+# --- Staff-Facing Routes ---
 @app.route("/dashboard")
 def dashboard():
-    return render_template("dashboard.html")
+    # MODIFIED: This function now fetches active requests from the database
+    active_requests = []
+    try:
+        with engine.connect() as connection:
+            result = connection.execute(text("""
+                SELECT request_id, room, user_input, category as role, timestamp
+                FROM requests 
+                WHERE completion_timestamp IS NULL 
+                ORDER BY timestamp DESC;
+            """))
+            for row in result:
+                active_requests.append({
+                    'id': row.request_id,
+                    'room': row.room,
+                    'request': row.user_input,
+                    'role': row.role,
+                    'timestamp': row.timestamp.isoformat()
+                })
+    except Exception as e:
+        print(f"ERROR fetching active requests: {e}")
+    
+    return render_template("dashboard.html", active_requests=json.dumps(active_requests))
 
 @app.route('/analytics')
 def analytics():
