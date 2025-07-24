@@ -1,3 +1,7 @@
+# THIS IS THE FIX: Initialize eventlet at the very top of the file
+import eventlet
+eventlet.monkey_patch()
+
 import os
 import json
 import smtplib
@@ -13,7 +17,8 @@ from sqlalchemy import create_engine, text
 # --- App Configuration ---
 app = Flask(__name__, template_folder='templates')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-strong-fallback-secret-key-for-local-development")
-socketio = SocketIO(app)
+# Pass the async_mode to SocketIO
+socketio = SocketIO(app, async_mode='eventlet')
 
 # --- Database Configuration ---
 DATABASE_URL = os.getenv("DATABASE_URL")
