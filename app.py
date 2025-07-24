@@ -99,7 +99,6 @@ def process_request(role, subject, user_input, reply_message):
     request_id = 'req_' + str(datetime.now().timestamp()).replace('.', '')
     send_email_alert(subject, user_input)
     log_request_to_db(request_id, role, user_input, reply_message)
-    # THIS IS THE FIX: This line sends the real-time alert to the dashboard.
     socketio.emit('new_request', {
         'id': request_id,
         'room': session.get('room_number', 'N/A'),
