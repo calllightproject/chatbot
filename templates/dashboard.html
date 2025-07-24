@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Real-Time Request Dashboard</title>
     <style>
-        /* Your existing CSS remains unchanged */
+        /* CSS from your provided stylesheet */
         :root {
             --core-blue: #00205b;
             --accent-blue: #007eb4;
@@ -13,12 +13,14 @@
             --light-gray-background: #f5f5f5;
             --white: #ffffff;
         }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
             padding: 20px;
             background-color: var(--light-gray-background);
             color: var(--neutral-gray-text);
         }
+
         .dashboard-container {
             max-width: 900px;
             margin: 20px auto;
@@ -27,14 +29,17 @@
             border-radius: 8px;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }
+
         h1 {
             color: var(--core-blue);
             text-align: center;
         }
+
         #requests-list {
             list-style-type: none;
             padding: 0;
         }
+
         .request-item {
             display: flex;
             align-items: center;
@@ -45,18 +50,22 @@
             background-color: #fff;
             gap: 15px;
         }
+
         .request-item.cna { border-left: 5px solid var(--accent-blue); }
         .request-item.nurse { border-left: 5px solid #d43f27; }
+
         .request-item p {
             margin: 0;
             font-size: 1.1em;
             flex-grow: 1;
         }
+
         .request-item span {
             font-size: 0.9em;
             color: #555;
             white-space: nowrap;
         }
+
         .request-item button {
             padding: 8px 12px;
             border: none;
@@ -66,14 +75,17 @@
             font-size: 14px;
             transition: opacity 0.3s;
         }
+
         .ack-button { background-color: #ffc107; color: black; }
         .omw-button { background-color: #28a745; }
         .complete-btn { background-color: #6c757d; }
         .defer-btn { background-color: #17a2b8; }
+
         .request-item button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
         }
+        
         .footer {
             text-align: center;
             margin-top: 30px;
@@ -128,7 +140,6 @@
             <button class="complete-btn">Complete</button>
         `;
 
-        // CORRECTED: Use prepend to add new items to the top of the list
         list.prepend(item);
 
         // --- Set up all buttons for this new item ---
@@ -180,9 +191,10 @@
 
     // --- Load existing active requests when the page first loads ---
     document.addEventListener('DOMContentLoaded', function() {
+        // This line gets the active_requests data that was passed from app.py
         const activeRequests = JSON.parse('{{ active_requests | safe }}');
-        // CORRECTED: Reverse the array so that when we prepend, the newest items end up on top
-        activeRequests.reverse().forEach(function(requestData) {
+        // Loop through the existing requests and add them to the list
+        activeRequests.forEach(function(requestData) {
             addRequestToList(requestData);
         });
     });
