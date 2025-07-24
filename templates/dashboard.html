@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Real-Time Request Dashboard</title>
     <style>
-        /* CSS from your provided stylesheet */
+        /* Your existing CSS remains unchanged */
         :root {
             --core-blue: #00205b;
             --accent-blue: #007eb4;
@@ -13,14 +13,12 @@
             --light-gray-background: #f5f5f5;
             --white: #ffffff;
         }
-
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             padding: 20px;
             background-color: var(--light-gray-background);
             color: var(--neutral-gray-text);
         }
-
         .dashboard-container {
             max-width: 900px;
             margin: 20px auto;
@@ -29,17 +27,14 @@
             border-radius: 8px;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }
-
         h1 {
             color: var(--core-blue);
             text-align: center;
         }
-
         #requests-list {
             list-style-type: none;
             padding: 0;
         }
-
         .request-item {
             display: flex;
             align-items: center;
@@ -50,22 +45,18 @@
             background-color: #fff;
             gap: 15px;
         }
-
         .request-item.cna { border-left: 5px solid var(--accent-blue); }
         .request-item.nurse { border-left: 5px solid #d43f27; }
-
         .request-item p {
             margin: 0;
             font-size: 1.1em;
             flex-grow: 1;
         }
-
         .request-item span {
             font-size: 0.9em;
             color: #555;
             white-space: nowrap;
         }
-
         .request-item button {
             padding: 8px 12px;
             border: none;
@@ -75,17 +66,14 @@
             font-size: 14px;
             transition: opacity 0.3s;
         }
-
         .ack-button { background-color: #ffc107; color: black; }
         .omw-button { background-color: #28a745; }
         .complete-btn { background-color: #6c757d; }
         .defer-btn { background-color: #17a2b8; }
-
         .request-item button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
         }
-        
         .footer {
             text-align: center;
             margin-top: 30px;
@@ -110,12 +98,16 @@
 <script type="text/javascript">
     const socket = io();
 
-    socket.on('connect', () => console.log('Connected to server!'));
-
-    socket.on('new_request', function(data) {
+    // --- Reusable function to add a request to the dashboard ---
+    function addRequestToList(data) {
         const list = document.getElementById('requests-list');
+        // Prevent duplicate requests from being added
+        if (document.getElementById(data.id)) {
+            return;
+        }
+        
         const item = document.createElement('li');
-        const requestTime = new Date();
+        const requestTime = new Date(data.timestamp); // Use the timestamp from the server
 
         item.id = data.id;
         item.className = `request-item ${data.role}`;
@@ -136,8 +128,10 @@
             <button class="complete-btn">Complete</button>
         `;
 
+        // CORRECTED: Use prepend to add new items to the top of the list
         list.prepend(item);
 
+        // --- Set up all buttons for this new item ---
         const ackButton = item.querySelector('.ack-button');
         const omwButton = item.querySelector('.omw-button');
         const deferButton = item.querySelector('.defer-btn');
@@ -145,18 +139,12 @@
         const ackButtons = [ackButton, omwButton, deferButton].filter(btn => btn);
 
         ackButton.addEventListener('click', function() {
-            socket.emit('acknowledge_request', {
-                room: data.room,
-                message: "✅ Your request was received and will be addressed shortly."
-            });
+            socket.emit('acknowledge_request', { room: data.room, message: "✅ Your request was received and will be addressed shortly." });
             ackButtons.forEach(btn => btn.disabled = true);
         });
 
         omwButton.addEventListener('click', function() {
-            socket.emit('acknowledge_request', {
-                room: data.room,
-                message: "✅ A team member is on their way."
-            });
+            socket.emit('acknowledge_request', { room: data.room, message: "✅ A team member is on their way." });
             ackButtons.forEach(btn => btn.disabled = true);
         });
 
@@ -167,18 +155,35 @@
             });
         }
         
-        const intervalId = setInterval(() => {
+        const updateTimestamp = () => {
             const minutes = Math.round((new Date() - requestTime) / 60000);
             const timestampSpan = item.querySelector('.timestamp');
             if (timestampSpan) {
                 timestampSpan.textContent = minutes > 0 ? `${minutes}m ago` : 'Just now';
             }
-        }, 60000);
+        };
+
+        const intervalId = setInterval(updateTimestamp, 60000);
+        updateTimestamp(); // Call it once immediately
 
         completeButton.addEventListener('click', function() {
             socket.emit('complete_request', { request_id: data.id });
             clearInterval(intervalId);
             item.remove();
+        });
+    }
+
+    // --- Handle new requests coming in real-time ---
+    socket.on('new_request', function(data) {
+        addRequestToList(data);
+    });
+
+    // --- Load existing active requests when the page first loads ---
+    document.addEventListener('DOMContentLoaded', function() {
+        const activeRequests = JSON.parse('{{ active_requests | safe }}');
+        // CORRECTED: Reverse the array so that when we prepend, the newest items end up on top
+        activeRequests.reverse().forEach(function(requestData) {
+            addRequestToList(requestData);
         });
     });
 
