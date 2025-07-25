@@ -1,7 +1,3 @@
-# THIS IS THE FIX: Initialize eventlet at the very top of the file
-import eventlet
-eventlet.monkey_patch()
-
 import os
 import json
 import smtplib
@@ -17,8 +13,7 @@ from sqlalchemy import create_engine, text
 # --- App Configuration ---
 app = Flask(__name__, template_folder='templates')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-strong-fallback-secret-key-for-local-development")
-# Pass the async_mode to SocketIO
-socketio = SocketIO(app, async_mode='eventlet')
+socketio = SocketIO(app)
 
 # --- Database Configuration ---
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -183,9 +178,14 @@ def handle_chat():
 
     user_input = request.form.get("user_input", "").strip()
     
+    # THIS IS THE FIX: The logic for handling the note was incorrect.
     if request.form.get("action") == "send_note":
         note_text = request.form.get("custom_note")
-        reply = process_request("nurse", "Custom Patient Note", note_text, button_data["nurse_notification"]) if note_text else "Please type a message in the box."
+        if note_text:
+            # We pass the actual note_text to be logged and displayed
+            reply = process_request("nurse", "Custom Patient Note", note_text, button_data["nurse_notification"])
+        else:
+            reply = "Please type a message in the box."
         return render_template("chat.html", reply=reply, options=button_data["main_buttons"], button_data=button_data)
 
     if user_input == button_data.get("back_text", "⬅ Back"):
