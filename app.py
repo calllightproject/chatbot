@@ -97,6 +97,7 @@ def send_email_alert(subject, body):
 
 def process_request(role, subject, user_input, reply_message):
     request_id = 'req_' + str(datetime.now().timestamp()).replace('.', '')
+    # The `user_input` here is what gets logged and sent to the dashboard
     send_email_alert(subject, user_input)
     log_request_to_db(request_id, role, user_input, reply_message)
     socketio.emit('new_request', {
@@ -178,12 +179,11 @@ def handle_chat():
 
     user_input = request.form.get("user_input", "").strip()
     
-    # THIS IS THE FIX: The logic for handling the note was incorrect.
     if request.form.get("action") == "send_note":
         note_text = request.form.get("custom_note")
         if note_text:
-            # We pass the actual note_text to be logged and displayed
-            reply = process_request("nurse", "Custom Patient Note", note_text, button_data["nurse_notification"])
+            # THIS IS THE FIX: We pass the actual note_text as the `user_input` to be logged and displayed.
+            reply = process_request(role="nurse", subject="Custom Patient Note", user_input=note_text, reply_message=button_data["nurse_notification"])
         else:
             reply = "Please type a message in the box."
         return render_template("chat.html", reply=reply, options=button_data["main_buttons"], button_data=button_data)
@@ -207,7 +207,8 @@ def handle_chat():
             role = "cna" if action == "Notify CNA" else "nurse"
             subject = f"{role.upper()} Request"
             notification_message = button_info.get("note", button_data[f"{role}_notification"])
-            reply = process_request(role, subject, user_input, notification_message)
+            # For regular buttons, the `user_input` is the text of the button itself.
+            reply = process_request(role=role, subject=subject, user_input=user_input, reply_message=notification_message)
             options = button_data["main_buttons"]
     else:
         reply = "I'm sorry, I didn't understand that. Please use the buttons provided."
