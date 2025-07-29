@@ -18,16 +18,14 @@ button_data = {
         "Necesito medicamentos",
         "Tengo preguntas",
         "Quiero saber sobre el alta",
-        "Necesito ayuda para ir al baño",
-        "Necesito cubrir mi vía IV para bañarme",
+        "Baño / Ducha", # UPDATED
         "Necesito ayuda para amamantar",
-        "Azúcar en la sangre"
+        "Azúcar en la sangre",
+        "Hielo / Agua" # UPDATED
     ],
 
     # --- Direct Actions & Simple Sub-menus ---
     "Tengo una emergencia": {"action": "Notify Nurse"},
-    "Necesito ayuda para ir al baño": {"action": "Notify CNA"},
-    "Necesito cubrir mi vía IV para bañarme": {"action": "Notify CNA"},
     "Necesito ayuda para amamantar": {
         "action": "Notify Nurse",
         "note": "✅ Se ha notificado a su enfermera. Mientras tanto, puede prepararse asegurándose de que su bebé tenga un pañal limpio y esté desvestido para el contacto piel con piel."
@@ -39,16 +37,48 @@ button_data = {
     "Mamá": {"action": "Notify CNA"},
     "Bebé (azúcar en la sangre)": {"action": "Notify Nurse"},
 
+    # --- NEW: Ice Chips/Water Submenu ---
+    "Hielo / Agua": {
+        "question": "Si tiene una persona de apoyo con usted, puede ir a nuestra sala de nutrición, que tiene agua, hielo picado, jugo y otros pequeños bocadillos. El personal puede mostrarle dónde se encuentra. ¿Qué le gustaría?",
+        "options": [
+            "Necesito agua con hielo",
+            "Necesito hielo picado",
+            "Necesito agua, sin hielo",
+            "Necesito agua caliente"
+        ]
+    },
+    "Necesito agua con hielo": {"action": "Notify CNA"},
+    "Necesito hielo picado": {"action": "Notify CNA"},
+    "Necesito agua, sin hielo": {"action": "Notify CNA"},
+    "Necesito agua caliente": {"action": "Notify CNA"},
+
+    # --- Bathroom/Shower Submenu ---
+    "Baño / Ducha": {
+        "question": "Si ya ha ido al baño una vez con un miembro del personal y se siente estable, puede usar el baño por su cuenta. Por favor, avísenos si todavía necesita ayuda. ¿Qué necesita?",
+        "options": [
+            "Necesito ayuda para ir al baño",
+            "Necesito cubrir mi vía IV para bañarme",
+            "¿Puedo tomar una ducha?"
+        ]
+    },
+    "Necesito ayuda para ir al baño": {"action": "Notify CNA"},
+    "Necesito cubrir mi vía IV para bañarme": {"action": "Notify CNA"},
+    "¿Puedo tomar una ducha?": {"note": "Normalmente sí, pero consulte con su enfermera si tiene una vía intravenosa u otras restricciones."},
+
     # --- Supplies Category ---
     "Necesito suministros": {
         "question": "¿Para el/la bebé o para la mamá?",
         "options": ["Artículos para bebé", "Artículos para mamá"]
     },
-    # Supplies -> Baby
     "Artículos para bebé": {
         "question": "¿Qué necesita su bebé?",
         "options": ["Pañales", "Fórmula", "Manta para envolver", "Toallitas húmedas"]
     },
+    "Artículos para mamá": {
+        "question": "¿Qué necesita?",
+        "options": ["Toallas sanitarias", "Ropa interior de malla", "Compresa de hielo", "Almohadas"]
+    },
+    "Almohadas": {"action": "Notify CNA"},
     "Pañales": {"action": "Notify CNA"},
     "Manta para envolver": {"action": "Notify CNA"},
     "Toallitas húmedas": {"action": "Notify CNA"},
@@ -67,11 +97,6 @@ button_data = {
     "Similac Neosure (etiqueta amarilla)": {"action": "Notify CNA"},
     "Enfamil Newborn (etiqueta amarilla)": {"action": "Notify CNA"},
     "Enfamil Gentlease (etiqueta morada)": {"action": "Notify CNA"},
-    # Supplies -> Mom
-    "Artículos para mamá": {
-        "question": "¿Qué necesita?",
-        "options": ["Toallas sanitarias", "Ropa interior de malla", "Compresa de hielo"]
-    },
     "Ropa interior de malla": {"action": "Notify CNA"},
     "Toallas sanitarias": {
         "question": "¿Qué tipo de toalla sanitaria necesita?",
@@ -103,18 +128,15 @@ button_data = {
         "question": "¿Preguntas sobre la mamá o el bebé?",
         "options": ["Preguntas sobre la mamá", "Preguntas sobre el bebé"]
     },
-    # Questions -> Mom
     "Preguntas sobre la mamá": {
         "note": "Si su pregunta no está en la lista, su enfermera vendrá tan pronto como sea posible.",
         "options": [
-            "¿Puedo tomar una ducha?",
             "¿Puedo ponerme mi propia ropa?",
             "¿Cómo de seguido debo cambiar mi toalla sanitaria?",
             "¿Cómo de seguido debo usar el sacaleches?",
             "No consigo sacar leche cuando uso el sacaleches. ¿Es normal?"
         ]
     },
-    # Questions -> Baby
     "Preguntas sobre el bebé": {
         "note": "Si su pregunta no está en la lista, su enfermera vendrá tan pronto como sea posible.",
         "options": [
@@ -126,7 +148,6 @@ button_data = {
             "¿Puedo vestir a mi bebé con su propia ropa?"
         ]
     },
-    "¿Puedo tomar una ducha?": {"note": "Normalmente sí, pero consulte con su enfermera si tiene una vía intravenosa u otras restricciones."},
     "¿Puedo ponerme mi propia ropa?": {"note": "Sí, siempre y cuando se sienta cómoda y su enfermera le haya dado el visto bueno."},
     "¿Cómo de seguido debo cambiar mi toalla sanitaria?": {"note": "Cambie su toalla cada 2-4 horas o cuando esté saturada. Informe a su enfermera si está empapando una toalla grande en menos de 1 hora o si tiene coágulos más grandes que una pelota de golf."},
     "¿Cómo de seguido debo usar el sacaleches?": {"note": "Cada 2-3 horas si está tratando de establecer o mantener la producción de leche. Su enfermera o asesora de lactancia pueden guiarla."},
