@@ -14,6 +14,7 @@ from sqlalchemy import create_engine, text
 app = Flask(__name__, template_folder='templates')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-strong-fallback-secret-key-for-local-development")
 socketio = SocketIO(app)
+
 # --- Database Configuration ---
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
@@ -172,50 +173,49 @@ def handle_chat():
         print(f"ERROR: Could not load configuration module '{config_module_name}'. Error: {e}")
         return f"Error: Configuration file '{config_module_name}.py' is missing or invalid. Please contact support."
 
-    if request.method == "GET" or 'user_input' not in request.form:
-        return render_template("chat.html", reply=button_data["greeting"], options=button_data["main_buttons"], button_data=button_data)
-
-    user_input = request.form.get("user_input", "").strip()
-    
-    if request.form.get("action") == "send_note":
-        # DEBUGGING: Added print statements to trace the note handling process
-        print("--- DEBUG: Inside 'send_note' block ---")
-        note_text = request.form.get("custom_note")
-        print(f"--- DEBUG: Received note_text: '{note_text}' ---")
-        if note_text:
-            reply = process_request(role="nurse", subject="Custom Patient Note", user_input=note_text, reply_message=button_data["nurse_notification"])
-            print("--- DEBUG: Called process_request with the note text. ---")
-        else:
-            reply = "Please type a message in the box."
-            print("--- DEBUG: Note text was empty. ---")
-        return render_template("chat.html", reply=reply, options=button_data["main_buttons"], button_data=button_data)
-
-    if user_input == button_data.get("back_text", "⬅ Back"):
-        return redirect(url_for('handle_chat'))
-
-    if user_input in button_data:
-        button_info = button_data[user_input]
-        reply = button_info.get("question") or button_info.get("note", "")
-        options = button_info.get("options", [])
+    # THIS IS THE FIX: The logic for handling the note was incorrect.
+    if request.method == 'POST':
+        # Check if the note form was submitted
+        if request.form.get("action") == "send_note":
+            note_text = request.form.get("custom_note")
+            if note_text:
+                reply = process_request(role="nurse", subject="Custom Patient Note", user_input=note_text, reply_message=button_data["nurse_notification"])
+            else:
+                reply = "Please type a message in the box."
+            return render_template("chat.html", reply=reply, options=button_data["main_buttons"], button_data=button_data)
         
-        back_text = button_data.get("back_text", "⬅ Back")
-        if options and back_text not in options:
-            options.append(back_text)
-        elif not options:
+        # Handle regular button presses
+        user_input = request.form.get("user_input", "").strip()
+        if user_input == button_data.get("back_text", "⬅ Back"):
+            return redirect(url_for('handle_chat'))
+
+        if user_input in button_data:
+            button_info = button_data[user_input]
+            reply = button_info.get("question") or button_info.get("note", "")
+            options = button_info.get("options", [])
+            
+            back_text = button_data.get("back_text", "⬅ Back")
+            if options and back_text not in options:
+                options.append(back_text)
+            elif not options:
+                options = button_data["main_buttons"]
+
+            if "action" in button_info:
+                action = button_info["action"]
+                role = "cna" if action == "Notify CNA" else "nurse"
+                subject = f"{role.upper()} Request"
+                notification_message = button_info.get("note", button_data[f"{role}_notification"])
+                reply = process_request(role=role, subject=subject, user_input=user_input, reply_message=notification_message)
+                options = button_data["main_buttons"]
+        else:
+            reply = "I'm sorry, I didn't understand that. Please use the buttons provided."
             options = button_data["main_buttons"]
 
-        if "action" in button_info:
-            action = button_info["action"]
-            role = "cna" if action == "Notify CNA" else "nurse"
-            subject = f"{role.upper()} Request"
-            notification_message = button_info.get("note", button_data[f"{role}_notification"])
-            reply = process_request(role=role, subject=subject, user_input=user_input, reply_message=notification_message)
-            options = button_data["main_buttons"]
-    else:
-        reply = "I'm sorry, I didn't understand that. Please use the buttons provided."
-        options = button_data["main_buttons"]
+        return render_template("chat.html", reply=reply, options=options, button_data=button_data)
 
-    return render_template("chat.html", reply=reply, options=options, button_data=button_data)
+    # For GET requests (initial page load)
+    return render_template("chat.html", reply=button_data["greeting"], options=button_data["main_buttons"], button_data=button_data)
+
 
 @app.route("/reset-language")
 def reset_language():
@@ -308,3 +308,4 @@ with app.app_context():
 
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
