@@ -14,7 +14,6 @@ from sqlalchemy import create_engine, text
 app = Flask(__name__, template_folder='templates')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-strong-fallback-secret-key-for-local-development")
 socketio = SocketIO(app)
-
 # --- Database Configuration ---
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
@@ -179,12 +178,16 @@ def handle_chat():
     user_input = request.form.get("user_input", "").strip()
     
     if request.form.get("action") == "send_note":
+        # DEBUGGING: Added print statements to trace the note handling process
+        print("--- DEBUG: Inside 'send_note' block ---")
         note_text = request.form.get("custom_note")
+        print(f"--- DEBUG: Received note_text: '{note_text}' ---")
         if note_text:
-            # THIS IS THE FIX: We pass the actual note_text as the `user_input` to be logged and displayed.
             reply = process_request(role="nurse", subject="Custom Patient Note", user_input=note_text, reply_message=button_data["nurse_notification"])
+            print("--- DEBUG: Called process_request with the note text. ---")
         else:
             reply = "Please type a message in the box."
+            print("--- DEBUG: Note text was empty. ---")
         return render_template("chat.html", reply=reply, options=button_data["main_buttons"], button_data=button_data)
 
     if user_input == button_data.get("back_text", "⬅ Back"):
@@ -206,7 +209,6 @@ def handle_chat():
             role = "cna" if action == "Notify CNA" else "nurse"
             subject = f"{role.upper()} Request"
             notification_message = button_info.get("note", button_data[f"{role}_notification"])
-            # For regular buttons, the `user_input` is the text of the button itself.
             reply = process_request(role=role, subject=subject, user_input=user_input, reply_message=notification_message)
             options = button_data["main_buttons"]
     else:
