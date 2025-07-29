@@ -3,6 +3,8 @@
 button_data = {
     # --- Core Notifications & Text ---
     "greeting": "您好。我们在此支持您。",
+    "custom_note_placeholder": "在此处输入给护士的留言...",
+    "send_note_button": "发送留言",
     "cna_notification": "✅ 已通知护理助理。",
     "nurse_notification": "✅ 已通知护士。",
     "back_text": "⬅ 返回",
@@ -14,22 +16,50 @@ button_data = {
         "我需要药物",
         "我有问题",
         "我想了解出院信息",
-        "我需要帮助去卫生间",
-        "我需要包裹我的静脉输液管以便洗澡",
-        "为我检查血糖"
+        "浴室/淋浴", # UPDATED
+        "为我检查血糖",
+        "冰块/水"  # UPDATED
     ],
 
     # --- Direct Actions & Simple Sub-menus ---
     "我有紧急情况": {"action": "Notify Nurse"},
+    "为我检查血糖": {"action": "Notify CNA"},
+
+    # --- NEW: Ice Chips/Water Submenu ---
+    "冰块/水": {
+        "question": "如果您有陪同人员，他们可以去我们的营养室，那里有水、冰块、果汁和小零食。工作人员可以告诉您具体位置。请问您需要什么？",
+        "options": [
+            "我需要冰水",
+            "我需要冰块",
+            "我需要不加冰的水",
+            "我需要热水"
+        ]
+    },
+    "我需要冰水": {"action": "Notify CNA"},
+    "我需要冰块": {"action": "Notify CNA"},
+    "我需要不加冰的水": {"action": "Notify CNA"},
+    "我需要热水": {"action": "Notify CNA"},
+
+    # --- Bathroom/Shower Submenu ---
+    "浴室/淋浴": {
+        "question": "如果您已经在工作人员的帮助下下床去过一次洗手间，并且感觉站立平稳，您可以自己去洗手间。如果您仍需要帮助，请告诉我们。请问您需要什么？",
+        "options": [
+            "我需要帮助去卫生间",
+            "我需要包裹我的静脉输液管以便洗澡",
+            "我可以洗澡吗？"
+        ]
+    },
     "我需要帮助去卫生间": {"action": "Notify CNA"},
     "我需要包裹我的静脉输液管以便洗澡": {"action": "Notify CNA"},
-    "为我检查血糖": {"action": "Notify CNA"},
+    "我可以洗澡吗？": {"note": "通常可以，但如果您有静脉输液管或其他限制，请先咨询您的护士。"},
 
     # --- Supplies Category ---
     "我需要用品": {
         "question": "您需要什么？",
-        "options": ["卫生巾", "网眼内裤", "冰袋"]
+        "options": ["卫生巾", "网眼内裤", "冰袋", "枕头"]
     },
+    "枕头": {"action": "Notify CNA"},
+    "网眼内裤": {"action": "Notify CNA"},
     "卫生巾": {
         "question": "您需要哪种卫生巾？",
         "options": ["蓝色卫生巾", "白色卫生巾"]
@@ -43,7 +73,6 @@ button_data = {
     "用于会阴部": {"action": "Notify CNA"},
     "用于剖腹产切口": {"action": "Notify CNA"},
     "用于乳房": {"action": "Notify CNA"},
-    "网眼内裤": {"action": "Notify CNA"},
 
     # --- Medication Category ---
     "我需要药物": {
@@ -60,13 +89,9 @@ button_data = {
     "我有问题": {
         "note": "如果您的问题不在列表中，您的护士会尽快过来。",
         "options": [
-            "我可以洗澡吗？",
             "我可以穿自己的衣服吗？",
             "我应该多久更换一次卫生巾？",
         ]
-    },
-    "我可以洗澡吗？": {
-        "note": "通常可以，但如果您有静脉输液管或其他限制，请先咨询您的护士。"
     },
     "我可以穿自己的衣服吗？": {
         "note": "是的，只要您感觉舒适并且得到了护士的许可。"
