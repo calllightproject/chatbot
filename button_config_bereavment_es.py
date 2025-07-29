@@ -2,6 +2,8 @@
 button_data = {
     # --- Core Notifications & Text ---
     "greeting": "Hola. Estamos aquí para apoyarle.",
+    "custom_note_placeholder": "Escribe tu nota para la enfermera aquí...",
+    "send_note_button": "Enviar Nota",
     "cna_notification": "✅ Se ha notificado al asistente de enfermería.",
     "nurse_notification": "✅ Se ha notificado a la enfermera.",
     "back_text": "⬅ Regresar",
@@ -13,22 +15,50 @@ button_data = {
         "Necesito medicamentos",
         "Tengo preguntas",
         "Quiero saber sobre el alta",
-        "Necesito ayuda para ir al baño",
-        "Necesito cubrir mi vía IV para ducharme",
-        "Control de azúcar en la sangre para mí"
+        "Baño / Ducha", # UPDATED
+        "Control de azúcar en la sangre para mí",
+        "Hielo / Agua"  # UPDATED
     ],
 
     # --- Direct Actions & Simple Sub-menus ---
     "Tengo una emergencia": {"action": "Notify Nurse"},
+    "Control de azúcar en la sangre para mí": {"action": "Notify CNA"},
+
+    # --- NEW: Ice Chips/Water Submenu ---
+    "Hielo / Agua": {
+        "question": "Si tiene una persona de apoyo con usted, puede ir a nuestra sala de nutrición, que tiene agua, hielo picado, jugo y otros pequeños bocadillos. El personal puede mostrarle dónde se encuentra. ¿Qué le gustaría?",
+        "options": [
+            "Necesito agua con hielo",
+            "Necesito hielo picado",
+            "Necesito agua, sin hielo",
+            "Necesito agua caliente"
+        ]
+    },
+    "Necesito agua con hielo": {"action": "Notify CNA"},
+    "Necesito hielo picado": {"action": "Notify CNA"},
+    "Necesito agua, sin hielo": {"action": "Notify CNA"},
+    "Necesito agua caliente": {"action": "Notify CNA"},
+
+    # --- Bathroom/Shower Submenu ---
+    "Baño / Ducha": {
+        "question": "Si ya ha ido al baño una vez con un miembro del personal y se siente estable, puede usar el baño por su cuenta. Por favor, avísenos si todavía necesita ayuda. ¿Qué necesita?",
+        "options": [
+            "Necesito ayuda para ir al baño",
+            "Necesito cubrir mi vía IV para ducharme",
+            "¿Puedo tomar una ducha?"
+        ]
+    },
     "Necesito ayuda para ir al baño": {"action": "Notify CNA"},
     "Necesito cubrir mi vía IV para ducharme": {"action": "Notify CNA"},
-    "Control de azúcar en la sangre para mí": {"action": "Notify CNA"},
+    "¿Puedo tomar una ducha?": {"note": "Normalmente sí, pero consulte con su enfermera si tiene una vía intravenosa u otras restricciones."},
 
     # --- Supplies Category ---
     "Necesito suministros": {
         "question": "¿Qué necesita?",
-        "options": ["Toallas sanitarias", "Ropa interior de malla", "Compresa de hielo"]
+        "options": ["Toallas sanitarias", "Ropa interior de malla", "Compresa de hielo", "Almohadas"]
     },
+    "Almohadas": {"action": "Notify CNA"},
+    "Ropa interior de malla": {"action": "Notify CNA"},
     "Toallas sanitarias": {
         "question": "¿Qué tipo de toalla sanitaria necesita?",
         "options": ["Toallas azules", "Toallas blancas"]
@@ -42,7 +72,6 @@ button_data = {
     "Para el perineo": {"action": "Notify CNA"},
     "Para la incisión de la cesárea": {"action": "Notify CNA"},
     "Para los senos": {"action": "Notify CNA"},
-    "Ropa interior de malla": {"action": "Notify CNA"},
 
     # --- Medication Category ---
     "Necesito medicamentos": {
@@ -59,13 +88,9 @@ button_data = {
     "Tengo preguntas": {
         "note": "Si su pregunta no está en la lista, su enfermera vendrá tan pronto como sea posible.",
         "options": [
-            "¿Puedo tomar una ducha?",
             "¿Puedo ponerme mi propia ropa?",
             "¿Cómo de seguido debo cambiar mi toalla sanitaria?",
         ]
-    },
-    "¿Puedo tomar una ducha?": {
-        "note": "Normalmente sí, pero consulte con su enfermera si tiene una vía intravenosa u otras restricciones."
     },
     "¿Puedo ponerme mi propia ropa?": {
         "note": "Sí, siempre y cuando se sienta cómoda y su enfermera le haya dado el visto bueno."
