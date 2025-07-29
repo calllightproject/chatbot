@@ -7,6 +7,9 @@ button_data = {
     "cna_notification": "✅ CNA has been notified.",
     "nurse_notification": "✅ Nurse has been notified.",
     "back_text": "⬅ Back",
+    "demographic_question": "Is this your first baby?",
+    "demographic_yes": "Yes",
+    "demographic_no": "No",
 
     # --- Main Menu Options ---
     "main_buttons": [
@@ -15,8 +18,7 @@ button_data = {
         "I need medication",
         "I have questions",
         "I want to know about going home",
-        "I need help to the bathroom",
-        "I need my IV covered to shower",
+        "Bathroom/Shower", # NEW GROUPED BUTTON
         "I need help breastfeeding",
         "Blood sugar",
         "Ice Chips",
@@ -25,14 +27,9 @@ button_data = {
 
     # --- Direct Actions & Simple Sub-menus ---
     "I'm having an emergency": {"action": "Notify Nurse"},
-    "I need help to the bathroom": {
-        "action": "Notify CNA",
-        "note": "If you have been up to the bathroom once with a staff member, not connected to an IV pole, and feel steady on your feet, you are allowed to use the restroom on your own."
-    },
-    "I need my IV covered to shower": {"action": "Notify CNA"},
     "Ice Chips": {
         "action": "Notify CNA",
-        "note": "✅ CNA has been notified. If you have a support person with you, they are welcome to go into our nourishment room, which has water, ice chips, juice and other small snacks. Staff can show you where it is located."
+        "note": "✅ CNA has been notified. If you have a support person with you, they are welcome to go into our nourishment room, which has water, ice chips, juice and other small snacks. Staff can show you where it is located"
     },
     "Water": {
         "action": "Notify CNA",
@@ -48,6 +45,20 @@ button_data = {
     },
     "Mom": {"action": "Notify CNA"},
     "Baby (blood sugar)": {"action": "Notify Nurse"},
+
+    # --- NEW: Bathroom/Shower Submenu ---
+    "Bathroom/Shower": {
+        "question": "If you have been up to the bathroom once with a staff member, and you feel steady on your feet, you are able to go to the bathroom on your own. Please let us know if you still need help. What do you need?",
+        "options": [
+            "I need help to the bathroom",
+            "I need my IV covered to shower",
+            "Can I take a shower?"
+        ]
+    },
+    "I need help to the bathroom": {"action": "Notify CNA"},
+    "I need my IV covered to shower": {"action": "Notify CNA"},
+    "Can I take a shower?": {"note": "Usually yes, but check with your nurse if you have an IV or other restrictions."},
+
 
     # --- Supplies Category ---
     "I need supplies": {
@@ -113,7 +124,7 @@ button_data = {
     "Questions about mom": {
         "note": "If your question is not listed, your nurse will be in as soon as possible.",
         "options": [
-            "Can I take a shower?", "Can I put on my own clothes?",
+            "Can I put on my own clothes?",
             "How often should I change my pad?", "How often should I use the breast pump?",
             "I'm not getting any breastmilk when I pump. Is that normal?"
         ]
@@ -128,7 +139,6 @@ button_data = {
             "Will my baby have their vision tested?", "Can I put clothes on my baby?"
         ]
     },
-    "Can I take a shower?": {"note": "Usually yes, but check with your nurse if you have an IV or other restrictions."},
     "Can I put on my own clothes?": {"note": "Yes, as long as you feel comfortable and have been cleared by your nurse."},
     "How often should I change my pad?": {"note": "Change your pad every 2–4 hours or when it becomes saturated. Let your nurse know if you’re soaking the big pad in less than 1 hour or clots bigger than a golf ball."},
     "How often should I use the breast pump?": {"note": "Every 2–3 hours if you're trying to build or maintain supply. Your nurse or lactation consultant can guide you."},
