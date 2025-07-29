@@ -1,4 +1,3 @@
-# button_config_en.py
 button_data = {
     # --- Core Notifications & Text ---
     "greeting": "Hello! How can I help you?",
@@ -7,10 +6,6 @@ button_data = {
     "cna_notification": "✅ CNA has been notified.",
     "nurse_notification": "✅ Nurse has been notified.",
     "back_text": "⬅ Back",
-    "demographic_question": "Is this your first baby?",
-    "demographic_yes": "Yes",
-    "demographic_no": "No",
-
 
     # --- Main Menu Options ---
     "main_buttons": [
@@ -22,13 +17,17 @@ button_data = {
         "I need help to the bathroom",
         "I need my IV covered to shower",
         "I need help breastfeeding",
-        "Blood sugar"
+        "Blood sugar",
+        "Ice Chips", # NEW
+        "Water"      # NEW
     ],
 
     # --- Direct Actions & Simple Sub-menus ---
     "I'm having an emergency": {"action": "Notify Nurse"},
     "I need help to the bathroom": {"action": "Notify CNA"},
     "I need my IV covered to shower": {"action": "Notify CNA"},
+    "Ice Chips": {"action": "Notify CNA"}, # NEW
+    "Water": {"action": "Notify CNA"},     # NEW
     "I need help breastfeeding": {
         "action": "Notify Nurse",
         "note": "✅ Your nurse has been notified. In the meantime, you can prepare by making sure your baby has a clean diaper and is undressed for skin-to-skin contact."
@@ -51,8 +50,9 @@ button_data = {
     },
     "Mom items": {
         "question": "What do you need?",
-        "options": ["Pads", "Mesh underwear", "Ice pack"]
+        "options": ["Pads", "Mesh underwear", "Ice pack", "Pillows"] # NEW
     },
+    "Pillows": {"action": "Notify CNA"}, # NEW
     "Diapers": {"action": "Notify CNA"},
     "Swaddle": {"action": "Notify CNA"},
     "Wipes": {"action": "Notify CNA"},
