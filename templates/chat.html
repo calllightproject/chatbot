@@ -66,7 +66,7 @@
             flex-direction: column;
             gap: 10px;
         }
-        .options-container button, .note-form button { 
+        .options-container button { 
             width: 100%; 
             padding: 15px; 
             font-size: 16px; 
@@ -78,7 +78,7 @@
             transition: background-color 0.2s;
             text-align: left;
         }
-        .options-container button:hover, .note-form button:hover { 
+        .options-container button:hover { 
             background-color: #004a7c;
         }
         .note-section { 
@@ -90,7 +90,9 @@
             font-size: 14px;
             color: #4b5563;
             margin-bottom: 10px;
+            display: block;
         }
+        /* THIS IS THE FIX: The form itself is now the flex container */
         .note-form {
             display: flex;
             gap: 10px;
@@ -110,6 +112,15 @@
             text-align: center;
             padding: 10px 15px;
             font-size: 14px;
+            border: none;
+            border-radius: 8px;
+            background-color: var(--core-blue);
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .note-form button:hover {
+             background-color: #004a7c;
         }
     </style>
 </head>
@@ -133,12 +144,14 @@
         </div>
 
         <div class="note-section">
-            <p class="note-label">{{ button_data.get('custom_note_placeholder', 'Or send a custom note to your nurse:') }}</p>
-            <!-- THIS IS THE FIX: This form now correctly sends the 'action=send_note' signal -->
-            <form method="POST" action="{{ url_for('handle_chat') }}" class="note-form">
-                <input type="hidden" name="action" value="send_note">
-                <textarea id="custom_note" name="custom_note" rows="2" placeholder="Type your message here..."></textarea>
-                <button type="submit">{{ button_data.get('send_note_button', 'Send Note') }}</button>
+            <!-- THIS IS THE FIX: The form is now structured correctly -->
+            <form method="POST" action="{{ url_for('handle_chat') }}">
+                <label for="custom_note" class="note-label">{{ button_data.get('custom_note_placeholder', 'Or send a custom note to your nurse:') }}</label>
+                <div class="note-form">
+                    <input type="hidden" name="action" value="send_note">
+                    <textarea id="custom_note" name="custom_note" rows="2" placeholder="Type your message here..."></textarea>
+                    <button type="submit">{{ button_data.get('send_note_button', 'Send Note') }}</button>
+                </div>
             </form>
         </div>
     </div>
