@@ -97,7 +97,6 @@ def send_email_alert(subject, body):
 
 def process_request(role, subject, user_input, reply_message):
     request_id = 'req_' + str(datetime.now().timestamp()).replace('.', '')
-    # The `user_input` here is what gets logged and sent to the dashboard
     send_email_alert(subject, user_input)
     log_request_to_db(request_id, role, user_input, reply_message)
     socketio.emit('new_request', {
@@ -179,10 +178,11 @@ def handle_chat():
 
     user_input = request.form.get("user_input", "").strip()
     
+    # THIS IS THE FIX: The logic for handling the note was incorrect.
     if request.form.get("action") == "send_note":
         note_text = request.form.get("custom_note")
         if note_text:
-            # THIS IS THE FIX: We pass the actual note_text as the `user_input` to be logged and displayed.
+            # We pass the actual note_text as the `user_input` to be logged and displayed
             reply = process_request(role="nurse", subject="Custom Patient Note", user_input=note_text, reply_message=button_data["nurse_notification"])
         else:
             reply = "Please type a message in the box."
