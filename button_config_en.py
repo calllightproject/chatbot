@@ -1,3 +1,4 @@
+# button_config_en.py
 button_data = {
     # --- Core Notifications & Text ---
     "greeting": "Hello! How can I help you?",
@@ -18,16 +19,25 @@ button_data = {
         "I need my IV covered to shower",
         "I need help breastfeeding",
         "Blood sugar",
-        "Ice Chips", # NEW
-        "Water"      # NEW
+        "Ice Chips",
+        "Water"
     ],
 
     # --- Direct Actions & Simple Sub-menus ---
     "I'm having an emergency": {"action": "Notify Nurse"},
-    "I need help to the bathroom": {"action": "Notify CNA"},
+    "I need help to the bathroom": {
+        "action": "Notify CNA",
+        "note": "If you have been up to the bathroom once with a staff member, not connected to an IV pole, and feel steady on your feet, you are allowed to use the restroom on your own."
+    },
     "I need my IV covered to shower": {"action": "Notify CNA"},
-    "Ice Chips": {"action": "Notify CNA"}, # NEW
-    "Water": {"action": "Notify CNA"},     # NEW
+    "Ice Chips": {
+        "action": "Notify CNA",
+        "note": "✅ CNA has been notified. If you have a support person with you, they are welcome to go into our nourishment room, which has water, ice chips, juice and other small snacks. Staff can show you where it is located"
+    },
+    "Water": {
+        "action": "Notify CNA",
+        "note": "✅ CNA has been notified. If you have a support person with you, they are welcome to go into our nourishment room, which has water, ice chips, juice and other small snacks. Staff can show you where it is located"
+    },
     "I need help breastfeeding": {
         "action": "Notify Nurse",
         "note": "✅ Your nurse has been notified. In the meantime, you can prepare by making sure your baby has a clean diaper and is undressed for skin-to-skin contact."
@@ -50,9 +60,9 @@ button_data = {
     },
     "Mom items": {
         "question": "What do you need?",
-        "options": ["Pads", "Mesh underwear", "Ice pack", "Pillows"] # NEW
+        "options": ["Pads", "Mesh underwear", "Ice pack", "Pillows"]
     },
-    "Pillows": {"action": "Notify CNA"}, # NEW
+    "Pillows": {"action": "Notify CNA"},
     "Diapers": {"action": "Notify CNA"},
     "Swaddle": {"action": "Notify CNA"},
     "Wipes": {"action": "Notify CNA"},
