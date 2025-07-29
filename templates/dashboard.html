@@ -5,22 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Real-Time Request Dashboard</title>
     <style>
-        /* CSS from your provided stylesheet */
+        /* Your existing CSS remains unchanged */
         :root {
             --core-blue: #00205b;
             --accent-blue: #007eb4;
             --neutral-gray-text: #303235;
-            --light-gray-background: #f5f5f5;
+            --light-gray-background: #f5f5ff;
             --white: #ffffff;
         }
-
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             padding: 20px;
             background-color: var(--light-gray-background);
             color: var(--neutral-gray-text);
         }
-
         .dashboard-container {
             max-width: 900px;
             margin: 20px auto;
@@ -29,17 +27,14 @@
             border-radius: 8px;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }
-
         h1 {
             color: var(--core-blue);
             text-align: center;
         }
-
         #requests-list {
             list-style-type: none;
             padding: 0;
         }
-
         .request-item {
             display: flex;
             align-items: center;
@@ -49,23 +44,20 @@
             border-radius: 5px;
             background-color: #fff;
             gap: 15px;
+            transition: background-color 0.5s ease; /* Smooth color transition */
         }
-
         .request-item.cna { border-left: 5px solid var(--accent-blue); }
         .request-item.nurse { border-left: 5px solid #d43f27; }
-
         .request-item p {
             margin: 0;
             font-size: 1.1em;
             flex-grow: 1;
         }
-
         .request-item span {
             font-size: 0.9em;
             color: #555;
             white-space: nowrap;
         }
-
         .request-item button {
             padding: 8px 12px;
             border: none;
@@ -75,17 +67,14 @@
             font-size: 14px;
             transition: opacity 0.3s;
         }
-
         .ack-button { background-color: #ffc107; color: black; }
         .omw-button { background-color: #28a745; }
         .complete-btn { background-color: #6c757d; }
         .defer-btn { background-color: #17a2b8; }
-
         .request-item button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
         }
-        
         .footer {
             text-align: center;
             margin-top: 30px;
@@ -94,6 +83,11 @@
             color: var(--accent-blue);
             text-decoration: none;
         }
+
+        /* NEW: CSS for color-coded wait times */
+        .wait-level-1 { background-color: #d4edda; } /* Green for < 5 mins */
+        .wait-level-2 { background-color: #fff3cd; } /* Yellow for 5-10 mins */
+        .wait-level-3 { background-color: #f8d7da; } /* Red for > 10 mins */
     </style>
 </head>
 <body>
@@ -110,16 +104,12 @@
 <script type="text/javascript">
     const socket = io();
 
-    // --- Reusable function to add a request to the dashboard ---
     function addRequestToList(data) {
         const list = document.getElementById('requests-list');
-        // Prevent duplicate requests from being added
-        if (document.getElementById(data.id)) {
-            return;
-        }
+        if (document.getElementById(data.id)) return;
         
         const item = document.createElement('li');
-        const requestTime = new Date(data.timestamp); // Use the timestamp from the server
+        const requestTime = new Date(data.timestamp);
 
         item.id = data.id;
         item.className = `request-item ${data.role}`;
@@ -142,64 +132,72 @@
 
         list.prepend(item);
 
-        // --- Set up all buttons for this new item ---
         const ackButton = item.querySelector('.ack-button');
         const omwButton = item.querySelector('.omw-button');
         const deferButton = item.querySelector('.defer-btn');
         const completeButton = item.querySelector('.complete-btn');
         const ackButtons = [ackButton, omwButton, deferButton].filter(btn => btn);
 
-        ackButton.addEventListener('click', function() {
+        ackButton.addEventListener('click', () => {
             socket.emit('acknowledge_request', { room: data.room, message: "✅ Your request was received and will be addressed shortly." });
             ackButtons.forEach(btn => btn.disabled = true);
         });
 
-        omwButton.addEventListener('click', function() {
+        omwButton.addEventListener('click', () => {
             socket.emit('acknowledge_request', { room: data.room, message: "✅ A team member is on their way." });
             ackButtons.forEach(btn => btn.disabled = true);
         });
 
         if (deferButton) {
-            deferButton.addEventListener('click', function() {
+            deferButton.addEventListener('click', () => {
                 socket.emit('defer_request', { id: item.id });
                 deferButton.remove();
             });
         }
         
-        const updateTimestamp = () => {
-            const minutes = Math.round((new Date() - requestTime) / 60000);
+        // --- MODIFIED: Timestamp and color-coding logic ---
+        const updateTimestampAndColor = () => {
+            const now = new Date();
+            const minutes = Math.round((now - requestTime) / 60000);
             const timestampSpan = item.querySelector('.timestamp');
+            
             if (timestampSpan) {
                 timestampSpan.textContent = minutes > 0 ? `${minutes}m ago` : 'Just now';
             }
+
+            // Remove all wait-level classes first
+            item.classList.remove('wait-level-1', 'wait-level-2', 'wait-level-3');
+
+            // Add the correct class based on the wait time
+            if (minutes >= 10) {
+                item.classList.add('wait-level-3'); // Red
+            } else if (minutes >= 5) {
+                item.classList.add('wait-level-2'); // Yellow
+            } else {
+                item.classList.add('wait-level-1'); // Green
+            }
         };
 
-        const intervalId = setInterval(updateTimestamp, 60000);
-        updateTimestamp(); // Call it once immediately
+        // Run the update function every minute
+        const intervalId = setInterval(updateTimestampAndColor, 60000);
+        // Run it once immediately to set the initial color and text
+        updateTimestampAndColor();
 
-        completeButton.addEventListener('click', function() {
+        completeButton.addEventListener('click', () => {
             socket.emit('complete_request', { request_id: data.id });
-            clearInterval(intervalId);
+            clearInterval(intervalId); // Stop the timer when the request is complete
             item.remove();
         });
     }
 
-    // --- Handle new requests coming in real-time ---
-    socket.on('new_request', function(data) {
-        addRequestToList(data);
-    });
+    socket.on('new_request', addRequestToList);
 
-    // --- Load existing active requests when the page first loads ---
-    document.addEventListener('DOMContentLoaded', function() {
-        // This line gets the active_requests data that was passed from app.py
+    document.addEventListener('DOMContentLoaded', () => {
         const activeRequests = JSON.parse('{{ active_requests | safe }}');
-        // Loop through the existing requests and add them to the list
-        activeRequests.forEach(function(requestData) {
-            addRequestToList(requestData);
-        });
+        activeRequests.reverse().forEach(addRequestToList);
     });
 
-    socket.on('request_deferred', function(data) {
+    socket.on('request_deferred', (data) => {
         const itemToUpdate = document.getElementById(data.id);
         if (itemToUpdate) {
             itemToUpdate.className = 'request-item nurse';
