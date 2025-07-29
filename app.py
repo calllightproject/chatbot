@@ -178,11 +178,10 @@ def handle_chat():
 
     user_input = request.form.get("user_input", "").strip()
     
-    # THIS IS THE FIX: The logic for handling the note was incorrect.
     if request.form.get("action") == "send_note":
         note_text = request.form.get("custom_note")
         if note_text:
-            # We pass the actual note_text as the `user_input` to be logged and displayed
+            # CORRECTED: The note is now routed to the NURSE and uses the NURSE notification
             reply = process_request(role="nurse", subject="Custom Patient Note", user_input=note_text, reply_message=button_data["nurse_notification"])
         else:
             reply = "Please type a message in the box."
@@ -207,7 +206,6 @@ def handle_chat():
             role = "cna" if action == "Notify CNA" else "nurse"
             subject = f"{role.upper()} Request"
             notification_message = button_info.get("note", button_data[f"{role}_notification"])
-            # For regular buttons, the `user_input` is the text of the button itself.
             reply = process_request(role=role, subject=subject, user_input=user_input, reply_message=notification_message)
             options = button_data["main_buttons"]
     else:
@@ -307,3 +305,4 @@ with app.app_context():
 
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
