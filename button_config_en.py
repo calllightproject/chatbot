@@ -18,23 +18,14 @@ button_data = {
         "I need medication",
         "I have questions",
         "I want to know about going home",
-        "Bathroom/Shower", # NEW GROUPED BUTTON
+        "Bathroom/Shower",
         "I need help breastfeeding",
         "Blood sugar",
-        "Ice Chips",
-        "Water"
+        "Ice Chips/Water" # NEW GROUPED BUTTON
     ],
 
     # --- Direct Actions & Simple Sub-menus ---
     "I'm having an emergency": {"action": "Notify Nurse"},
-    "Ice Chips": {
-        "action": "Notify CNA",
-        "note": "✅ CNA has been notified. If you have a support person with you, they are welcome to go into our nourishment room, which has water, ice chips, juice and other small snacks. Staff can show you where it is located"
-    },
-    "Water": {
-        "action": "Notify CNA",
-        "note": "✅ CNA has been notified. If you have a support person with you, they are welcome to go into our nourishment room, which has water, ice chips, juice and other small snacks. Staff can show you where it is located"
-    },
     "I need help breastfeeding": {
         "action": "Notify Nurse",
         "note": "✅ Your nurse has been notified. In the meantime, you can prepare by making sure your baby has a clean diaper and is undressed for skin-to-skin contact."
@@ -46,7 +37,22 @@ button_data = {
     "Mom": {"action": "Notify CNA"},
     "Baby (blood sugar)": {"action": "Notify Nurse"},
 
-    # --- NEW: Bathroom/Shower Submenu ---
+    # --- NEW: Ice Chips/Water Submenu ---
+    "Ice Chips/Water": {
+        "question": "If you have a support person with you, they are welcome to go into our nourishment room, which has water, ice chips, juice and small snacks. Staff can show you where it is located. What would you like?",
+        "options": [
+            "I need ice water",
+            "I need ice chips",
+            "I need water, no ice",
+            "I need hot water"
+        ]
+    },
+    "I need ice water": {"action": "Notify CNA"},
+    "I need ice chips": {"action": "Notify CNA"},
+    "I need water, no ice": {"action": "Notify CNA"},
+    "I need hot water": {"action": "Notify CNA"},
+
+    # --- Bathroom/Shower Submenu ---
     "Bathroom/Shower": {
         "question": "If you have been up to the bathroom once with a staff member, and you feel steady on your feet, you are able to go to the bathroom on your own. Please let us know if you still need help. What do you need?",
         "options": [
@@ -58,7 +64,6 @@ button_data = {
     "I need help to the bathroom": {"action": "Notify CNA"},
     "I need my IV covered to shower": {"action": "Notify CNA"},
     "Can I take a shower?": {"note": "Usually yes, but check with your nurse if you have an IV or other restrictions."},
-
 
     # --- Supplies Category ---
     "I need supplies": {
