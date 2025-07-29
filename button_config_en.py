@@ -32,7 +32,7 @@ button_data = {
     "I need my IV covered to shower": {"action": "Notify CNA"},
     "Ice Chips": {
         "action": "Notify CNA",
-        "note": "✅ CNA has been notified. If you have a support person with you, they are welcome to go into our nourishment room, which has water, ice chips, juice and other small snacks. Staff can show you where it is located"
+        "note": "✅ CNA has been notified. If you have a support person with you, they are welcome to go into our nourishment room, which has water, ice chips, juice and other small snacks. Staff can show you where it is located."
     },
     "Water": {
         "action": "Notify CNA",
