@@ -11,6 +11,11 @@ button_data = {
     "demographic_yes": "Yes",
     "demographic_no": "No",
 
+    # NEW: Text for the AI follow-up
+    "ai_follow_up_question": "Would you like to speak to your nurse?",
+    "ai_yes": "Yes, speak to nurse",
+    "ai_no": "No, I'm ok",
+
     # --- Main Menu Options ---
     "main_buttons": [
         "I'm having an emergency",
@@ -21,7 +26,7 @@ button_data = {
         "Bathroom/Shower",
         "I need help breastfeeding",
         "Blood sugar",
-        "Ice Chips/Water" # NEW GROUPED BUTTON
+        "Ice Chips/Water"
     ],
 
     # --- Direct Actions & Simple Sub-menus ---
@@ -37,7 +42,6 @@ button_data = {
     "Mom": {"action": "Notify CNA"},
     "Baby (blood sugar)": {"action": "Notify Nurse"},
 
-    # --- NEW: Ice Chips/Water Submenu ---
     "Ice Chips/Water": {
         "question": "If you have a support person with you, they are welcome to go into our nourishment room, which has water, ice chips, juice and small snacks. Staff can show you where it is located. What would you like?",
         "options": [
@@ -52,7 +56,6 @@ button_data = {
     "I need water, no ice": {"action": "Notify CNA"},
     "I need hot water": {"action": "Notify CNA"},
 
-    # --- Bathroom/Shower Submenu ---
     "Bathroom/Shower": {
         "question": "If you have been up to the bathroom once with a staff member, and you feel steady on your feet, you are able to go to the bathroom on your own. Please let us know if you still need help. What do you need?",
         "options": [
