@@ -69,24 +69,19 @@ engine = create_engine(DATABASE_URL)
 def setup_database():
     try:
         with engine.connect() as connection:
-            # Create the 'requests' table if it doesn't exist
             connection.execute(text("""
                 CREATE TABLE IF NOT EXISTS requests (
                     id SERIAL PRIMARY KEY,
+                    request_id VARCHAR(255) UNIQUE,
                     timestamp TIMESTAMP WITHOUT TIME ZONE,
+                    completion_timestamp TIMESTAMP WITHOUT TIME ZONE,
                     room VARCHAR(255),
                     user_input TEXT,
                     category VARCHAR(255),
-                    reply TEXT
+                    reply TEXT,
+                    is_first_baby BOOLEAN
                 );
             """))
-            
-            # Add new columns to the 'requests' table if they don't exist
-            connection.execute(text("ALTER TABLE requests ADD COLUMN IF NOT EXISTS request_id VARCHAR(255) UNIQUE;"))
-            connection.execute(text("ALTER TABLE requests ADD COLUMN IF NOT EXISTS completion_timestamp TIMESTAMP WITHOUT TIME ZONE;"))
-            connection.execute(text("ALTER TABLE requests ADD COLUMN IF NOT EXISTS is_first_baby BOOLEAN;"))
-
-            # Create the 'assignments' table if it doesn't exist
             connection.execute(text("""
                 CREATE TABLE IF NOT EXISTS assignments (
                     id SERIAL PRIMARY KEY,
@@ -142,6 +137,7 @@ def send_email_alert(subject, body):
     except Exception as e:
         print(f"ERROR: Email failed to send: {e}")
 
+# THIS IS THE FIX: This function now runs slow tasks in the background
 def process_request(role, subject, user_input, reply_message):
     request_id = 'req_' + str(datetime.now().timestamp()).replace('.', '')
     
@@ -260,6 +256,16 @@ def handle_chat():
         return f"Error: Configuration file '{config_module_name}.py' is missing or invalid. Please contact support."
 
     if request.method == 'POST':
+        user_input = request.form.get("user_input", "").strip()
+        
+        # Handle the AI follow-up question
+        if user_input == button_data.get("ai_yes"):
+            original_question = session.get("last_ai_question", "A patient has a question.")
+            reply = process_request(role="nurse", subject="Patient Follow-up Request", user_input=original_question, reply_message=button_data["nurse_notification"])
+            return render_template("chat.html", reply=reply, options=button_data["main_buttons"], button_data=button_data)
+        elif user_input == button_data.get("ai_no"):
+            return redirect(url_for('handle_chat'))
+
         if request.form.get("action") == "send_note":
             note_text = request.form.get("custom_note")
             if note_text:
@@ -267,17 +273,23 @@ def handle_chat():
                 
                 if ai_answer == "NURSE_ACTION":
                     reply = process_request(role="nurse", subject="Custom Patient Note (AI Triage)", user_input=note_text, reply_message=button_data["nurse_notification"])
+                    options = button_data["main_buttons"]
                 elif ai_answer == "CNA_ACTION":
                     reply = process_request(role="cna", subject="Custom Patient Note (AI Triage)", user_input=note_text, reply_message=button_data["cna_notification"])
+                    options = button_data["main_buttons"]
                 elif ai_answer == "CANNOT_ANSWER":
                     reply = process_request(role="nurse", subject="Custom Patient Note (AI Triage)", user_input=note_text, reply_message=button_data["nurse_notification"])
+                    options = button_data["main_buttons"]
                 else:
-                    reply = ai_answer
+                    # This is an educational answer, show the follow-up
+                    session["last_ai_question"] = note_text
+                    reply = f"{ai_answer}\n\n{button_data.get('ai_follow_up_question', 'Would you like to speak to your nurse?')}"
+                    options = [button_data.get("ai_yes", "Yes"), button_data.get("ai_no", "No")]
             else:
                 reply = "Please type a message in the box."
-            return render_template("chat.html", reply=reply, options=button_data["main_buttons"], button_data=button_data)
+                options = button_data["main_buttons"]
+            return render_template("chat.html", reply=reply, options=options, button_data=button_data)
         
-        user_input = request.form.get("user_input", "").strip()
         if user_input == button_data.get("back_text", "⬅ Back"):
             return redirect(url_for('handle_chat'))
 
@@ -368,7 +380,7 @@ def assignments():
         today = date.today()
         try:
             with engine.connect() as connection:
-                with connection.begin(): # Start a transaction
+                with connection.begin():
                     for key, nurse_name in request.form.items():
                         if key.startswith('nurse_for_room_'):
                             room_number = key.replace('nurse_for_room_', '')
