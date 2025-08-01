@@ -146,9 +146,11 @@ def send_email_alert(subject, body):
 def process_request(role, subject, user_input, reply_message):
     request_id = 'req_' + str(datetime.now().timestamp()).replace('.', '')
     
+    # Run the slow (blocking) tasks in the background
     socketio.start_background_task(send_email_alert, subject, user_input)
     socketio.start_background_task(log_request_to_db, request_id, role, user_input, reply_message)
     
+    # Send the real-time alert to the dashboard immediately
     socketio.emit('new_request', {
         'id': request_id,
         'room': session.get('room_number', 'N/A'),
