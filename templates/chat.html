@@ -26,9 +26,11 @@
             border-radius: 8px;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }
+        /* THIS IS THE FIX: Using Flexbox for robust alignment */
         .header {
-            position: relative;
-            text-align: center;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             padding-bottom: 15px;
             border-bottom: 1px solid #e1e1e2;
             margin-bottom: 20px;
@@ -38,13 +40,12 @@
             margin: 0;
             font-size: 24px;
         }
+        /* THIS IS THE FIX: Removing absolute positioning */
         .language-link {
-            position: absolute;
-            top: 5px;
-            right: 5px;
             text-decoration: none;
             color: var(--accent-blue);
             font-size: 14px;
+            white-space: nowrap; /* Prevents the link text from wrapping */
         }
         .bot-reply {
             background-color: #ebf0fa;
