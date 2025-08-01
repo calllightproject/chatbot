@@ -56,7 +56,6 @@ How do I know if formula isn’t agreeing with my baby? Most healthy baby cry, f
 Bottle Feeding Don’ts: never leave your baby alone, never prop a bottle in place, never put baby to bed with a bottle, never add baby cereal in the bottle. 
 
 """
-
 # --- Database Configuration ---
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
@@ -137,15 +136,12 @@ def send_email_alert(subject, body):
     except Exception as e:
         print(f"ERROR: Email failed to send: {e}")
 
-# THIS IS THE FIX: This function now runs slow tasks in the background
 def process_request(role, subject, user_input, reply_message):
     request_id = 'req_' + str(datetime.now().timestamp()).replace('.', '')
     
-    # Run the slow (blocking) tasks in the background so they don't block the server
     socketio.start_background_task(send_email_alert, subject, user_input)
     socketio.start_background_task(log_request_to_db, request_id, role, user_input, reply_message)
     
-    # Send the real-time alert to the dashboard immediately
     socketio.emit('new_request', {
         'id': request_id,
         'room': session.get('room_number', 'N/A'),
@@ -258,7 +254,7 @@ def handle_chat():
     if request.method == 'POST':
         user_input = request.form.get("user_input", "").strip()
         
-        # Handle the AI follow-up question
+        # Handle the AI/Note follow-up question
         if user_input == button_data.get("ai_yes"):
             original_question = session.get("last_ai_question", "A patient has a question.")
             reply = process_request(role="nurse", subject="Patient Follow-up Request", user_input=original_question, reply_message=button_data["nurse_notification"])
@@ -281,7 +277,6 @@ def handle_chat():
                     reply = process_request(role="nurse", subject="Custom Patient Note (AI Triage)", user_input=note_text, reply_message=button_data["nurse_notification"])
                     options = button_data["main_buttons"]
                 else:
-                    # This is an educational answer, show the follow-up
                     session["last_ai_question"] = note_text
                     reply = f"{ai_answer}\n\n{button_data.get('ai_follow_up_question', 'Would you like to speak to your nurse?')}"
                     options = [button_data.get("ai_yes", "Yes"), button_data.get("ai_no", "No")]
@@ -298,19 +293,25 @@ def handle_chat():
             reply = button_info.get("question") or button_info.get("note", "")
             options = button_info.get("options", [])
             
-            back_text = button_data.get("back_text", "⬅ Back")
-            if options and back_text not in options:
-                options.append(back_text)
-            elif not options:
-                options = button_data["main_buttons"]
+            # THIS IS THE FIX: Check for the new "follow_up" flag on regular buttons
+            if button_info.get("follow_up"):
+                session["last_ai_question"] = user_input
+                reply = f"{reply}\n\n{button_data.get('ai_follow_up_question', 'Would you like to speak to your nurse?')}"
+                options = [button_data.get("ai_yes", "Yes"), button_data.get("ai_no", "No")]
+            else:
+                back_text = button_data.get("back_text", "⬅ Back")
+                if options and back_text not in options:
+                    options.append(back_text)
+                elif not options:
+                    options = button_data["main_buttons"]
 
-            if "action" in button_info:
-                action = button_info["action"]
-                role = "cna" if action == "Notify CNA" else "nurse"
-                subject = f"{role.upper()} Request"
-                notification_message = button_info.get("note", button_data[f"{role}_notification"])
-                reply = process_request(role=role, subject=subject, user_input=user_input, reply_message=notification_message)
-                options = button_data["main_buttons"]
+                if "action" in button_info:
+                    action = button_info["action"]
+                    role = "cna" if action == "Notify CNA" else "nurse"
+                    subject = f"{role.upper()} Request"
+                    notification_message = button_info.get("note", button_data[f"{role}_notification"])
+                    reply = process_request(role=role, subject=subject, user_input=user_input, reply_message=notification_message)
+                    options = button_data["main_buttons"]
         else:
             reply = "I'm sorry, I didn't understand that. Please use the buttons provided."
             options = button_data["main_buttons"]
