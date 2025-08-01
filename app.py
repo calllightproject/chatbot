@@ -76,8 +76,7 @@ def setup_database():
                 );
             """))
             
-            # THIS IS THE FIX: Add new columns to the 'requests' table if they don't exist
-            # This makes the setup process robust to changes.
+            # Add new columns to the 'requests' table if they don't exist
             connection.execute(text("ALTER TABLE requests ADD COLUMN IF NOT EXISTS request_id VARCHAR(255) UNIQUE;"))
             connection.execute(text("ALTER TABLE requests ADD COLUMN IF NOT EXISTS completion_timestamp TIMESTAMP WITHOUT TIME ZONE;"))
             connection.execute(text("ALTER TABLE requests ADD COLUMN IF NOT EXISTS is_first_baby BOOLEAN;"))
@@ -151,7 +150,66 @@ def process_request(role, subject, user_input, reply_message):
     })
     return reply_message
 
-# ... (The rest of the app.py file remains the same) ...
+# THIS IS THE FIX: Replaced the placeholder with a robust, local search function
+def get_ai_response(question, context):
+    question_lower = question.lower()
+    
+    # Rule 1: Safety First - Check for clinical keywords that require a nurse
+    nurse_keywords = ["pain", "dizzy", "bleeding", "headache", "nausea", "sad", "scared", "anxious", "crying", "help", "emergency", "harm"]
+    if any(keyword in question_lower for keyword in nurse_keywords):
+        return "NURSE_ACTION"
+
+    # Rule 2: Check for simple CNA tasks
+    cna_keywords = ["pillow", "water", "blanket", "ice", "pad", "diaper", "formula"]
+    if any(keyword in question_lower for keyword in cna_keywords):
+        return "CNA_ACTION"
+
+    # Rule 3: Search for educational topics using a keyword map
+    topic_map = {
+        "jaundice": "Jaundice:",
+        "uterus": "Uterus:", "cramps": "Uterus:", "afterbirth": "Uterus:",
+        "bladder": "Bladder:", "urinate": "Bladder:",
+        "bowel": "Bowels:", "constipation": "Bowels:",
+        "hemorrhoid": "Hemorrhoids:",
+        "perineum": "Perineum:",
+        "discharge": "Vaginal discharge:", "lochia": "Vaginal discharge:",
+        "gas": "Gas Pains:",
+        "incision": "Cesarean Birth Incision Care:", "cesarean": "Cesarean Birth Incision Care:",
+        "moving": "Moving After Cesarean Birth:",
+        "baby blues": "Baby Blues:", "depression": "Postpartum Depression And Anxiety:",
+        "ocd": "Postpartum Obsessive-Compulsive Disorder (OCD):",
+        "psychosis": "Postpartum Psychosis:",
+        "pets": "Family Pets:", "cat": "Family Pets:", "dog": "Family Pets:",
+        "siblings": "Siblings:", "brother": "Siblings:", "sister": "Siblings:",
+        "skin to skin": "Skin to Skin Contact:",
+        "acne": "Newborn Appearance:", "swollen": "Newborn Appearance:", "head shape": "Newborn Appearance:",
+        "eyes": "Newborn Appearance:",
+        "hearing": "Newborn Screenings:",
+        "umbilical": "Umbilical cord:", "cord": "Umbilical cord:",
+        "nail": "Nail care:",
+        "rash": "Diaper Rash:",
+        "diapering": "Diapering:", "meconium": "Diapering:", "stools": "Diapering:",
+        "behavior": "Baby’s Behavior:", "crying": "Baby’s Behavior:", "fussing": "Baby’s Behavior:",
+        "colic": "Colic:",
+        "sleep": "Safe Sleep:", "sids": "Safe Sleep:",
+        "car seat": "Car Seats:",
+        "temperature": "Taking Baby’s Temperature:",
+        "cluster feeding": "Cluster Feeding:",
+        "burping": "Burping:",
+        "bottle feeding": "Feeding your baby a bottle:"
+    }
+
+    paragraphs = [p.strip() for p in context.strip().split('\n') if p.strip()]
+    
+    for keyword, title in topic_map.items():
+        if keyword in question_lower:
+            for p in paragraphs:
+                if p.startswith(title):
+                    return p # Return the correct, full paragraph
+
+    # Rule 4: If no topic is found, escalate to the nurse for safety
+    return "CANNOT_ANSWER"
+
 # --- App Routes ---
 @app.route("/room/<room_id>")
 def set_room(room_id):
@@ -221,8 +279,16 @@ def handle_chat():
         if request.form.get("action") == "send_note":
             note_text = request.form.get("custom_note")
             if note_text:
-                # This is a placeholder for the AI logic
-                reply = process_request(role="nurse", subject="Custom Patient Note", user_input=note_text, reply_message=button_data["nurse_notification"])
+                ai_answer = get_ai_response(note_text, KNOWLEDGE_BASE)
+                
+                if ai_answer == "NURSE_ACTION":
+                    reply = process_request(role="nurse", subject="Custom Patient Note (AI Triage)", user_input=note_text, reply_message=button_data["nurse_notification"])
+                elif ai_answer == "CNA_ACTION":
+                    reply = process_request(role="cna", subject="Custom Patient Note (AI Triage)", user_input=note_text, reply_message=button_data["cna_notification"])
+                elif ai_answer == "CANNOT_ANSWER":
+                    reply = process_request(role="nurse", subject="Custom Patient Note (AI Triage)", user_input=note_text, reply_message=button_data["nurse_notification"])
+                else:
+                    reply = ai_answer
             else:
                 reply = "Please type a message in the box."
             return render_template("chat.html", reply=reply, options=button_data["main_buttons"], button_data=button_data)
