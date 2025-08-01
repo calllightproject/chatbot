@@ -12,7 +12,7 @@ button_data = {
     "demographic_yes": "是",
     "demographic_no": "否",
 
-    # NEW: Text for the AI follow-up
+    # NEW: Text for the AI/Note follow-up
     "ai_follow_up_question": "您想和您的护士谈谈吗？",
     "ai_yes": "是的，和护士谈谈",
     "ai_no": "不，我没事",
@@ -67,7 +67,11 @@ button_data = {
     },
     "我需要帮助去卫生间": {"action": "Notify CNA"},
     "我需要包裹我的静脉输液管以便洗澡": {"action": "Notify CNA"},
-    "我可以洗澡吗？": {"note": "通常可以，但如果您有静脉输液管或其他限制，请先咨询您的护士。"},
+    # THIS IS THE FIX: Added a "follow_up" flag to this specific note
+    "我可以洗澡吗？": {
+        "note": "通常可以，但如果您有静脉输液管或其他限制，请先咨询您的护士。",
+        "follow_up": True
+    },
 
     # --- Supplies Category ---
     "我需要用品": {
