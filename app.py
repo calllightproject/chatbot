@@ -12,6 +12,7 @@ from sqlalchemy import create_engine, text
 import eventlet
 
 # Initialize eventlet at the very top of the file
+import eventlet
 eventlet.monkey_patch()
 
 # --- App Configuration ---
