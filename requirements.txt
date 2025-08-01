@@ -1,6 +1,7 @@
 Flask
 Flask-SocketIO
-eventlet
-gunicorn
 SQLAlchemy
 psycopg2-binary
+gunicorn
+eventlet
+requests
