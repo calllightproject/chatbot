@@ -54,8 +54,6 @@ Burping: After feeding, try to burp your baby. Not all babies will burp in the f
 Feeding your baby a bottle: Feeding time presents an ideal opportunity for you to bond with your newborn. It’s a special time to build a strong foundation for the rest of your baby’s life. How do I know my baby’s ready to eat? When your baby’s ready to eat, they have ways of letting you know. They’ll start by showing feeding cues. Feedings usually go more smoothly if you start when they’re showing early cues. Practicing rooming in and placing your baby skin to skin can help you learn their cues. You’ll be right there where you can respond to them quickly. If your baby is already crying, they may be too upset to feed. When this happens, calm your baby first by gently rocking them side to side or through skin to skin contact. What do my baby’s feeding cues look like? Head moving side to side, hands to mouth and stretching, lips smacking and puckering, tongue sticking out and fidgeting. What are proper bottle feeding techniques? Your baby will learn to suck, swallow and breathe-all at the same time. As new parents who are bottle feeding, you’ll learn the techniques that are best for your baby, and for yourselves. So, try to keep an open mind as your share this learning experience with your little one. A newborn needs human contact. Feeding is an ideal time to share it. Take advantage of this time to make eye contact with your baby and to really connect. Make this a time to touch, talk and sing. Try not to get distracted by your phone or other electronic devices. A baby also benefits from skin to skin time with parents during feedings. If you’re comfortable and relaxed, your baby will be too. Is there more than one way to bottlefeed? In traditional method, you cradle your baby securely in the crook of your arm as you hold the bottle in your other hand. Then when your baby is ready, gradually tip the bottle up. You want the fluid to fill the nipple, but you don’t want to let any air enter it. If you’re comfortable with this method, then you can stick with it. You may also try a more natural method called paced bottle feeding. This style lets the baby set the pace, eat more slowly, and take breaks as needed. In this method, you hold the bottle horizontally and hold the baby more upright. When  you notice your baby pausing between bursts of sucking, remove the nipple from your baby’s mouth. Then allow the nipple to rest on your baby’s lip until the baby starts sucking again. In paced bottle feeding, the baby controls the flow of milk. This methods helps prevent both overfeeding and choking. How to pace bottle feed: hold your baby in an upright position, supporting their head and neck with your arm or hand, use the nipple to touch your baby’s upper lip. Encourage baby to open their mouth wide. Let your baby pull the nipple into their mouth, don’t force them to take it. Keep nipple horizontal so the nipple remains partially full. This will slow the flow of the milk. Give your baby breaks and watch for signs they are ready to end the feeding. If your baby is drinking too fast, tip the bottle down or remove it slow the pace. If your baby spits up after you feed them: try giving them less or try smaller amounts more frequently. Try burping them several times during the feeding. Hold them upright for 15-30 minutes after a feeding. Avoid bouncing them or active play right after a feeding . Avoid placing them on their tummy right after a feeding. Warning: Contact your health care provider if your baby: vomits 1/3 or more of their formula at most feeding sessions, projectile vomits-or forcefully spews out the contents of their stomach. Burping your baby: After feeding, it’s time to try to burp your baby. During the first few days after birth, not all babies will burp. So, just do your best. To burp your baby, gently pat them on the back or stroke their back with an upward motion. If your baby doesn’t burp after a few minutes, you can keep feeding. Try burping a few more times during the feeding when the sucking slows down or stops. How do I know when my baby has finished feeding? You want to make sure you don’t overfeed your baby. Just like they show cues when they’re hungry, your baby also has ways of letting you know they’re ready to end the feeding. So watch and listen closely to your baby throughout the feeding. Watch for these cues: closes mouth, turns head away, relaxes hands, no longer sucking, letting go of the nipple. Warning: Stop the feeding if the following signs of stress occur: turning the head, arching the back, choking, sputtering, changing color, moving the arms, tensing fists while eating. 
 How do I know if formula isn’t agreeing with my baby? Most healthy baby cry, fuss, get gassy and spit up from time to time. Only a very small percentage of babies actually have a formula intolerance and need to change formula type. There are signs that your baby may be allergic to the formula you are feeding them. These signs include excessive crying or fussiness after a feeding, very gassy, very watery stools or forceful vomiting. Their skin could also be red and scaly. Is it normal for my baby to spit up after feeding? Most babies spit up because the muscle around the opening of the stomach isn’t strong enough to keep the milk or formula down. Spitting up will usually go aways as babies develop more and can sit up. It is possible that spitting up a lot is a sign of acid reflux, an allergy or intolerance of the formula. 
 Bottle Feeding Don’ts: never leave your baby alone, never prop a bottle in place, never put baby to bed with a bottle, never add baby cereal in the bottle. 
-
-
 """
 
 # --- Database Configuration ---
@@ -158,16 +156,13 @@ def process_request(role, subject, user_input, reply_message):
     })
     return reply_message
 
-# THIS IS THE FIX: Reordered the logic to prioritize education
 def get_ai_response(question, context):
     question_lower = question.lower()
     
-    # Rule 1: Safety First - Check for clinical keywords that require a nurse
     nurse_keywords = ["pain", "dizzy", "bleeding", "headache", "nausea", "sad", "scared", "anxious", "crying", "help", "emergency", "harm"]
     if any(keyword in question_lower for keyword in nurse_keywords):
         return "NURSE_ACTION"
 
-    # Rule 2: Search for educational topics using a keyword map FIRST
     topic_map = {
         "jaundice": "Jaundice:", "uterus": "Uterus:", "cramps": "Uterus:", "afterbirth": "Uterus:",
         "bladder": "Bladder:", "urinate": "Bladder:", "bowel": "Bowels:", "constipation": "Bowels:",
@@ -188,14 +183,12 @@ def get_ai_response(question, context):
         if keyword in question_lower:
             for p in paragraphs:
                 if p.startswith(title):
-                    return p # Return the educational paragraph
+                    return p
 
-    # Rule 3: ONLY if no educational answer is found, check for simple CNA tasks
     cna_keywords = ["pillow", "water", "blanket", "ice", "pad", "diaper", "formula"]
     if any(keyword in question_lower for keyword in cna_keywords):
         return "CNA_ACTION"
 
-    # Rule 4: If no topic is found, escalate to the nurse for safety
     return "CANNOT_ANSWER"
 
 # --- App Routes ---
@@ -366,6 +359,39 @@ def analytics():
 
     return render_template('analytics.html', top_requests_labels=json.dumps(top_requests_labels), top_requests_values=json.dumps(top_requests_values), requests_by_hour_labels=json.dumps(requests_by_hour_labels), requests_by_hour_values=json.dumps(requests_by_hour_values))
     
+# NEW: Route for the assignment interface
+@app.route('/assignments', methods=['GET', 'POST'])
+def assignments():
+    if request.method == 'POST':
+        today = date.today()
+        try:
+            with engine.connect() as connection:
+                with connection.begin(): # Start a transaction
+                    for key, nurse_name in request.form.items():
+                        if key.startswith('nurse_for_room_'):
+                            room_number = key.replace('nurse_for_room_', '')
+                            if nurse_name and nurse_name != 'unassigned':
+                                # This is an "UPSERT" operation for PostgreSQL
+                                connection.execute(text("""
+                                    INSERT INTO assignments (assignment_date, room_number, nurse_name)
+                                    VALUES (:date, :room, :nurse)
+                                    ON CONFLICT (assignment_date, room_number)
+                                    DO UPDATE SET nurse_name = EXCLUDED.nurse_name;
+                                """), {"date": today, "room": room_number, "nurse": nurse_name})
+                            else:
+                                # If 'unassigned' is selected, delete any existing assignment for that room today
+                                connection.execute(text("""
+                                    DELETE FROM assignments 
+                                    WHERE assignment_date = :date AND room_number = :room;
+                                """), {"date": today, "room": room_number})
+            print("Assignments saved successfully.")
+        except Exception as e:
+            print(f"ERROR saving assignments: {e}")
+        return redirect(url_for('dashboard'))
+
+    # For a GET request, just show the page
+    return render_template('assignments.html')
+
 @socketio.on('join')
 def on_join(data):
     room = data['room']
