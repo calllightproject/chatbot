@@ -56,6 +56,7 @@ How do I know if formula isn’t agreeing with my baby? Most healthy baby cry, f
 Bottle Feeding Don’ts: never leave your baby alone, never prop a bottle in place, never put baby to bed with a bottle, never add baby cereal in the bottle. 
 
 """
+
 # --- Database Configuration ---
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
@@ -68,19 +69,24 @@ engine = create_engine(DATABASE_URL)
 def setup_database():
     try:
         with engine.connect() as connection:
+            # Create the 'requests' table if it doesn't exist
             connection.execute(text("""
                 CREATE TABLE IF NOT EXISTS requests (
                     id SERIAL PRIMARY KEY,
-                    request_id VARCHAR(255) UNIQUE,
                     timestamp TIMESTAMP WITHOUT TIME ZONE,
-                    completion_timestamp TIMESTAMP WITHOUT TIME ZONE,
                     room VARCHAR(255),
                     user_input TEXT,
                     category VARCHAR(255),
-                    reply TEXT,
-                    is_first_baby BOOLEAN
+                    reply TEXT
                 );
             """))
+            
+            # Add new columns to the 'requests' table if they don't exist
+            connection.execute(text("ALTER TABLE requests ADD COLUMN IF NOT EXISTS request_id VARCHAR(255) UNIQUE;"))
+            connection.execute(text("ALTER TABLE requests ADD COLUMN IF NOT EXISTS completion_timestamp TIMESTAMP WITHOUT TIME ZONE;"))
+            connection.execute(text("ALTER TABLE requests ADD COLUMN IF NOT EXISTS is_first_baby BOOLEAN;"))
+
+            # Create the 'assignments' table if it doesn't exist
             connection.execute(text("""
                 CREATE TABLE IF NOT EXISTS assignments (
                     id SERIAL PRIMARY KEY,
@@ -254,7 +260,6 @@ def handle_chat():
     if request.method == 'POST':
         user_input = request.form.get("user_input", "").strip()
         
-        # Handle the AI/Note follow-up question
         if user_input == button_data.get("ai_yes"):
             original_question = session.get("last_ai_question", "A patient has a question.")
             reply = process_request(role="nurse", subject="Patient Follow-up Request", user_input=original_question, reply_message=button_data["nurse_notification"])
@@ -293,7 +298,6 @@ def handle_chat():
             reply = button_info.get("question") or button_info.get("note", "")
             options = button_info.get("options", [])
             
-            # THIS IS THE FIX: Check for the new "follow_up" flag on regular buttons
             if button_info.get("follow_up"):
                 session["last_ai_question"] = user_input
                 reply = f"{reply}\n\n{button_data.get('ai_follow_up_question', 'Would you like to speak to your nurse?')}"
