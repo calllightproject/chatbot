@@ -6,14 +6,12 @@ from datetime import datetime, date
 from collections import defaultdict
 from email.message import EmailMessage
 
+import eventlet
+eventlet.monkey_patch()
+
 from flask import Flask, render_template, request, session, redirect, url_for
 from flask_socketio import SocketIO, join_room
 from sqlalchemy import create_engine, text
-import eventlet
-
-# Initialize eventlet at the very top of the file
-import eventlet
-eventlet.monkey_patch()
 
 # --- App Configuration ---
 app = Flask(__name__, template_folder='templates')
@@ -21,6 +19,7 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-strong-fallback-secret-key-for
 socketio = SocketIO(app, async_mode='eventlet')
 
 # --- KNOWLEDGE BASE ---
+# The text from the "New Beginnings" book
 KNOWLEDGE_BASE = """
 Hemorrhoids: Hemorrhoids are swollen veins at the opening of the rectum, inside the rectum, or outside of the anus. They can be painful, itchy, and even bleed. Although they’re usually not serious, they can be really uncomfortable. What can help: eat health (especially high-fiber) foods, drink plenty of water to avoid constipation, avoid straining during bowel movement, avoid sitting or standing for long periods of time, use pre-moistened wipes instead of toilet paper, apply ice packs or witch hazel pads to the hemorrhoids, soak in a warm tub several times a day, use topical creams, suppositories, and pain medication with your health care provider’s approval. 
 Perineum: The perineum is the area between your vagina and rectum. During a vaginal birth, it stretches and may tear. So, you may have tears and lacerations in your perineum. These tears, along with any vaginal tears, can cause pain and tenderness for several weeks. During the first 24-48 hours, icing can help discomfort. Keeping the area clean and dry can help relieve pain, prevent infection, and promote healing.
@@ -70,24 +69,19 @@ engine = create_engine(DATABASE_URL)
 def setup_database():
     try:
         with engine.connect() as connection:
-            # Create the 'requests' table if it doesn't exist
             connection.execute(text("""
                 CREATE TABLE IF NOT EXISTS requests (
                     id SERIAL PRIMARY KEY,
+                    request_id VARCHAR(255) UNIQUE,
                     timestamp TIMESTAMP WITHOUT TIME ZONE,
+                    completion_timestamp TIMESTAMP WITHOUT TIME ZONE,
                     room VARCHAR(255),
                     user_input TEXT,
                     category VARCHAR(255),
-                    reply TEXT
+                    reply TEXT,
+                    is_first_baby BOOLEAN
                 );
             """))
-            
-            # Add new columns to the 'requests' table if they don't exist
-            connection.execute(text("ALTER TABLE requests ADD COLUMN IF NOT EXISTS request_id VARCHAR(255) UNIQUE;"))
-            connection.execute(text("ALTER TABLE requests ADD COLUMN IF NOT EXISTS completion_timestamp TIMESTAMP WITHOUT TIME ZONE;"))
-            connection.execute(text("ALTER TABLE requests ADD COLUMN IF NOT EXISTS is_first_baby BOOLEAN;"))
-
-            # Create the 'assignments' table if it doesn't exist
             connection.execute(text("""
                 CREATE TABLE IF NOT EXISTS assignments (
                     id SERIAL PRIMARY KEY,
@@ -146,11 +140,9 @@ def send_email_alert(subject, body):
 def process_request(role, subject, user_input, reply_message):
     request_id = 'req_' + str(datetime.now().timestamp()).replace('.', '')
     
-    # Run the slow (blocking) tasks in the background
     socketio.start_background_task(send_email_alert, subject, user_input)
     socketio.start_background_task(log_request_to_db, request_id, role, user_input, reply_message)
     
-    # Send the real-time alert to the dashboard immediately
     socketio.emit('new_request', {
         'id': request_id,
         'room': session.get('room_number', 'N/A'),
