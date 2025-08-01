@@ -6,14 +6,21 @@ from datetime import datetime, date
 from collections import defaultdict
 from email.message import EmailMessage
 
-from flask import Flask, render_template, request, session, redirect, url_for
+from flask import Flask, render_template, request, session, redirect, url_for, jsonify
 from flask_socketio import SocketIO, join_room
 from sqlalchemy import create_engine, text
+import requests # Needed for API calls
 
 # --- App Configuration ---
 app = Flask(__name__, template_folder='templates')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-strong-fallback-secret-key-for-local-development")
 socketio = SocketIO(app)
+
+# --- KNOWLEDGE BASE ---
+# The text from the "New Beginnings" book
+KNOWLEDGE_BASE = """
+PASTE YOUR KNOWLEDGE BASE TEXT HERE
+"""
 
 # --- Database Configuration ---
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -108,6 +115,40 @@ def process_request(role, subject, user_input, reply_message):
     })
     return reply_message
 
+# UPDATED: Function to get a response from the AI using the Gemini API
+async def get_ai_response(question, context):
+    prompt = f"""
+    You are a helpful postpartum nurse assistant. A patient has sent a message.
+    Using ONLY the following text from the "New Beginnings" book, determine if the message is a question you can answer.
+    The text is: '{context}'
+    The patient's message is: '{question}'
+
+    First, analyze the patient's message.
+    - If the message is a request for a person, an item, or an action (like "I need help", "I am in pain", "Can you bring me a pillow?"), respond with the single phrase: ACTION_REQUIRED
+    - If the message is a question that can be answered using the provided text, provide a clear, concise, and helpful answer based ONLY on that text.
+    - If the message is a question, but you cannot find the answer in the provided text, respond with the single phrase: CANNOT_ANSWER
+    """
+    try:
+        chatHistory = [{"role": "user", "parts": [{"text": prompt}]}]
+        payload = {"contents": chatHistory}
+        apiKey = "" # API key is handled by the environment
+        apiUrl = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key={apiKey}"
+        
+        response = requests.post(apiUrl, json=payload, headers={'Content-Type': 'application/json'})
+        response.raise_for_status() # Raise an exception for bad status codes
+        result = response.json()
+
+        if (result.get('candidates') and result['candidates'][0].get('content') and 
+            result['candidates'][0]['content'].get('parts') and result['candidates'][0]['content']['parts'][0].get('text')):
+            return result['candidates'][0]['content']['parts'][0]['text'].strip()
+        else:
+            return "CANNOT_ANSWER"
+            
+    except Exception as e:
+        print(f"Error getting AI response: {e}")
+        return "ACTION_REQUIRED"
+
+
 # --- App Routes ---
 @app.route("/room/<room_id>")
 def set_room(room_id):
@@ -159,8 +200,9 @@ def demographics():
     
     return render_template("demographics.html", question_text=question_text, yes_text=yes_text, no_text=no_text)
 
+# UPDATED: This route now needs to be async to call the AI function
 @app.route("/chat", methods=["GET", "POST"])
-def handle_chat():
+async def handle_chat():
     pathway = session.get("pathway", "standard")
     lang = session.get("language", "en")
     
@@ -173,50 +215,53 @@ def handle_chat():
         print(f"ERROR: Could not load configuration module '{config_module_name}'. Error: {e}")
         return f"Error: Configuration file '{config_module_name}.py' is missing or invalid. Please contact support."
 
-    # THIS IS THE FIX: The logic for handling the note was incorrect.
-    if request.method == 'POST':
-        # Check if the note form was submitted
-        if request.form.get("action") == "send_note":
-            note_text = request.form.get("custom_note")
-            if note_text:
-                reply = process_request(role="nurse", subject="Custom Patient Note", user_input=note_text, reply_message=button_data["nurse_notification"])
-            else:
-                reply = "Please type a message in the box."
-            return render_template("chat.html", reply=reply, options=button_data["main_buttons"], button_data=button_data)
-        
-        # Handle regular button presses
-        user_input = request.form.get("user_input", "").strip()
-        if user_input == button_data.get("back_text", "⬅ Back"):
-            return redirect(url_for('handle_chat'))
+    if request.method == "GET" or 'user_input' not in request.form:
+        return render_template("chat.html", reply=button_data["greeting"], options=button_data["main_buttons"], button_data=button_data)
 
-        if user_input in button_data:
-            button_info = button_data[user_input]
-            reply = button_info.get("question") or button_info.get("note", "")
-            options = button_info.get("options", [])
+    user_input = request.form.get("user_input", "").strip()
+    
+    if request.form.get("action") == "send_note":
+        note_text = request.form.get("custom_note")
+        if note_text:
+            # UPDATED: Call the async AI function
+            ai_answer = await get_ai_response(note_text, KNOWLEDGE_BASE)
             
-            back_text = button_data.get("back_text", "⬅ Back")
-            if options and back_text not in options:
-                options.append(back_text)
-            elif not options:
-                options = button_data["main_buttons"]
-
-            if "action" in button_info:
-                action = button_info["action"]
-                role = "cna" if action == "Notify CNA" else "nurse"
-                subject = f"{role.upper()} Request"
-                notification_message = button_info.get("note", button_data[f"{role}_notification"])
-                reply = process_request(role=role, subject=subject, user_input=user_input, reply_message=notification_message)
-                options = button_data["main_buttons"]
+            if ai_answer not in ["ACTION_REQUIRED", "CANNOT_ANSWER"]:
+                reply = ai_answer
+            else:
+                reply = process_request(role="nurse", subject="Custom Patient Note", user_input=note_text, reply_message=button_data["nurse_notification"])
         else:
-            reply = "I'm sorry, I didn't understand that. Please use the buttons provided."
+            reply = "Please type a message in the box."
+        return render_template("chat.html", reply=reply, options=button_data["main_buttons"], button_data=button_data)
+
+    if user_input == button_data.get("back_text", "⬅ Back"):
+        return redirect(url_for('handle_chat'))
+
+    if user_input in button_data:
+        button_info = button_data[user_input]
+        reply = button_info.get("question") or button_info.get("note", "")
+        options = button_info.get("options", [])
+        
+        back_text = button_data.get("back_text", "⬅ Back")
+        if options and back_text not in options:
+            options.append(back_text)
+        elif not options:
             options = button_data["main_buttons"]
 
-        return render_template("chat.html", reply=reply, options=options, button_data=button_data)
+        if "action" in button_info:
+            action = button_info["action"]
+            role = "cna" if action == "Notify CNA" else "nurse"
+            subject = f"{role.upper()} Request"
+            notification_message = button_info.get("note", button_data[f"{role}_notification"])
+            reply = process_request(role=role, subject=subject, user_input=user_input, reply_message=notification_message)
+            options = button_data["main_buttons"]
+    else:
+        reply = "I'm sorry, I didn't understand that. Please use the buttons provided."
+        options = button_data["main_buttons"]
 
-    # For GET requests (initial page load)
-    return render_template("chat.html", reply=button_data["greeting"], options=button_data["main_buttons"], button_data=button_data)
+    return render_template("chat.html", reply=reply, options=options, button_data=button_data)
 
-
+# ... (rest of your app.py file: reset_language, dashboard, analytics, SocketIO handlers) ...
 @app.route("/reset-language")
 def reset_language():
     session.clear()
