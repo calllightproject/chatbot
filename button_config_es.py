@@ -11,6 +11,11 @@ button_data = {
     "demographic_yes": "Sí",
     "demographic_no": "No",
 
+    # NEW: Text for the AI follow-up
+    "ai_follow_up_question": "¿Le gustaría hablar con su enfermera?",
+    "ai_yes": "Sí, hablar con la enfermera",
+    "ai_no": "No, estoy bien",
+
     # --- Main Menu Options ---
     "main_buttons": [
         "Tengo una emergencia",
@@ -18,10 +23,10 @@ button_data = {
         "Necesito medicamentos",
         "Tengo preguntas",
         "Quiero saber sobre el alta",
-        "Baño / Ducha", # UPDATED
+        "Baño / Ducha",
         "Necesito ayuda para amamantar",
         "Azúcar en la sangre",
-        "Hielo / Agua" # UPDATED
+        "Hielo / Agua"
     ],
 
     # --- Direct Actions & Simple Sub-menus ---
@@ -37,7 +42,6 @@ button_data = {
     "Mamá": {"action": "Notify CNA"},
     "Bebé (azúcar en la sangre)": {"action": "Notify Nurse"},
 
-    # --- NEW: Ice Chips/Water Submenu ---
     "Hielo / Agua": {
         "question": "Si tiene una persona de apoyo con usted, puede ir a nuestra sala de nutrición, que tiene agua, hielo picado, jugo y otros pequeños bocadillos. El personal puede mostrarle dónde se encuentra. ¿Qué le gustaría?",
         "options": [
@@ -52,7 +56,6 @@ button_data = {
     "Necesito agua, sin hielo": {"action": "Notify CNA"},
     "Necesito agua caliente": {"action": "Notify CNA"},
 
-    # --- Bathroom/Shower Submenu ---
     "Baño / Ducha": {
         "question": "Si ya ha ido al baño una vez con un miembro del personal y se siente estable, puede usar el baño por su cuenta. Por favor, avísenos si todavía necesita ayuda. ¿Qué necesita?",
         "options": [
