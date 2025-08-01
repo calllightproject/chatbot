@@ -66,7 +66,11 @@ button_data = {
     },
     "Necesito ayuda para ir al baño": {"action": "Notify CNA"},
     "Necesito cubrir mi vía IV para bañarme": {"action": "Notify CNA"},
-    "¿Puedo tomar una ducha?": {"note": "Normalmente sí, pero consulte con su enfermera si tiene una vía intravenosa u otras restricciones."},
+    # THIS IS THE FIX: Added a "follow_up" flag to this specific note
+    "¿Puedo tomar una ducha?": {
+        "note": "Normalmente sí, pero consulte con su enfermera si tiene una vía intravenosa u otras restricciones.",
+        "follow_up": True
+    },
 
     # --- Supplies Category ---
     "Necesito suministros": {
