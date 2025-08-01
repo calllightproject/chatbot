@@ -9,7 +9,6 @@ from email.message import EmailMessage
 from flask import Flask, render_template, request, session, redirect, url_for
 from flask_socketio import SocketIO, join_room
 from sqlalchemy import create_engine, text
-import requests # Needed for API calls
 
 # --- App Configuration ---
 app = Flask(__name__, template_folder='templates')
@@ -29,6 +28,8 @@ Postpartum Psychosis: Postpartum psychosis is a very rare condition that require
 
 Family Pets: Because safety is a top priority, never leave your baby and pets alone together without an adult present. Cats: Cats are creatures of habit who like a set routine. But many household routines will change when a new baby joins the family. When you bring your baby home, go to a quiet room and sit the baby on your lap. Let your cat come close when it’s ready. Dogs: If your dog is well-trained, it will be easier to control their introduction and behavior around the new baby. If your dog will be allowed in the baby’s room, put a dog bed in the corner and give your dog a treat or toy for staying in the bed. If the baby’s room will be off limits, install a tall baby gate and place a dog bed outside the room.  When you bring your baby home, it’s important to warmly greet your dog without the baby in the room. After you’ve been home for a few hours, have a helper bring in your dog on a leash while you hold the baby. Talk in a calm and happy voice. If your dog is not stressed, let him briefly sniff the baby’s feet. Reward your dog for good behavior and repeat. 
 Siblings: It’s normal for brothers or sisters to worry that the new baby will replace them or you will love the baby more. Encourage children to be honest about any feelings of jealousy, fear, or anger. To help them adjust, you can read books or watch videos with them about adding a baby to the family. Let children help with baby planning, shopping, and nursery decorations. Make sure to spend quality time with each child doing activities they enjoy. If siblings want to help care for their new baby brother or sister, it’s a good idea for you or another adult to supervise these interactions. 
+
+
 Skin to Skin Contact: At birth, your baby may be placed directly on your chest. At this time, a member of the health care team will dry your baby. They’ll check your baby over and cover you both with a warm blanket. The connection of your bare-skinned baby lying directly on your skin is called skin to skin contact. This immediate undisturbed skin to skin contact allows your baby to go through instinctive stages. These include looking at you, resting and finally self-attachment to the breast. This initial snuggling also has very important health benefits. Benefits: Soothes and calms you and your baby, your baby cries less, helps your baby regulate their temperature and heart rate, helps your baby regulate their breathing and blood sugar, enhances bonding, helps your uterus shrink back to regular size. Safe positioning for safe skin to skin contact: you should be semi-reclined or upright and alert, your baby is in the middle and high up on your chest, your baby’s shoulders and chest are facing you, your baby’s head is turned to one side with mouth and nose visible, your baby’s chin is in a neutral position (not slouched)- also called sniffing position, your baby’s neck is straight, not bent, your baby’s arms and legs are flexed-in tight to the side of their body, your baby’s back is covered with warm blankets. Remember: Babies should always maintain good skin color. They should respond to stimulation. Babies are usually calm and relaxed during skin to skin contact. You may get sleepy as well. It’s best to have an alert adult in the room or nearby to help out.  
 
 #has been submitted#
@@ -165,46 +166,44 @@ def process_request(role, subject, user_input, reply_message):
     })
     return reply_message
 
-# THIS IS THE FIX: Replaced placeholder with a real Gemini API call
+# THIS IS THE FIX: Replaced the failing API call with a smarter, local search function
 def get_ai_response(question, context):
-    prompt = f"""
-    You are a helpful postpartum nurse assistant with expert clinical judgment. A patient has sent a message.
-    Your task is to analyze the message and decide on the correct action based on a strict set of rules.
-
-    **Rules:**
-    1.  **Safety First:** If a message contains ANY mention of a clinical symptom (e.g., "pain", "dizzy", "fast heart rate", "bleeding", "headache", "nausea") OR any mention of emotional distress (e.g., "sad", "scared", "anxious", "crying"), it MUST be escalated to a nurse. This is the most important rule.
-    2.  **CNA Tasks:** If a message is a simple, non-clinical request for an item or basic help (e.g., "I need a pillow", "Can I have some water?", "I need help to the bathroom"), you can classify it as a CNA task.
-    3.  **Educational Questions:** If the message is a question that can be answered using the provided text, provide a clear, helpful answer based ONLY on that text.
-    4.  **Cannot Answer:** If the message is a question that cannot be answered from the text, you cannot answer it.
-
-    **Response Format:**
-    - If the message requires a nurse, respond with the single phrase: NURSE_ACTION
-    - If the message is a CNA task, respond with the single phrase: CNA_ACTION
-    - If you can answer the question from the text, provide the answer directly.
-    - If you cannot answer the question, respond with the single phrase: CANNOT_ANSWER
-
-    **Provided Text:** '{context}'
-    **Patient's Message:** '{question}'
-    """
-    try:
-        chatHistory = [{"role": "user", "parts": [{"text": prompt}]}]
-        payload = {"contents": chatHistory}
-        apiKey = "" # API key is handled by the environment
-        apiUrl = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key={apiKey}"
-        
-        response = requests.post(apiUrl, json=payload, headers={'Content-Type': 'application/json'})
-        response.raise_for_status()
-        result = response.json()
-
-        if (result.get('candidates') and result['candidates'][0].get('content') and 
-            result['candidates'][0]['content'].get('parts') and result['candidates'][0]['content']['parts'][0].get('text')):
-            return result['candidates'][0]['content']['parts'][0]['text'].strip()
-        else:
-            return "CANNOT_ANSWER"
-            
-    except Exception as e:
-        print(f"Error getting AI response: {e}")
+    question_lower = question.lower()
+    
+    # Rule 1: Safety First - Check for clinical keywords that require a nurse
+    nurse_keywords = ["pain", "dizzy", "bleeding", "headache", "nausea", "sad", "scared", "anxious", "crying", "help", "emergency", "harm"]
+    if any(keyword in question_lower for keyword in nurse_keywords):
         return "NURSE_ACTION"
+
+    # Rule 2: Check for simple CNA tasks
+    cna_keywords = ["pillow", "water", "blanket", "ice", "pad", "diaper", "formula"]
+    if any(keyword in question_lower for keyword in cna_keywords):
+        return "CNA_ACTION"
+
+    # Rule 3: Search for educational answers in the knowledge base
+    paragraphs = [p.strip() for p in context.strip().split('\n') if p.strip()]
+    question_words = set(q for q in question_lower.split() if len(q) > 2) # Ignore small words
+
+    best_match = None
+    highest_score = 0
+
+    for p in paragraphs:
+        p_lower = p.lower()
+        score = 0
+        for word in question_words:
+            if word in p_lower:
+                score += 1
+        
+        if score > highest_score:
+            highest_score = score
+            best_match = p
+
+    if highest_score > 0 and best_match:
+        # Return the most relevant paragraph found
+        return best_match
+    
+    # Rule 4: If no answer is found, escalate to the nurse for safety
+    return "CANNOT_ANSWER"
 
 # --- App Routes ---
 @app.route("/room/<room_id>")
