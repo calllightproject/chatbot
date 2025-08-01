@@ -1,3 +1,7 @@
+# These two lines MUST be the very first lines in the file.
+import eventlet
+eventlet.monkey_patch()
+
 import os
 import json
 import smtplib
@@ -5,9 +9,6 @@ import importlib
 from datetime import datetime, date
 from collections import defaultdict
 from email.message import EmailMessage
-
-import eventlet
-eventlet.monkey_patch()
 
 from flask import Flask, render_template, request, session, redirect, url_for
 from flask_socketio import SocketIO, join_room
