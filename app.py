@@ -22,7 +22,6 @@ socketio = SocketIO(app, async_mode='eventlet')
 # --- KNOWLEDGE BASE ---
 KNOWLEDGE_BASE = """
 Hemorrhoids: Many people develop hemorrhoids during pregnancy. Hemorrhoids are swollen veins at the opening of the rectum, inside the rectum, or outside of the anus. They can be painful, itchy, and even bleed. Although they’re usually not serious, they can be really uncomfortable. What can help: eat health (especially high-fiber) foods, drink plenty of water to avoid constipation, avoid straining during bowel movement, avoid sitting or standing for long periods of time, use pre-moistened wipes instead of toilet paper, apply ice packs or witch hazel pads to the hemorrhoids, soak in a warm tub several times a day, use topical creams, suppositories, and pain medication with your health care provider’s approval.  Perineum: The perineum is the area between your vagina and rectum. During a vaginal birth, it stretches and may tear. So, you may have tears and lacerations in your perineum. These tears, along with any vaginal tears, can cause pain and tenderness for several weeks. During the first 24-48 hours, icing can help discomfort. Keeping the area clean and dry can help relieve pain, prevent infection, and promote healing. Vaginal discharge: After giving birth, you can expect to have a bloody vaginal discharge, called lochia, for a few days. This is part of the natural healing process for your uterus. For the first few days, lochia is bright red, heavy in flow, and may have small blood clots. It has a distinct smell that women often describe as fleshy, musty, or earthy. Because blood collects in your vagina when you’re sitting or lying down, this may make lochia heavier when you stand up. You may notice a heavier blood flow after too much physical activity. If you do, you should slow down and rest. You may have less lochia if you had a cesarean birth. Over time, the flow gets less and lighter in color. But expect to have this lighter discharge for up to 4-6 weeks. You’ll want to use pads (not tampons or menstrual cups) until your lochia stops. Tampons or menstrual cups can increase the chance for infection in your uterus. First 1-3 days: bright to dark red, heavy to medium flow, may have small clots About days 3-10: pink or brown-tinged, medium to light flow, very few or no small clots About days 10-14 (maybe longer): yellowish-white color, very light flow, no clots or bright red color. Warning: Tell a nurse or call your health care provider immediately if you: soak through more than 1 pad in an hour, have a steady flow that continues over time, pass clots the size of an egg or larger after the first hour, have bright red vaginal bleeding day 4 or after, notice your lochia has a bad odor, have a fever of 100.4 degrees F or higher or 96.8 degrees F or lower, have severe pain in your lower abdomen. If you can’t reach your health care provider, go to an emergency room or call 911. Gain Pains: A buildup of gas in the intestines and constipation are common problems especially after cesarean birth. You want to keep your bowels moving, so walk around as often as you can. Eat foods that are high in fiber and drink plenty of water. To minimize gas pains: get in a knees to chest position, walk, rock, or lie on your left side, drink warm fluids often , avoid carbonated drinks, avoid foods that give you gas. Warning: Call your health care provider if your pain is: constant, unusual, worse than it was before, keeping you from doing things you could do before, located in the right upper area of your abdomen, located just below your breast bone. Cesarean Birth Incision Care: If you had a cesarean birth, your incision may be closed with staples, stitches, wound closure strips, or surgical glue covered by a sterile dressing. Your outer dressing may be removed before you leave the hospital or during a follow-up visit with your provider. Wound closure strips come loose on their own after 7-10 days and then you can remove them. You may want to use a clean gauze over your incision, especially if the skin on your belly folds over it. Remember to always wash your hands before and after touching your incision. It’s important to check your incision daily to make sure it’s not infected. Some people find it helpful to stand in front of a mirror or use a hand-held mirror to check. Each time you clean your incision, make sure to use a clean freshly washed cloth. Otherwise, you’re at risk for infection. Clean it by washing with warm water and soap. Do not scrub it. Use a clean towel and gently pat dry. Moving After Cesarean Birth: When you get out of bed, roll to your side and use your top arm to push yourself up. Sit on the side of the bed for a minute before you get up to make sure you’re not dizzy. Place a pillow over your incision while you cough or move around in bed. If you have stairs at home, try to limit the number of times you go up and down them. Warning: Call your health care provider immediately if your incision is: red, separated, swollen, warm to touch, tender or painful, draining, not healing. Baby Blues: About 70-80% of new parents experience some negative feelings or mood swings that can start a few days after birth. “Baby blues” are common and usually last from a few days up to a few weeks. These feelings are likely related to changing hormones and fatigue. Common symptoms of baby blues can include: Weepiness, impatience, irritability, restlessness, anxiety, feeling tired, insomnia, sadness, mood changes, poor concentration. If you or your family feels your symptoms are more severe or have lasted longer than 2 weeks, contact your health care provider. There are plenty of treatment options if you need some help getting back on your feet. Tips: Don’t skimp on sleep and rest when you can, get out in nature and soak up some sunshine, get moving-walk or dance to your favorite music, keep doing the things you love, carve out time for your partner or a support person, reach out for peer support-in your community or online, make up your mind to meditate or journal, make time just for you-try a bath, aromatherapy, or massage. Postpartum Depression And Anxiety: About 1 in 7 new parents will experience moderate to severe symptoms of depression or anxiety after the birth of their baby. Symptoms of maternal postpartum depression can happen any time during the first year. Many of the symptoms are similar to the baby blues. The difference is that symptoms of postpartum depression and anxiety may: be felt more intensely, last most of the day, happen on more days than not, make it hard to function, affect your ability to care for your baby, change your feelings toward your baby. 
-
 Family Pets: Because safety is a top priority, never leave your baby and pets alone together without an adult present. Cats: Cats are creatures of habit who like a set routine. But many household routines will change when a new baby joins the family. When you bring your baby home, go to a quiet room and sit the baby on your lap. Let your cat come close when it’s ready. Dogs: If your dog is well-trained, it will be easier to control their introduction and behavior around the new baby. If your dog will be allowed in the baby’s room, put a dog bed in the corner and give your dog a treat or toy for staying in the bed. If the baby’s room will be off limits, install a tall baby gate and place a dog bed outside the room.  When you bring your baby home, it’s important to warmly greet your dog without the baby in the room. After you’ve been home for a few hours, have a helper bring in your dog on a leash while you hold the baby. Talk in a calm and happy voice. If your dog is not stressed, let him briefly sniff the baby’s feet. Reward your dog for good behavior and repeat. Siblings: It’s normal for brothers or sisters to worry that the new baby will replace them or you will love the baby more. Encourage children to be honest about any feelings of jealousy, fear, or anger. To help them adjust, you can read books or watch videos with them about adding a baby to the family. Let children help with baby planning, shopping, and nursery decorations. Make sure to spend quality time with each child doing activities they enjoy. If siblings want to help care for their new baby brother or sister, it’s a good idea for you or another adult to supervise these interactions. Skin to Skin Contact: The connection of your bare-skinned baby lying directly on your skin is called skin to skin contact. This immediate undisturbed skin to skin contact allows your baby to go through instinctive stages. These include looking at you, resting and finally self-attachment to the breast. This initial snuggling also has very important health benefits. Benefits: Soothes and calms you and your baby, your baby cries less, helps your baby regulate their temperature and heart rate, helps your baby regulate their breathing and blood sugar, enhances bonding, helps your uterus shrink back to regular size. Safe positioning for safe skin to skin contact: you should be semi-reclined or upright and alert, your baby is in the middle and high up on your chest, your baby’s shoulders and chest are facing you, your baby’s head is turned to one side with mouth and nose visible, your baby’s chin is in a neutral position (not slouched)- also called sniffing position, your baby’s neck is straight, not bent, your baby’s arms and legs are flexed-in tight to the side of their body, your baby’s back is covered with warm blankets. Remember: Babies should always maintain good skin color. They should respond to stimulation. Babies are usually calm and relaxed during skin to skin contact. You may get sleepy as well. It’s best to have an alert adult in the room or nearby to help out. 
 Newborn Appearance: 
 Skin: Newborn babies can have a variety of harmless skin blemishes and rashes. A common condition is newborn acne, caused by your hormones. It will get better in the first few weeks. Your baby’s skin may be dry and peeling-mostly on the feet, hands, and scalp. This is simply the shedding of dead skin, and it will resolve on its own. The amount of time it takes to shed the outer layer of skin varies from baby to baby. 
@@ -137,10 +136,15 @@ def send_email_alert(subject, body):
     except Exception as e:
         print(f"ERROR: Email failed to send: {e}")
 
+# THIS IS THE FIX: This function now runs slow tasks in the background
 def process_request(role, subject, user_input, reply_message):
     request_id = 'req_' + str(datetime.now().timestamp()).replace('.', '')
-    send_email_alert(subject, user_input)
-    log_request_to_db(request_id, role, user_input, reply_message)
+    
+    # Run the slow (blocking) tasks in the background so they don't block the server
+    socketio.start_background_task(send_email_alert, subject, user_input)
+    socketio.start_background_task(log_request_to_db, request_id, role, user_input, reply_message)
+    
+    # Send the real-time alert to the dashboard immediately
     socketio.emit('new_request', {
         'id': request_id,
         'room': session.get('room_number', 'N/A'),
@@ -150,53 +154,32 @@ def process_request(role, subject, user_input, reply_message):
     })
     return reply_message
 
-# THIS IS THE FIX: Replaced the placeholder with a robust, local search function
+# ... (The rest of the app.py file remains the same) ...
 def get_ai_response(question, context):
     question_lower = question.lower()
     
-    # Rule 1: Safety First - Check for clinical keywords that require a nurse
     nurse_keywords = ["pain", "dizzy", "bleeding", "headache", "nausea", "sad", "scared", "anxious", "crying", "help", "emergency", "harm"]
     if any(keyword in question_lower for keyword in nurse_keywords):
         return "NURSE_ACTION"
 
-    # Rule 2: Check for simple CNA tasks
     cna_keywords = ["pillow", "water", "blanket", "ice", "pad", "diaper", "formula"]
     if any(keyword in question_lower for keyword in cna_keywords):
         return "CNA_ACTION"
 
-    # Rule 3: Search for educational topics using a keyword map
     topic_map = {
-        "jaundice": "Jaundice:",
-        "uterus": "Uterus:", "cramps": "Uterus:", "afterbirth": "Uterus:",
-        "bladder": "Bladder:", "urinate": "Bladder:",
-        "bowel": "Bowels:", "constipation": "Bowels:",
-        "hemorrhoid": "Hemorrhoids:",
-        "perineum": "Perineum:",
-        "discharge": "Vaginal discharge:", "lochia": "Vaginal discharge:",
-        "gas": "Gas Pains:",
-        "incision": "Cesarean Birth Incision Care:", "cesarean": "Cesarean Birth Incision Care:",
-        "moving": "Moving After Cesarean Birth:",
-        "baby blues": "Baby Blues:", "depression": "Postpartum Depression And Anxiety:",
-        "ocd": "Postpartum Obsessive-Compulsive Disorder (OCD):",
-        "psychosis": "Postpartum Psychosis:",
-        "pets": "Family Pets:", "cat": "Family Pets:", "dog": "Family Pets:",
-        "siblings": "Siblings:", "brother": "Siblings:", "sister": "Siblings:",
-        "skin to skin": "Skin to Skin Contact:",
-        "acne": "Newborn Appearance:", "swollen": "Newborn Appearance:", "head shape": "Newborn Appearance:",
-        "eyes": "Newborn Appearance:",
-        "hearing": "Newborn Screenings:",
-        "umbilical": "Umbilical cord:", "cord": "Umbilical cord:",
-        "nail": "Nail care:",
-        "rash": "Diaper Rash:",
-        "diapering": "Diapering:", "meconium": "Diapering:", "stools": "Diapering:",
-        "behavior": "Baby’s Behavior:", "crying": "Baby’s Behavior:", "fussing": "Baby’s Behavior:",
-        "colic": "Colic:",
-        "sleep": "Safe Sleep:", "sids": "Safe Sleep:",
-        "car seat": "Car Seats:",
-        "temperature": "Taking Baby’s Temperature:",
-        "cluster feeding": "Cluster Feeding:",
-        "burping": "Burping:",
-        "bottle feeding": "Feeding your baby a bottle:"
+        "jaundice": "Jaundice:", "uterus": "Uterus:", "cramps": "Uterus:", "afterbirth": "Uterus:",
+        "bladder": "Bladder:", "urinate": "Bladder:", "bowel": "Bowels:", "constipation": "Bowels:",
+        "hemorrhoid": "Hemorrhoids:", "perineum": "Perineum:", "discharge": "Vaginal discharge:", "lochia": "Vaginal discharge:",
+        "gas": "Gas Pains:", "incision": "Cesarean Birth Incision Care:", "cesarean": "Cesarean Birth Incision Care:",
+        "moving": "Moving After Cesarean Birth:", "baby blues": "Baby Blues:", "depression": "Postpartum Depression And Anxiety:",
+        "ocd": "Postpartum Obsessive-Compulsive Disorder (OCD):", "psychosis": "Postpartum Psychosis:",
+        "pets": "Family Pets:", "cat": "Family Pets:", "dog": "Family Pets:", "siblings": "Siblings:", "brother": "Siblings:", "sister": "Siblings:",
+        "skin to skin": "Skin to Skin Contact:", "acne": "Newborn Appearance:", "swollen": "Newborn Appearance:", "head shape": "Newborn Appearance:",
+        "eyes": "Newborn Appearance:", "hearing": "Newborn Screenings:", "umbilical": "Umbilical cord:", "cord": "Umbilical cord:",
+        "nail": "Nail care:", "rash": "Diaper Rash:", "diapering": "Diapering:", "meconium": "Diapering:", "stools": "Diapering:",
+        "behavior": "Baby’s Behavior:", "crying": "Baby’s Behavior:", "fussing": "Baby’s Behavior:", "colic": "Colic:",
+        "sleep": "Safe Sleep:", "sids": "Safe Sleep:", "car seat": "Car Seats:", "temperature": "Taking Baby’s Temperature:",
+        "cluster feeding": "Cluster Feeding:", "burping": "Burping:", "bottle feeding": "Feeding your baby a bottle:"
     }
 
     paragraphs = [p.strip() for p in context.strip().split('\n') if p.strip()]
@@ -205,12 +188,10 @@ def get_ai_response(question, context):
         if keyword in question_lower:
             for p in paragraphs:
                 if p.startswith(title):
-                    return p # Return the correct, full paragraph
+                    return p
 
-    # Rule 4: If no topic is found, escalate to the nurse for safety
     return "CANNOT_ANSWER"
 
-# --- App Routes ---
 @app.route("/room/<room_id>")
 def set_room(room_id):
     session.clear()
