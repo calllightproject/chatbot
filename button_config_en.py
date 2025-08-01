@@ -10,8 +10,6 @@ button_data = {
     "demographic_question": "Is this your first baby?",
     "demographic_yes": "Yes",
     "demographic_no": "No",
-
-    # NEW: Text for the AI follow-up
     "ai_follow_up_question": "Would you like to speak to your nurse?",
     "ai_yes": "Yes, speak to nurse",
     "ai_no": "No, I'm ok",
@@ -66,7 +64,11 @@ button_data = {
     },
     "I need help to the bathroom": {"action": "Notify CNA"},
     "I need my IV covered to shower": {"action": "Notify CNA"},
-    "Can I take a shower?": {"note": "Usually yes, but check with your nurse if you have an IV or other restrictions."},
+    # THIS IS THE FIX: Added a "follow_up" flag to this specific note
+    "Can I take a shower?": {
+        "note": "Usually yes, but check with your nurse if you have an IV or other restrictions.",
+        "follow_up": True
+    },
 
     # --- Supplies Category ---
     "I need supplies": {
