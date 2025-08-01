@@ -12,6 +12,11 @@ button_data = {
     "demographic_yes": "是",
     "demographic_no": "否",
 
+    # NEW: Text for the AI follow-up
+    "ai_follow_up_question": "您想和您的护士谈谈吗？",
+    "ai_yes": "是的，和护士谈谈",
+    "ai_no": "不，我没事",
+
     # --- Main Menu Options ---
     "main_buttons": [
         "我有紧急情况",
@@ -19,10 +24,10 @@ button_data = {
         "我需要药物",
         "我有问题",
         "我想了解出院信息",
-        "浴室/淋浴", # UPDATED
+        "浴室/淋浴",
         "我需要母乳喂养方面的帮助",
         "血糖",
-        "冰块/水" # UPDATED
+        "冰块/水"
     ],
 
     # --- Direct Actions & Simple Sub-menus ---
@@ -38,7 +43,6 @@ button_data = {
     "妈妈": {"action": "Notify CNA"},
     "宝宝（血糖）": {"action": "Notify Nurse"},
 
-    # --- NEW: Ice Chips/Water Submenu ---
     "冰块/水": {
         "question": "如果您有陪同人员，他们可以去我们的营养室，那里有水、冰块、果汁和小零食。工作人员可以告诉您具体位置。请问您需要什么？",
         "options": [
@@ -53,7 +57,6 @@ button_data = {
     "我需要不加冰的水": {"action": "Notify CNA"},
     "我需要热水": {"action": "Notify CNA"},
 
-    # --- Bathroom/Shower Submenu ---
     "浴室/淋浴": {
         "question": "如果您已经在工作人员的帮助下下床去过一次洗手间，并且感觉站立平稳，您可以自己去洗手间。如果您仍需要帮助，请告诉我们。请问您需要什么？",
         "options": [
