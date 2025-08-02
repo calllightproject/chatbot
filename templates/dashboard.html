@@ -99,23 +99,23 @@
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script type="text/javascript">
-    // This script has been rewritten for maximum stability.
+    // This script has been rewritten using classic JavaScript for maximum stability.
 
-    const socket = io();
+    var socket = io();
 
     function addRequestToDashboard(data) {
-        const list = document.getElementById('requests-list');
+        var list = document.getElementById('requests-list');
         if (document.getElementById(data.id)) {
             return; // Avoid adding duplicates
         }
 
-        const item = document.createElement('li');
-        const requestTime = new Date(data.timestamp);
+        var item = document.createElement('li');
+        var requestTime = new Date(data.timestamp);
 
         item.id = data.id;
         item.className = 'request-item ' + data.role;
 
-        let deferButtonHtml = '';
+        var deferButtonHtml = '';
         if (data.role === 'cna') {
             deferButtonHtml = '<button class="defer-btn">Defer to Nurse</button>';
         }
@@ -133,10 +133,10 @@
         list.prepend(item);
 
         // --- Attach Event Listeners ---
-        const ackButton = item.querySelector('.ack-button');
-        const omwButton = item.querySelector('.omw-button');
-        const deferButton = item.querySelector('.defer-btn');
-        const completeButton = item.querySelector('.complete-btn');
+        var ackButton = item.querySelector('.ack-button');
+        var omwButton = item.querySelector('.omw-button');
+        var deferButton = item.querySelector('.defer-btn');
+        var completeButton = item.querySelector('.complete-btn');
         
         ackButton.addEventListener('click', function() {
             socket.emit('acknowledge_request', { room: data.room, message: "✅ Your request was received and will be addressed shortly." });
@@ -159,9 +159,9 @@
 
         // --- Timestamp and Color Logic ---
         function updateTimestampAndColor() {
-            const now = new Date();
-            const minutes = Math.round((now - requestTime) / 60000);
-            const timestampSpan = item.querySelector('.timestamp');
+            var now = new Date();
+            var minutes = Math.round((now - requestTime) / 60000);
+            var timestampSpan = item.querySelector('.timestamp');
             
             if (timestampSpan) {
                 timestampSpan.textContent = minutes > 0 ? (minutes + 'm ago') : 'Just now';
@@ -178,7 +178,7 @@
             }
         }
 
-        const intervalId = setInterval(updateTimestampAndColor, 60000);
+        var intervalId = setInterval(updateTimestampAndColor, 60000);
         updateTimestampAndColor(); // Run once immediately
 
         completeButton.addEventListener('click', function() {
@@ -194,10 +194,10 @@
     });
 
     socket.on('request_deferred', function(data) {
-        const itemToUpdate = document.getElementById(data.id);
+        var itemToUpdate = document.getElementById(data.id);
         if (itemToUpdate) {
             itemToUpdate.className = 'request-item nurse';
-            const roleSpan = itemToUpdate.querySelector('.role-span');
+            var roleSpan = itemToUpdate.querySelector('.role-span');
             if (roleSpan) {
                 roleSpan.textContent = 'For: NURSE';
             }
@@ -207,7 +207,7 @@
     // --- Load Existing Requests on Page Load ---
     document.addEventListener('DOMContentLoaded', function() {
         try {
-            const activeRequests = JSON.parse('{{ active_requests | safe }}');
+            var activeRequests = JSON.parse('{{ active_requests | safe }}');
             if (activeRequests && activeRequests.length > 0) {
                 activeRequests.reverse().forEach(function(requestData) {
                     addRequestToDashboard(requestData);
