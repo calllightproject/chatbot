@@ -169,10 +169,8 @@ def get_ai_response(question, context):
     "siblings": "Siblings:", "brother": "Siblings:", "sister": "Siblings:",
     "skin to skin": "Skin to Skin Contact:", "acne": "Newborn Appearance:", "swollen": "Newborn Appearance:", "head shape": "Newborn Appearance:",
     "eyes": "Newborn Appearance:", "hearing": "Newborn Screenings:", "umbilical": "Umbilical cord:", "cord": "Umbilical cord:",
-    "nail": "Nail care:", "rash": "Diaper Rash:", "diapering": "Diapering:", "meconium": "Diapering:", "stools": "Diapering:",
-    "behavior": "Baby’s Behavior:", "crying": "Baby’s Behavior:", "fussing": "Baby’s Behavior:", "colic": "Colic:",
-    "sleep": "Safe Sleep:", "sids": "Safe Sleep:", "car seat": "Car Seats:", "temperature": "Taking Baby’s Temperature:",
-    "cluster feeding": "Cluster Feeding:", "burping": "Burping:", "bottle feeding": "Feeding your baby a bottle:"
+    "nail": "Nail care:", "rash": "Diaper Rash:", "behavior": "Baby’s Behavior:", "crying": "Baby’s Behavior:", "fussing": "Baby’s Behavior:", "colic": "Colic:",
+    "sleep": "Safe Sleep:", "sids": "Safe Sleep:", "car seat": "Car Seats:", "cluster feeding": "Cluster Feeding:", "burping": "Burping:", "bottle feeding": "Feeding your baby a bottle:"
 }
     paragraphs = [p.strip() for p in context.strip().split('\n') if p.strip()]
     for keyword, title in topic_map.items():
@@ -439,5 +437,6 @@ with app.app_context():
 
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
