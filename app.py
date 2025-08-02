@@ -162,10 +162,9 @@ def get_ai_response(question, context):
     topic_map = {
     "jaundice": "Jaundice:", "uterus": "Uterus:", "cramps": "Uterus:", "afterbirth": "Uterus:",
     "bladder": "Bladder:", "urinate": "Bladder:", "bowel": "Bowels:", "constipation": "Bowels:",
-    "hemorrhoid": "Hemorrhoids:", "perineum": "Perineum:", "discharge": "Vaginal discharge:", "lochia": "Vaginal discharge:",
-    "gas": "Gas Pains:", "incision": "Cesarean Birth Incision Care:", "cesarean": "Cesarean Birth Incision Care:",
+    "hemorrhoid": "Hemorrhoids:", "perineum": "Perineum:", "discharge": "Vaginal discharge:",
+    "gas": "Gas Pains:", "incision": "Cesarean Birth Incision Care:", "cesarean": "Cesarean Incision Care:",
     "moving": "Moving After Cesarean Birth:", "baby blues": "Baby Blues:", "depression": "Postpartum Depression And Anxiety:",
-    "ocd": "Postpartum Obsessive-Compulsive Disorder (OCD):", "psychosis": "Postpartum Psychosis:",
     "family pets": "Family Pets:", "cat": "Cats:", "dog": "Dogs:",
     "siblings": "Siblings:", "brother": "Siblings:", "sister": "Siblings:",
     "skin to skin": "Skin to Skin Contact:", "acne": "Newborn Appearance:", "swollen": "Newborn Appearance:", "head shape": "Newborn Appearance:",
@@ -440,4 +439,5 @@ with app.app_context():
 
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
