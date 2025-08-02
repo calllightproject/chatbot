@@ -1,3 +1,4 @@
+# These two lines MUST be the very first lines in the file.
 import eventlet
 eventlet.monkey_patch()
 
@@ -160,24 +161,36 @@ def get_ai_response(question, context):
         return "NURSE_ACTION"
 
     topic_map = {
-    "jaundice": "Jaundice:", "uterus": "Uterus:", "cramps": "Uterus:", "afterbirth": "Uterus:",
-    "bladder": "Bladder:", "urinate": "Bladder:", "bowel": "Bowels:", "constipation": "Bowels:",
-    "hemorrhoid": "Hemorrhoids:", "perineum": "Perineum:", "discharge": "Vaginal discharge:",
-    "gas": "Gas Pains:", "incision": "Cesarean Birth Incision Care:", "cesarean": "Cesarean Incision Care:",
-    "moving": "Moving After Cesarean Birth:", "baby blues": "Baby Blues:", "depression": "Postpartum Depression And Anxiety:",
-    "family pets": "Family Pets:", "cat": "Cats:", "dog": "Dogs:",
-    "siblings": "Siblings:", "brother": "Siblings:", "sister": "Siblings:",
-    "skin to skin": "Skin to Skin Contact:", "acne": "Newborn Appearance:", "swollen": "Newborn Appearance:", "head shape": "Newborn Appearance:",
-    "eyes": "Newborn Appearance:", "hearing": "Newborn Screenings:", "umbilical": "Umbilical cord:", "cord": "Umbilical cord:",
-    "nail": "Nail care:", "rash": "Diaper Rash:", "behavior": "Baby’s Behavior:", "crying": "Baby’s Behavior:", "fussing": "Baby’s Behavior:", "colic": "Colic:",
-    "sleep": "Safe Sleep:", "sids": "Safe Sleep:", "car seat": "Car Seats:", "cluster feeding": "Cluster Feeding:", "burping": "Burping:", "bottle feeding": "Feeding your baby a bottle:"
-}
+        "jaundice": "Jaundice:", "uterus": "Uterus:", "cramps": "Uterus:", "afterbirth": "Uterus:",
+        "bladder": "Bladder:", "urinate": "Bladder:", "bowel": "Bowels:", "constipation": "Bowels:",
+        "hemorrhoid": "Hemorrhoids:", "perineum": "Perineum:", "discharge": "Vaginal discharge:", "lochia": "Vaginal discharge:",
+        "gas": "Gas Pains:", "incision": "Cesarean Birth Incision Care:", "cesarean": "Cesarean Birth Incision Care:",
+        "moving": "Moving After Cesarean Birth:", "baby blues": "Baby Blues:", "depression": "Postpartum Depression And Anxiety:",
+        "ocd": "Postpartum Obsessive-Compulsive Disorder (OCD):", "psychosis": "Postpartum Psychosis:",
+        "pets": "Family Pets:", "cat": "Cats:", "dog": "Dogs:",
+        "siblings": "Siblings:", "brother": "Siblings:", "sister": "Siblings:",
+        "skin to skin": "Skin to Skin Contact:", "acne": "Newborn Appearance:", "swollen": "Newborn Appearance:", "head shape": "Newborn Appearance:",
+        "eyes": "Newborn Appearance:", "hearing": "Newborn Screenings:", "umbilical": "Umbilical cord:", "cord": "Umbilical cord:",
+        "nail": "Nail care:", "rash": "Diaper Rash:", "diapering": "Diapering:", "meconium": "Diapering:", "stools": "Diapering:",
+        "behavior": "Baby’s Behavior:", "crying": "Baby’s Behavior:", "fussing": "Baby’s Behavior:", "colic": "Colic:",
+        "sleep": "Safe Sleep:", "sids": "Safe Sleep:", "car seat": "Car Seats:", "temperature": "Taking Baby’s Temperature:",
+        "cluster feeding": "Cluster Feeding:", "burping": "Burping:", "bottle feeding": "Feeding your baby a bottle:"
+    }
     paragraphs = [p.strip() for p in context.strip().split('\n') if p.strip()]
+    
+    best_match_title = None
+    longest_keyword_len = 0
+
     for keyword, title in topic_map.items():
         if keyword in question_lower:
-            for p in paragraphs:
-                if p.startswith(title):
-                    return p
+            if len(keyword) > longest_keyword_len:
+                longest_keyword_len = len(keyword)
+                best_match_title = title
+
+    if best_match_title:
+        for p in paragraphs:
+            if p.startswith(best_match_title):
+                return p
 
     cna_keywords = ["pillow", "water", "blanket", "ice", "pad", "diaper", "formula"]
     if any(keyword in question_lower for keyword in cna_keywords):
@@ -437,6 +450,3 @@ with app.app_context():
 
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
-
-
-
