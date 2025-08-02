@@ -110,7 +110,9 @@
 <script type="text/javascript">
     const socket = io();
 
-    socket.on('connect', () => console.log('Connected to server!'));
+    socket.on('connect', function() {
+        console.log('Connected to server!');
+    });
 
     function addRequestToList(data) {
         const list = document.getElementById('requests-list');
@@ -122,11 +124,11 @@
         const requestTime = new Date(data.timestamp);
 
         item.id = data.id;
-        item.className = `request-item ${data.role}`;
+        item.className = 'request-item ' + data.role;
 
         let deferButtonHtml = '';
         if (data.role === 'cna') {
-            deferButtonHtml = `<button class="defer-btn">Defer to Nurse</button>`;
+            deferButtonHtml = '<button class="defer-btn">Defer to Nurse</button>';
         }
 
         item.innerHTML = `
@@ -146,16 +148,16 @@
         const omwButton = item.querySelector('.omw-button');
         const deferButton = item.querySelector('.defer-btn');
         const completeButton = item.querySelector('.complete-btn');
-        const ackButtons = [ackButton, omwButton, deferButton].filter(btn => btn);
+        const ackButtons = [ackButton, omwButton, deferButton].filter(function(btn) { return btn; });
 
         ackButton.addEventListener('click', function() {
             socket.emit('acknowledge_request', { room: data.room, message: "✅ Your request was received and will be addressed shortly." });
-            ackButtons.forEach(btn => btn.disabled = true);
+            ackButtons.forEach(function(btn) { btn.disabled = true; });
         });
 
         omwButton.addEventListener('click', function() {
             socket.emit('acknowledge_request', { room: data.room, message: "✅ A team member is on their way." });
-            ackButtons.forEach(btn => btn.disabled = true);
+            ackButtons.forEach(function(btn) { btn.disabled = true; });
         });
 
         if (deferButton) {
@@ -165,7 +167,7 @@
             });
         }
         
-        const updateTimestamp = () => {
+        const updateTimestamp = function() {
             const minutes = Math.round((new Date() - requestTime) / 60000);
             const timestampSpan = item.querySelector('.timestamp');
             if (timestampSpan) {
