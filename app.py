@@ -1,4 +1,3 @@
-# These two lines MUST be the very first lines in the file.
 import eventlet
 eventlet.monkey_patch()
 
