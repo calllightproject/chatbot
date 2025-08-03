@@ -99,14 +99,12 @@
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script type="text/javascript">
-    // This script has been rewritten using classic JavaScript for maximum stability.
-
     var socket = io();
 
     function addRequestToDashboard(data) {
         var list = document.getElementById('requests-list');
         if (document.getElementById(data.id)) {
-            return; // Avoid adding duplicates
+            return;
         }
 
         var item = document.createElement('li');
@@ -132,7 +130,6 @@
 
         list.prepend(item);
 
-        // --- Attach Event Listeners ---
         var ackButton = item.querySelector('.ack-button');
         var omwButton = item.querySelector('.omw-button');
         var deferButton = item.querySelector('.defer-btn');
@@ -157,7 +154,6 @@
             });
         }
 
-        // --- Timestamp and Color Logic ---
         function updateTimestampAndColor() {
             var now = new Date();
             var minutes = Math.round((now - requestTime) / 60000);
@@ -174,16 +170,16 @@
             item.classList.remove('wait-level-1', 'wait-level-2', 'wait-level-3');
 
             if (minutes >= 10) {
-                item.classList.add('wait-level-3'); // Red
+                item.classList.add('wait-level-3');
             } else if (minutes >= 5) {
-                item.classList.add('wait-level-2'); // Yellow
+                item.classList.add('wait-level-2');
             } else {
-                item.classList.add('wait-level-1'); // Green
+                item.classList.add('wait-level-1');
             }
         }
 
         var intervalId = setInterval(updateTimestampAndColor, 60000);
-        updateTimestampAndColor(); // Run once immediately
+        updateTimestampAndColor();
 
         completeButton.addEventListener('click', function() {
             socket.emit('complete_request', { request_id: data.id });
@@ -192,7 +188,6 @@
         });
     }
 
-    // --- Socket.IO Listeners ---
     socket.on('new_request', function(data) {
         addRequestToDashboard(data);
     });
@@ -208,11 +203,10 @@
         }
     });
 
-    // --- Load Existing Requests on Page Load ---
     document.addEventListener('DOMContentLoaded', function() {
         try {
-            var activeRequestsData = '{{ active_requests | safe }}';
-            var activeRequests = JSON.parse(activeRequestsData);
+            // THIS IS THE FIX: Using `tojson` is safer than JSON.parse with single quotes
+            var activeRequests = {{ active_requests | tojson }};
             if (activeRequests && activeRequests.length > 0) {
                 activeRequests.reverse().forEach(function(requestData) {
                     addRequestToDashboard(requestData);
@@ -220,7 +214,6 @@
             }
         } catch (e) {
             console.error("Could not parse or render active requests:", e);
-            console.error("Data received from server:", activeRequestsData);
         }
     });
 </script>
