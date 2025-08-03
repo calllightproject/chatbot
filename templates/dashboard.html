@@ -165,7 +165,7 @@
             
             if (timestampSpan) {
                 if (minutes > 0) {
-                    timestampSpan.textContent = minutes + 'm ago';
+                    timestampSpan.textContent = String(minutes) + 'm ago';
                 } else {
                     timestampSpan.textContent = 'Just now';
                 }
