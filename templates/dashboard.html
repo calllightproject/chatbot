@@ -211,8 +211,8 @@
     // --- Load Existing Requests on Page Load ---
     document.addEventListener('DOMContentLoaded', function() {
         try {
-            // THIS IS THE FIX: Removed the single quotes around the Jinja variable
-            var activeRequests = {{ active_requests | safe }};
+            var activeRequestsData = '{{ active_requests | safe }}';
+            var activeRequests = JSON.parse(activeRequestsData);
             if (activeRequests && activeRequests.length > 0) {
                 activeRequests.reverse().forEach(function(requestData) {
                     addRequestToDashboard(requestData);
@@ -220,6 +220,7 @@
             }
         } catch (e) {
             console.error("Could not parse or render active requests:", e);
+            console.error("Data received from server:", activeRequestsData);
         }
     });
 </script>
