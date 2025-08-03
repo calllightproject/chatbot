@@ -99,12 +99,14 @@
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script type="text/javascript">
+    // This script has been rewritten using classic JavaScript for maximum stability.
+
     var socket = io();
 
     function addRequestToDashboard(data) {
         var list = document.getElementById('requests-list');
         if (document.getElementById(data.id)) {
-            return;
+            return; // Avoid adding duplicates
         }
 
         var item = document.createElement('li');
@@ -130,6 +132,7 @@
 
         list.prepend(item);
 
+        // --- Attach Event Listeners ---
         var ackButton = item.querySelector('.ack-button');
         var omwButton = item.querySelector('.omw-button');
         var deferButton = item.querySelector('.defer-btn');
@@ -154,28 +157,33 @@
             });
         }
 
+        // --- Timestamp and Color Logic ---
         function updateTimestampAndColor() {
             var now = new Date();
             var minutes = Math.round((now - requestTime) / 60000);
             var timestampSpan = item.querySelector('.timestamp');
             
             if (timestampSpan) {
-                timestampSpan.textContent = minutes > 0 ? (minutes + 'm ago') : 'Just now';
+                if (minutes > 0) {
+                    timestampSpan.textContent = minutes + 'm ago';
+                } else {
+                    timestampSpan.textContent = 'Just now';
+                }
             }
 
             item.classList.remove('wait-level-1', 'wait-level-2', 'wait-level-3');
 
             if (minutes >= 10) {
-                item.classList.add('wait-level-3');
+                item.classList.add('wait-level-3'); // Red
             } else if (minutes >= 5) {
-                item.classList.add('wait-level-2');
+                item.classList.add('wait-level-2'); // Yellow
             } else {
-                item.classList.add('wait-level-1');
+                item.classList.add('wait-level-1'); // Green
             }
         }
 
         var intervalId = setInterval(updateTimestampAndColor, 60000);
-        updateTimestampAndColor();
+        updateTimestampAndColor(); // Run once immediately
 
         completeButton.addEventListener('click', function() {
             socket.emit('complete_request', { request_id: data.id });
@@ -184,6 +192,7 @@
         });
     }
 
+    // --- Socket.IO Listeners ---
     socket.on('new_request', function(data) {
         addRequestToDashboard(data);
     });
@@ -199,9 +208,11 @@
         }
     });
 
+    // --- Load Existing Requests on Page Load ---
     document.addEventListener('DOMContentLoaded', function() {
         try {
-            var activeRequests = JSON.parse('{{ active_requests | safe }}');
+            var activeRequestsData = '{{ active_requests | safe }}';
+            var activeRequests = JSON.parse(activeRequestsData);
             if (activeRequests && activeRequests.length > 0) {
                 activeRequests.reverse().forEach(function(requestData) {
                     addRequestToDashboard(requestData);
@@ -209,6 +220,7 @@
             }
         } catch (e) {
             console.error("Could not parse or render active requests:", e);
+            console.error("Data received from server:", activeRequestsData);
         }
     });
 </script>
