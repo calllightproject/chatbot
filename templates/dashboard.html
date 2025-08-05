@@ -99,21 +99,19 @@
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script type="text/javascript">
-    var socket = io();
+    const socket = io();
 
     function addRequestToDashboard(data) {
-        var list = document.getElementById('requests-list');
-        if (document.getElementById(data.id)) {
-            return;
-        }
+        const list = document.getElementById('requests-list');
+        if (document.getElementById(data.id)) return;
 
-        var item = document.createElement('li');
-        var requestTime = new Date(data.timestamp);
+        const item = document.createElement('li');
+        const requestTime = new Date(data.timestamp);
 
         item.id = data.id;
         item.className = 'request-item ' + data.role;
 
-        var deferButtonHtml = '';
+        let deferButtonHtml = '';
         if (data.role === 'cna') {
             deferButtonHtml = '<button class="defer-btn">Defer to Nurse</button>';
         }
@@ -130,19 +128,25 @@
 
         list.prepend(item);
 
-        var ackButton = item.querySelector('.ack-button');
-        var omwButton = item.querySelector('.omw-button');
-        var deferButton = item.querySelector('.defer-btn');
-        var completeButton = item.querySelector('.complete-btn');
-        
+        const ackButton = item.querySelector('.ack-button');
+        const omwButton = item.querySelector('.omw-button');
+        const deferButton = item.querySelector('.defer-btn');
+        const completeButton = item.querySelector('.complete-btn');
+
         ackButton.addEventListener('click', function() {
-            socket.emit('acknowledge_request', { room: data.room, message: "✅ Your request was received and will be addressed shortly." });
+            socket.emit('acknowledge_request', {
+                room: data.room,
+                message: "✅ Your request was received and will be addressed shortly."
+            });
             ackButton.disabled = true;
             omwButton.disabled = true;
         });
 
         omwButton.addEventListener('click', function() {
-            socket.emit('acknowledge_request', { room: data.room, message: "✅ A team member is on their way." });
+            socket.emit('acknowledge_request', {
+                room: data.room,
+                message: "✅ A team member is on their way."
+            });
             ackButton.disabled = true;
             omwButton.disabled = true;
         });
@@ -155,16 +159,12 @@
         }
 
         function updateTimestampAndColor() {
-            var now = new Date();
-            var minutes = Math.round((now - requestTime) / 60000);
-            var timestampSpan = item.querySelector('.timestamp');
-            
+            const now = new Date();
+            const minutes = Math.round((now - requestTime) / 60000);
+            const timestampSpan = item.querySelector('.timestamp');
+
             if (timestampSpan) {
-                if (minutes > 0) {
-                    timestampSpan.textContent = String(minutes) + 'm ago';
-                } else {
-                    timestampSpan.textContent = 'Just now';
-                }
+                timestampSpan.textContent = minutes > 0 ? `${minutes}m ago` : 'Just now';
             }
 
             item.classList.remove('wait-level-1', 'wait-level-2', 'wait-level-3');
@@ -178,7 +178,7 @@
             }
         }
 
-        var intervalId = setInterval(updateTimestampAndColor, 60000);
+        const intervalId = setInterval(updateTimestampAndColor, 60000);
         updateTimestampAndColor();
 
         completeButton.addEventListener('click', function() {
@@ -193,26 +193,25 @@
     });
 
     socket.on('request_deferred', function(data) {
-        var itemToUpdate = document.getElementById(data.id);
+        const itemToUpdate = document.getElementById(data.id);
         if (itemToUpdate) {
             itemToUpdate.className = 'request-item nurse';
-            var roleSpan = itemToUpdate.querySelector('.role-span');
-            if (roleSpan) {
-                roleSpan.textContent = 'For: NURSE';
-            }
+            const roleSpan = itemToUpdate.querySelector('.role-span');
+            if (roleSpan) roleSpan.textContent = 'For: NURSE';
         }
     });
 
     document.addEventListener('DOMContentLoaded', function() {
         try {
-            var activeRequests = {{ active_requests | tojson | safe }};
+            const raw = '{{ active_requests | tojson | safe | escapejs }}';
+            const activeRequests = JSON.parse(raw);
             if (activeRequests && activeRequests.length > 0) {
                 activeRequests.reverse().forEach(function(requestData) {
                     addRequestToDashboard(requestData);
                 });
             }
         } catch (e) {
-            console.error("Could not parse or render active requests:", e);
+            console.error("Failed to load active requests:", e);
         }
     });
 </script>
