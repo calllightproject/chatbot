@@ -205,8 +205,7 @@
 
     document.addEventListener('DOMContentLoaded', function() {
         try {
-            // THIS IS THE FIX: Using `tojson` is safer than JSON.parse with single quotes
-            var activeRequests = {{ active_requests | tojson }};
+            var activeRequests = {{ active_requests | tojson | safe }};
             if (activeRequests && activeRequests.length > 0) {
                 activeRequests.reverse().forEach(function(requestData) {
                     addRequestToDashboard(requestData);
