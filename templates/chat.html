@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Postpartum Chatbot</title>
     <style>
-        /* Your provided CSS starts here */
         :root {
             --core-blue: #00205b;
             --accent-blue: #007eb4;
@@ -13,14 +12,12 @@
             --light-gray-background: #f5f5f5;
             --white: #ffffff;
         }
-
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             padding: 20px;
             background-color: var(--light-gray-background);
             color: var(--neutral-gray-text);
         }
-
         .chat-box {
             max-width: 500px;
             margin: 20px auto;
@@ -29,10 +26,11 @@
             border-radius: 8px;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }
-
+        /* THIS IS THE FIX: Using Flexbox for robust alignment */
         .header {
-            position: relative;
-            text-align: center;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             padding-bottom: 15px;
             border-bottom: 1px solid #e1e1e2;
             margin-bottom: 20px;
@@ -42,16 +40,12 @@
             margin: 0;
             font-size: 24px;
         }
-
         .language-link {
-            position: absolute;
-            top: 5px;
-            right: 5px;
             text-decoration: none;
             color: var(--accent-blue);
             font-size: 14px;
+            white-space: nowrap; /* Prevents the link text from wrapping */
         }
-
         .bot-reply {
             background-color: #ebf0fa;
             padding: 15px;
@@ -64,7 +58,6 @@
             align-items: center;
             justify-content: center;
         }
-
         .options button {
             display: block;
             width: 100%;
@@ -83,7 +76,6 @@
         .options button:hover, .options button:focus {
             background-color: #093582;
         }
-
         .note-section {
             border-top: 1px solid #e1e1e2;
             padding-top: 20px;
@@ -120,20 +112,6 @@
         .note-form button:hover {
             background-color: #093582;
         }
-        
-        /* Styles for the footer */
-        .footer {
-            text-align: center;
-            margin-top: 20px;
-            padding-top: 15px;
-            border-top: 1px solid #e1e1e2;
-        }
-        .footer p {
-            font-size: 12px;
-            color: #6b7280;
-            margin: 0;
-            line-height: 1.5;
-        }
     </style>
 </head>
 <body>
@@ -164,11 +142,6 @@
                     <button type="submit">{{ button_data.get('send_note_button', 'Send Note') }}</button>
                 </div>
             </form>
-        </div>
-
-        <!-- THIS IS THE FIX: The footer with the citation is restored -->
-        <div class="footer">
-            <p>Educational content sourced from the Banner Health New Beginnings guide and "Your Guide to Formula Feeding Your Baby" (Copyright 2020 by Customized Communications, Inc.).</p>
         </div>
     </div>
 </body>
