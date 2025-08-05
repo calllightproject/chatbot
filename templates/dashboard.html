@@ -90,4 +90,133 @@
 <body>
 
 <div class="dashboard-container">
-    <h1>Real-Time Request Da
+    <h1>Real-Time Request Dashboard</h1>
+    <ul id="requests-list"></ul>
+    <div class="footer">
+        <a href="{{ url_for('analytics') }}">View Analytics Dashboard</a>
+    </div>
+</div>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+<script>
+    var socket = io();
+
+    function addRequestToDashboard(data) {
+        var list = document.getElementById('requests-list');
+        if (document.getElementById(data.id)) {
+            return;
+        }
+
+        var item = document.createElement('li');
+        var requestTime = new Date(data.timestamp);
+
+        item.id = data.id;
+        item.className = 'request-item ' + data.role;
+
+        var deferButtonHtml = '';
+        if (data.role === 'cna') {
+            deferButtonHtml = '<button class="defer-btn">Defer to Nurse</button>';
+        }
+
+        item.innerHTML =
+            '<p>' + data.request + '</p>' +
+            '<span>Room: ' + data.room + '</span>' +
+            '<span class="role-span">For: ' + data.role.toUpperCase() + '</span>' +
+            '<span class="timestamp">Just now</span>' +
+            '<button class="ack-button">Acknowledge</button>' +
+            '<button class="omw-button">On my way</button>' +
+            deferButtonHtml +
+            '<button class="complete-btn">Complete</button>';
+
+        list.prepend(item);
+
+        var ackButton = item.querySelector('.ack-button');
+        var omwButton = item.querySelector('.omw-button');
+        var deferButton = item.querySelector('.defer-btn');
+        var completeButton = item.querySelector('.complete-btn');
+
+        ackButton.addEventListener('click', function() {
+            socket.emit('acknowledge_request', {
+                room: data.room,
+                message: "✅ Your request was received and will be addressed shortly."
+            });
+            ackButton.disabled = true;
+            omwButton.disabled = true;
+        });
+
+        omwButton.addEventListener('click', function() {
+            socket.emit('acknowledge_request', {
+                room: data.room,
+                message: "✅ A team member is on their way."
+            });
+            ackButton.disabled = true;
+            omwButton.disabled = true;
+        });
+
+        if (deferButton) {
+            deferButton.addEventListener('click', function() {
+                socket.emit('defer_request', { id: item.id });
+                deferButton.remove();
+            });
+        }
+
+        function updateTimestampAndColor() {
+            var now = new Date();
+            var minutes = Math.round((now - requestTime) / 60000);
+            var timestampSpan = item.querySelector('.timestamp');
+
+            if (timestampSpan) {
+                timestampSpan.textContent = minutes > 0 ? `${minutes}m ago` : 'Just now';
+            }
+
+            item.classList.remove('wait-level-1', 'wait-level-2', 'wait-level-3');
+
+            if (minutes >= 10) {
+                item.classList.add('wait-level-3');
+            } else if (minutes >= 5) {
+                item.classList.add('wait-level-2');
+            } else {
+                item.classList.add('wait-level-1');
+            }
+        }
+
+        var intervalId = setInterval(updateTimestampAndColor, 60000);
+        updateTimestampAndColor();
+
+        completeButton.addEventListener('click', function() {
+            socket.emit('complete_request', { request_id: data.id });
+            clearInterval(intervalId);
+            item.remove();
+        });
+    }
+
+    socket.on('new_request', function(data) {
+        addRequestToDashboard(data);
+    });
+
+    socket.on('request_deferred', function(data) {
+        var itemToUpdate = document.getElementById(data.id);
+        if (itemToUpdate) {
+            itemToUpdate.className = 'request-item nurse';
+            var roleSpan = itemToUpdate.querySelector('.role-span');
+            if (roleSpan) {
+                roleSpan.textContent = 'For: NURSE';
+            }
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var activeRequests = [];
+        {% if active_requests %}
+        activeRequests = {{ active_requests | tojson | safe }};
+        {% endif %}
+
+        activeRequests.reverse().forEach(function(requestData) {
+            addRequestToDashboard(requestData);
+        });
+    });
+</script>
+
+</body>
+</html>
