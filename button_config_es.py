@@ -37,9 +37,9 @@ button_data = {
     },
     "Azúcar en la sangre": {
         "question": "¿Es para la mamá o para el/la bebé?",
-        "options": ["Mamá", "Bebé (azúcar en la sangre)"]
+        "options": ["Mamá (azúcar en la sangre)", "Bebé (azúcar en la sangre)"]
     },
-    "Mamá": {"action": "Notify CNA"},
+    "Mamá (azúcar en la sangre)": {"action": "Notify CNA"},
     "Bebé (azúcar en la sangre)": {"action": "Notify Nurse"},
 
     "Hielo / Agua": {
@@ -177,3 +177,4 @@ button_data = {
     "Parto por cesárea": {"note": "Si tuvo un parto por cesárea, la estadía mínima es de 48 horas. El ginecólogo dará la orden de alta si es apropiado. Típicamente, siempre que su dolor, presión arterial y sangrado sean normales, será dada de alta."},
     "Bebé": {"note": "El pediatra necesita evaluar a su bebé todos los días que esté en el hospital. La estadía mínima para el bebé es de 24 horas. Su bebé necesita alimentarse bien del pecho o del biberón, tener una pérdida de peso adecuada, pasar las pruebas de 24 horas, la prueba de audición, y estar orinando y defecando. Si nació antes de las 37 semanas o si fue positivo para GBS sin los antibióticos adecuados, es posible que el bebé deba quedarse 48 horas. Discuta el plan de alta de su bebé con la enfermera y el pediatra."}
 }
+
