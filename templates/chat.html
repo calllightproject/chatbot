@@ -26,7 +26,6 @@
             border-radius: 8px;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }
-        /* THIS IS THE FIX: Using Flexbox for robust alignment */
         .header {
             display: flex;
             justify-content: space-between;
@@ -38,13 +37,14 @@
         .header h2 {
             color: var(--core-blue);
             margin: 0;
-            font-size: 24px;
+            font-size: 22px; /* Slightly reduced font size for better mobile fit */
         }
         .language-link {
             text-decoration: none;
             color: var(--accent-blue);
             font-size: 14px;
             white-space: nowrap; /* Prevents the link text from wrapping */
+            margin-left: 10px; /* Ensures space between title and link */
         }
         .bot-reply {
             background-color: #ebf0fa;
@@ -112,6 +112,18 @@
         .note-form button:hover {
             background-color: #093582;
         }
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #e1e1e2;
+        }
+        .footer p {
+            font-size: 12px;
+            color: #6b7280;
+            margin: 0;
+            line-height: 1.5;
+        }
     </style>
 </head>
 <body>
@@ -142,6 +154,11 @@
                     <button type="submit">{{ button_data.get('send_note_button', 'Send Note') }}</button>
                 </div>
             </form>
+        </div>
+        
+        <!-- RESTORED: Footer with citation -->
+        <div class="footer">
+            <p>Educational content sourced from the Banner Health New Beginnings guide.</p>
         </div>
     </div>
 </body>
