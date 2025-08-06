@@ -98,6 +98,12 @@
 </div>
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+<!-- THIS IS THE FIX: Load the initial data into a safe script tag -->
+<script id="initial-requests" type="application/json">
+    {{ active_requests | tojson | safe }}
+</script>
+
 <script type="text/javascript">
     var socket = io();
 
@@ -203,10 +209,11 @@
         }
     });
 
+    // THIS IS THE FIX: Read the data from the safe script tag
     document.addEventListener('DOMContentLoaded', function() {
         try {
-            // THIS IS THE FIX: Using `tojson` is safer than JSON.parse with single quotes
-            var activeRequests = {{ active_requests | tojson | safe }};
+            var rawData = document.getElementById('initial-requests').textContent;
+            var activeRequests = JSON.parse(rawData);
             if (activeRequests && activeRequests.length > 0) {
                 activeRequests.reverse().forEach(function(requestData) {
                     addRequestToDashboard(requestData);
