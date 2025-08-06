@@ -245,8 +245,7 @@ def dashboard():
     except Exception as e:
         print(f"ERROR fetching active requests: {e}")
     
-    # THIS IS THE FIX: Pass the Python list directly to the template, don't use json.dumps
-    return render_template("dashboard.html", active_requests=active_requests)
+    return render_template("dashboard.html", active_requests=json.dumps(active_requests))
 
 @app.route('/analytics')
 def analytics():
