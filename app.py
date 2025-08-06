@@ -1,3 +1,7 @@
+# These two lines MUST be the very first lines in the file.
+import eventlet
+eventlet.monkey_patch()
+
 import os
 import json
 import smtplib
@@ -13,7 +17,7 @@ from sqlalchemy import create_engine, text
 # --- App Configuration ---
 app = Flask(__name__, template_folder='templates')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-strong-fallback-secret-key-for-local-development")
-socketio = SocketIO(app)
+socketio = SocketIO(app, async_mode='eventlet')
 
 # --- Database Configuration ---
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -95,10 +99,15 @@ def send_email_alert(subject, body):
     except Exception as e:
         print(f"ERROR: Email failed to send: {e}")
 
+# THIS IS THE FIX: This function now runs slow tasks in the background
 def process_request(role, subject, user_input, reply_message):
     request_id = 'req_' + str(datetime.now().timestamp()).replace('.', '')
-    send_email_alert(subject, user_input)
-    log_request_to_db(request_id, role, user_input, reply_message)
+    
+    # Run the slow (blocking) tasks in the background so they don't block the server
+    socketio.start_background_task(send_email_alert, subject, user_input)
+    socketio.start_background_task(log_request_to_db, request_id, role, user_input, reply_message)
+    
+    # Send the real-time alert to the dashboard immediately
     socketio.emit('new_request', {
         'id': request_id,
         'room': session.get('room_number', 'N/A'),
