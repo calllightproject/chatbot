@@ -67,11 +67,11 @@ button_data = {
     "Toallas blancas": {"action": "Notify CNA"},
     "Compresa de hielo": {
         "question": "¿Dónde necesita la compresa de hielo?",
-        "options": ["Para el perineo", "Para la incisión de la cesárea", "Para los senos"]
+        "options": ["Compresa de hielo para el perineo", "Compresa die hielo para la incisión de la cesárea", "Compresa de hielo para los senos"]
     },
-    "Para el perineo": {"action": "Notify CNA"},
-    "Para la incisión de la cesárea": {"action": "Notify CNA"},
-    "Para los senos": {"action": "Notify CNA"},
+    "Compresa de hielo para el perineo": {"action": "Notify CNA"},
+    "Compresa de hielo para la incisión de la cesárea": {"action": "Notify CNA"},
+    "Compresa de hielo para los senos": {"action": "Notify CNA"},
 
     # --- Medication Category ---
     "Necesito medicamentos": {
@@ -118,3 +118,4 @@ button_data = {
         "note": "Si tuvo un parto por cesárea, la estadía mínima es de 48 horas. El ginecólogo dará la orden de alta si es apropiado. Típicamente, siempre que su dolor, presión arterial y sangrado sean normales, será dada de alta."
     }
 }
+
