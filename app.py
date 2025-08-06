@@ -36,24 +36,19 @@ engine = create_engine(DATABASE_URL)
 def setup_database():
     try:
         with engine.connect() as connection:
-            # Create the 'requests' table if it doesn't exist
             connection.execute(text("""
                 CREATE TABLE IF NOT EXISTS requests (
                     id SERIAL PRIMARY KEY,
+                    request_id VARCHAR(255) UNIQUE,
                     timestamp TIMESTAMP WITHOUT TIME ZONE,
+                    completion_timestamp TIMESTAMP WITHOUT TIME ZONE,
                     room VARCHAR(255),
                     user_input TEXT,
                     category VARCHAR(255),
-                    reply TEXT
+                    reply TEXT,
+                    is_first_baby BOOLEAN
                 );
             """))
-            
-            # Add new columns to the 'requests' table if they don't exist
-            connection.execute(text("ALTER TABLE requests ADD COLUMN IF NOT EXISTS request_id VARCHAR(255) UNIQUE;"))
-            connection.execute(text("ALTER TABLE requests ADD COLUMN IF NOT EXISTS completion_timestamp TIMESTAMP WITHOUT TIME ZONE;"))
-            connection.execute(text("ALTER TABLE requests ADD COLUMN IF NOT EXISTS is_first_baby BOOLEAN;"))
-
-            # Create the 'assignments' table if it doesn't exist
             connection.execute(text("""
                 CREATE TABLE IF NOT EXISTS assignments (
                     id SERIAL PRIMARY KEY,
@@ -127,21 +122,10 @@ def process_request(role, subject, user_input, reply_message):
 def get_ai_response(question, context):
     question_lower = question.lower()
     
-    # Rule 1: Safety First - Check for clinical keywords that require a nurse
-    nurse_keywords = [
-        "pain", "dizzy", "bleeding", "headache", "nausea", "sad", "scared", "anxious", 
-        "crying", "emergency", "harm", "swelling", "weak", "seeing spots", 
-        "numbing spray", "benzocaine", "witch hazel", "lanolin", "nipple cream"
-    ]
+    nurse_keywords = ["pain", "dizzy", "bleeding", "headache", "nausea", "sad", "scared", "anxious", "crying", "help", "emergency", "harm"]
     if any(keyword in question_lower for keyword in nurse_keywords):
         return "NURSE_ACTION"
 
-    # Rule 2: Check for simple CNA tasks
-    cna_keywords = ["diapers", "wipes", "ice pack", "pillows", "blankets", "formula"]
-    if any(keyword in question_lower for keyword in cna_keywords):
-        return "CNA_ACTION"
-        
-    # Rule 3: Search for educational topics
     topic_map = {
         "jaundice": "Jaundice:", "uterus": "Uterus:", "cramps": "Uterus:", "afterbirth": "Uterus:",
         "bladder": "Bladder:", "urinate": "Bladder:", "bowel": "Bowels:", "constipation": "Bowels:",
@@ -174,11 +158,10 @@ def get_ai_response(question, context):
             if p.startswith(title):
                 return p
 
-    # Rule 4: If no specific keywords are found, but it's a general request, escalate to the nurse
-    if "help" in question_lower or "need" in question_lower or "don't feel right" in question_lower:
-        return "NURSE_ACTION"
+    cna_keywords = ["pillow", "water", "blanket", "ice", "pad", "diaper", "formula"]
+    if any(keyword in question_lower for keyword in cna_keywords):
+        return "CNA_ACTION"
 
-    # Rule 5: If no topic is found, escalate to the nurse for safety
     return "CANNOT_ANSWER"
 
 # --- App Routes ---
@@ -340,7 +323,8 @@ def dashboard():
     except Exception as e:
         print(f"ERROR fetching active requests: {e}")
     
-    return render_template("dashboard.html", active_requests=json.dumps(active_requests))
+    # THIS IS THE FIX: Pass the Python list directly to the template, not a JSON string
+    return render_template("dashboard.html", active_requests=active_requests)
 
 @app.route('/analytics')
 def analytics():
