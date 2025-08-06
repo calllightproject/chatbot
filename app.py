@@ -124,7 +124,6 @@ def process_request(role, subject, user_input, reply_message):
     })
     return reply_message
 
-# THIS IS THE FIX: The AI logic is now smarter and follows your clinical rules
 def get_ai_response(question, context):
     question_lower = question.lower()
     
