@@ -1,3 +1,7 @@
+# These two lines MUST be the very first lines in the file.
+import eventlet
+eventlet.monkey_patch()
+
 import os
 import json
 import smtplib
@@ -14,7 +18,6 @@ from sqlalchemy import create_engine, text
 app = Flask(__name__, template_folder='templates')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-strong-fallback-secret-key-for-local-development")
 socketio = SocketIO(app, async_mode='eventlet')
-
 
 # --- Database Configuration ---
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -98,8 +101,10 @@ def send_email_alert(subject, body):
 
 def process_request(role, subject, user_input, reply_message):
     request_id = 'req_' + str(datetime.now().timestamp()).replace('.', '')
-    send_email_alert(subject, user_input)
-    log_request_to_db(request_id, role, user_input, reply_message)
+    
+    socketio.start_background_task(send_email_alert, subject, user_input)
+    socketio.start_background_task(log_request_to_db, request_id, role, user_input, reply_message)
+    
     socketio.emit('new_request', {
         'id': request_id,
         'room': session.get('room_number', 'N/A'),
@@ -240,7 +245,8 @@ def dashboard():
     except Exception as e:
         print(f"ERROR fetching active requests: {e}")
     
-    return render_template("dashboard.html", active_requests=json.dumps(active_requests))
+    # THIS IS THE FIX: Pass the Python list directly to the template, don't use json.dumps
+    return render_template("dashboard.html", active_requests=active_requests)
 
 @app.route('/analytics')
 def analytics():
@@ -333,4 +339,3 @@ with app.app_context():
 
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
-
