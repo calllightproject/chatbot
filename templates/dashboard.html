@@ -30,7 +30,6 @@
             color: var(--core-blue);
             text-align: center;
         }
-        /* NEW: Styles for the room group container */
         .room-group {
             background-color: #f9f9f9;
             border: 1px solid #ddd;
@@ -46,7 +45,7 @@
             padding-bottom: 10px;
             border-bottom: 1px solid #eee;
         }
-        #requests-list {
+        .requests-list {
             list-style-type: none;
             padding: 0;
         }
@@ -107,7 +106,6 @@
 
 <div class="dashboard-container">
     <h1>Real-Time Request Dashboard</h1>
-    <!-- This is now a container for room groups -->
     <div id="requests-container"></div>
     <div class="footer">
         <a href="{{ url_for('analytics') }}">View Analytics Dashboard</a>
@@ -115,10 +113,12 @@
 </div>
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script id="initial-requests" type="application/json">
+    {{ active_requests_by_room | tojson | safe }}
+</script>
 <script type="text/javascript">
     var socket = io();
 
-    // --- Function to create a room group if it doesn't exist ---
     function findOrCreateRoomGroup(roomNumber) {
         var container = document.getElementById('requests-container');
         var roomGroupId = 'room-group-' + roomNumber;
@@ -134,7 +134,7 @@
             header.textContent = 'Room: ' + roomNumber;
             
             var list = document.createElement('ul');
-            list.id = 'requests-list-' + roomNumber;
+            list.className = 'requests-list';
             
             roomGroup.appendChild(header);
             roomGroup.appendChild(list);
@@ -143,7 +143,6 @@
         return roomGroup.querySelector('ul');
     }
 
-    // --- Function to add a single request to the correct room group ---
     function addRequestToDashboard(data) {
         var list = findOrCreateRoomGroup(data.room);
         if (document.getElementById(data.id)) return;
@@ -170,7 +169,6 @@
 
         list.appendChild(item);
 
-        // --- Attach Event Listeners ---
         var ackButton = item.querySelector('.ack-button');
         var omwButton = item.querySelector('.omw-button');
         var deferButton = item.querySelector('.defer-btn');
@@ -197,7 +195,7 @@
 
         function updateTimestampAndColor() {
             var now = new Date();
-            var minutes = Math.round((now - requestTime) / 60000);
+            var minutes = Math.floor((now - requestTime) / 60000);
             var timestampSpan = item.querySelector('.timestamp');
             
             if (timestampSpan) {
@@ -210,28 +208,24 @@
             else item.classList.add('wait-level-1');
         }
 
-        var intervalId = setInterval(updateTimestampAndColor, 60000);
+        var intervalId = setInterval(updateTimestampAndColor, 10000); // Check every 10 seconds
         updateTimestampAndColor();
 
         completeButton.addEventListener('click', function() {
             socket.emit('complete_request', { request_id: data.id });
             clearInterval(intervalId);
             item.remove();
-            // If this was the last request in the group, remove the whole group
             if (list.children.length === 0) {
                 list.parentElement.remove();
             }
         });
     }
 
-    // --- Socket.IO Listeners ---
     socket.on('new_request', function(data) {
         addRequestToDashboard(data);
     });
 
     socket.on('request_deferred', function(data) {
-        // This logic would need to be updated to move the item between groups if needed
-        // For now, it just updates the role
         var itemToUpdate = document.getElementById(data.id);
         if (itemToUpdate) {
             itemToUpdate.className = 'request-item nurse';
@@ -240,14 +234,16 @@
         }
     });
 
-    // --- Load Existing Requests on Page Load ---
     document.addEventListener('DOMContentLoaded', function() {
         try {
-            var activeRequestsByRoom = {{ active_requests_by_room | tojson | safe }};
+            var rawData = document.getElementById('initial-requests').textContent;
+            var activeRequestsByRoom = JSON.parse(rawData);
             for (var roomNumber in activeRequestsByRoom) {
                 if (activeRequestsByRoom.hasOwnProperty(roomNumber)) {
                     var requests = activeRequestsByRoom[roomNumber];
                     requests.forEach(function(requestData) {
+                        // Add room number to each request object for the add function
+                        requestData.room = roomNumber; 
                         addRequestToDashboard(requestData);
                     });
                 }
