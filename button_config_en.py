@@ -96,11 +96,11 @@ button_data = {
     "White pads": {"action": "Notify CNA"},
     "Ice pack": {
         "question": "Where do you need the ice pack?",
-        "options": ["Bottom", "C-section incision", "Breasts"]
+        "options": ["Ice Pack for Bottom", "Ice Pack for C-section incision", "Ice Pack for Breasts"]
     },
-    "Bottom": {"action": "Notify CNA"},
-    "C-section incision": {"action": "Notify CNA"},
-    "Breasts": {"action": "Notify CNA"},
+    "Ice Pack for Bottom": {"action": "Notify CNA"},
+    "Ice Pack for C-section incision": {"action": "Notify CNA"},
+    "Ice Pack for Breasts": {"action": "Notify CNA"},
     "Formula": {
         "question": "Which formula do you need?",
         "options": [
@@ -171,5 +171,6 @@ button_data = {
     "When will I get my discharge paperwork?": {"note": "Once the OB-GYN and the pediatrician has put in their notes and discharge orders, your nurse can print out paperwork."},
     "Do I have to take a wheelchair?": {"note": "No, but a staff member has to go with you. If the nursing staff is busy, a transport worker will be the one to escort you out."}
 }
+
 
 
