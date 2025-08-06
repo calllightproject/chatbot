@@ -143,9 +143,6 @@ def handle_chat():
                 reply = "Please type a message in the box."
             return render_template("chat.html", reply=reply, options=button_data["main_buttons"], button_data=button_data)
 
-    # No change to rest of the route logic
-    # ... (keep existing logic unchanged)
-
     return render_template("chat.html", reply=button_data["greeting"], options=button_data["main_buttons"], button_data=button_data)
 
 # --- Dashboard Timestamp Update ---
@@ -172,6 +169,11 @@ def dashboard():
         print(f"ERROR fetching active requests: {e}")
 
     return render_template("dashboard.html", active_requests=json.dumps(active_requests))
+
+# --- Analytics Placeholder Route ---
+@app.route("/analytics")
+def analytics():
+    return "<h1>Analytics Dashboard Coming Soon</h1>"
 
 # --- Startup ---
 with app.app_context():
