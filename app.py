@@ -6,6 +6,7 @@ import os
 import json
 import smtplib
 import importlib
+import traceback
 from datetime import datetime, date
 from collections import defaultdict
 from email.message import EmailMessage
@@ -31,7 +32,6 @@ if not DATABASE_URL:
     print("WARNING: DATABASE_URL environment variable not found. Using a local SQLite database.")
     DATABASE_URL = "sqlite:///local_call_light.db"
 
-# Configure the database engine for a real-time server environment
 engine = create_engine(DATABASE_URL, poolclass=NullPool)
 
 # --- Database Setup ---
@@ -104,15 +104,12 @@ def send_email_alert(subject, body):
     except Exception as e:
         print(f"ERROR: Email failed to send: {e}")
 
-# THIS IS THE FIX: This function now runs slow tasks in the background
 def process_request(role, subject, user_input, reply_message):
     request_id = 'req_' + str(datetime.now().timestamp()).replace('.', '')
     
-    # Run the slow (blocking) tasks in the background so they don't block the server
     socketio.start_background_task(send_email_alert, subject, user_input)
     socketio.start_background_task(log_request_to_db, request_id, role, user_input, reply_message)
     
-    # Send the real-time alert to the dashboard immediately
     socketio.emit('new_request', {
         'id': request_id,
         'room': session.get('room_number', 'N/A'),
