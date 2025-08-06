@@ -1,3 +1,7 @@
+# These two lines MUST be the very first lines in the file.
+import eventlet
+eventlet.monkey_patch()
+
 import os
 import json
 import smtplib
@@ -13,7 +17,12 @@ from sqlalchemy import create_engine, text
 # --- App Configuration ---
 app = Flask(__name__, template_folder='templates')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-strong-fallback-secret-key-for-local-development")
-socketio = SocketIO(app)
+socketio = SocketIO(app, async_mode='eventlet')
+
+# --- KNOWLEDGE BASE ---
+KNOWLEDGE_BASE = """
+PASTE YOUR KNOWLEDGE BASE TEXT HERE
+"""
 
 # --- Database Configuration ---
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -97,8 +106,10 @@ def send_email_alert(subject, body):
 
 def process_request(role, subject, user_input, reply_message):
     request_id = 'req_' + str(datetime.now().timestamp()).replace('.', '')
-    send_email_alert(subject, user_input)
-    log_request_to_db(request_id, role, user_input, reply_message)
+    
+    socketio.start_background_task(send_email_alert, subject, user_input)
+    socketio.start_background_task(log_request_to_db, request_id, role, user_input, reply_message)
+    
     socketio.emit('new_request', {
         'id': request_id,
         'room': session.get('room_number', 'N/A'),
@@ -107,6 +118,51 @@ def process_request(role, subject, user_input, reply_message):
         'timestamp': datetime.now().isoformat()
     })
     return reply_message
+
+def get_ai_response(question, context):
+    question_lower = question.lower()
+    
+    nurse_keywords = ["pain", "dizzy", "bleeding", "headache", "nausea", "sad", "scared", "anxious", "crying", "help", "emergency", "harm"]
+    if any(keyword in question_lower for keyword in nurse_keywords):
+        return "NURSE_ACTION"
+
+    topic_map = {
+        "jaundice": "Jaundice:", "uterus": "Uterus:", "cramps": "Uterus:", "afterbirth": "Uterus:",
+        "bladder": "Bladder:", "urinate": "Bladder:", "bowel": "Bowels:", "constipation": "Bowels:",
+        "hemorrhoid": "Hemorrhoids:", "perineum": "Perineum:", "discharge": "Vaginal discharge:", "lochia": "Vaginal discharge:",
+        "gas": "Gas Pains:", "incision": "Cesarean Birth Incision Care:", "cesarean": "Cesarean Birth Incision Care:",
+        "moving": "Moving After Cesarean Birth:", "baby blues": "Baby Blues:", "depression": "Postpartum Depression And Anxiety:",
+        "ocd": "Postpartum Obsessive-Compulsive Disorder (OCD):", "psychosis": "Postpartum Psychosis:",
+        "pets": "Family Pets:", "cat": "Cats:", "dog": "Dogs:",
+        "siblings": "Siblings:", "brother": "Siblings:", "sister": "Siblings:",
+        "skin to skin": "Skin to Skin Contact:", "acne": "Newborn Appearance:", "swollen": "Newborn Appearance:", "head shape": "Newborn Appearance:",
+        "eyes": "Newborn Appearance:", "hearing": "Newborn Screenings:", "umbilical": "Umbilical cord:", "cord": "Umbilical cord:",
+        "nail": "Nail care:", "rash": "Diaper Rash:", "diapering": "Diapering:", "meconium": "Diapering:", "stools": "Diapering:",
+        "behavior": "Baby’s Behavior:", "crying": "Baby’s Behavior:", "fussing": "Baby’s Behavior:", "colic": "Colic:",
+        "sleep": "Safe Sleep:", "sids": "Safe Sleep:", "car seat": "Car Seats:", "temperature": "Taking Baby’s Temperature:",
+        "cluster feeding": "Cluster Feeding:", "burping": "Burping:", "bottle feeding": "Feeding your baby a bottle:"
+    }
+    paragraphs = [p.strip() for p in context.strip().split('\n') if p.strip()]
+    
+    best_match_title = None
+    longest_keyword_len = 0
+
+    for keyword, title in topic_map.items():
+        if keyword in question_lower:
+            if len(keyword) > longest_keyword_len:
+                longest_keyword_len = len(keyword)
+                best_match_title = title
+
+    if best_match_title:
+        for p in paragraphs:
+            if p.startswith(title):
+                return p
+
+    cna_keywords = ["pillow", "water", "blanket", "ice", "pad", "diaper", "formula"]
+    if any(keyword in question_lower for keyword in cna_keywords):
+        return "CNA_ACTION"
+
+    return "CANNOT_ANSWER"
 
 # --- App Routes ---
 @app.route("/room/<room_id>")
@@ -174,15 +230,38 @@ def handle_chat():
         return f"Error: Configuration file '{config_module_name}.py' is missing or invalid. Please contact support."
 
     if request.method == 'POST':
+        user_input = request.form.get("user_input", "").strip()
+        
+        if user_input == button_data.get("ai_yes"):
+            original_question = session.get("last_ai_question", "A patient has a question.")
+            reply = process_request(role="nurse", subject="Patient Follow-up Request", user_input=original_question, reply_message=button_data["nurse_notification"])
+            return render_template("chat.html", reply=reply, options=button_data["main_buttons"], button_data=button_data)
+        elif user_input == button_data.get("ai_no"):
+            return redirect(url_for('handle_chat'))
+
         if request.form.get("action") == "send_note":
             note_text = request.form.get("custom_note")
             if note_text:
-                reply = process_request(role="nurse", subject="Custom Patient Note", user_input=note_text, reply_message=button_data["nurse_notification"])
+                ai_answer = get_ai_response(note_text, KNOWLEDGE_BASE)
+                
+                if ai_answer == "NURSE_ACTION":
+                    reply = process_request(role="nurse", subject="Custom Patient Note (AI Triage)", user_input=note_text, reply_message=button_data["nurse_notification"])
+                    options = button_data["main_buttons"]
+                elif ai_answer == "CNA_ACTION":
+                    reply = process_request(role="cna", subject="Custom Patient Note (AI Triage)", user_input=note_text, reply_message=button_data["cna_notification"])
+                    options = button_data["main_buttons"]
+                elif ai_answer == "CANNOT_ANSWER":
+                    reply = process_request(role="nurse", subject="Custom Patient Note (AI Triage)", user_input=note_text, reply_message=button_data["nurse_notification"])
+                    options = button_data["main_buttons"]
+                else:
+                    session["last_ai_question"] = note_text
+                    reply = f"{ai_answer}\n\n{button_data.get('ai_follow_up_question', 'Would you like to speak to your nurse?')}"
+                    options = [button_data.get("ai_yes", "Yes"), button_data.get("ai_no", "No")]
             else:
                 reply = "Please type a message in the box."
-            return render_template("chat.html", reply=reply, options=button_data["main_buttons"], button_data=button_data)
+                options = button_data["main_buttons"]
+            return render_template("chat.html", reply=reply, options=options, button_data=button_data)
         
-        user_input = request.form.get("user_input", "").strip()
         if user_input == button_data.get("back_text", "⬅ Back"):
             return redirect(url_for('handle_chat'))
 
@@ -191,19 +270,24 @@ def handle_chat():
             reply = button_info.get("question") or button_info.get("note", "")
             options = button_info.get("options", [])
             
-            back_text = button_data.get("back_text", "⬅ Back")
-            if options and back_text not in options:
-                options.append(back_text)
-            elif not options:
-                options = button_data["main_buttons"]
+            if button_info.get("follow_up"):
+                session["last_ai_question"] = user_input
+                reply = f"{reply}\n\n{button_data.get('ai_follow_up_question', 'Would you like to speak to your nurse?')}"
+                options = [button_data.get("ai_yes", "Yes"), button_data.get("ai_no", "No")]
+            else:
+                back_text = button_data.get("back_text", "⬅ Back")
+                if options and back_text not in options:
+                    options.append(back_text)
+                elif not options:
+                    options = button_data["main_buttons"]
 
-            if "action" in button_info:
-                action = button_info["action"]
-                role = "cna" if action == "Notify CNA" else "nurse"
-                subject = f"{role.upper()} Request"
-                notification_message = button_info.get("note", button_data[f"{role}_notification"])
-                reply = process_request(role=role, subject=subject, user_input=user_input, reply_message=notification_message)
-                options = button_data["main_buttons"]
+                if "action" in button_info:
+                    action = button_info["action"]
+                    role = "cna" if action == "Notify CNA" else "nurse"
+                    subject = f"{role.upper()} Request"
+                    notification_message = button_info.get("note", button_data[f"{role}_notification"])
+                    reply = process_request(role=role, subject=subject, user_input=user_input, reply_message=notification_message)
+                    options = button_data["main_buttons"]
         else:
             reply = "I'm sorry, I didn't understand that. Please use the buttons provided."
             options = button_data["main_buttons"]
@@ -219,18 +303,19 @@ def reset_language():
 
 @app.route("/dashboard")
 def dashboard():
-    active_requests_by_room = defaultdict(list)
+    active_requests = []
     try:
         with engine.connect() as connection:
             result = connection.execute(text("""
                 SELECT request_id, room, user_input, category as role, timestamp
                 FROM requests 
                 WHERE completion_timestamp IS NULL 
-                ORDER BY room, timestamp ASC;
+                ORDER BY timestamp DESC;
             """))
             for row in result:
-                active_requests_by_room[row.room].append({
+                active_requests.append({
                     'id': row.request_id,
+                    'room': row.room,
                     'request': row.user_input,
                     'role': row.role,
                     'timestamp': row.timestamp.isoformat()
@@ -238,7 +323,7 @@ def dashboard():
     except Exception as e:
         print(f"ERROR fetching active requests: {e}")
     
-    return render_template("dashboard.html", active_requests_by_room=active_requests_by_room)
+    return render_template("dashboard.html", active_requests=json.dumps(active_requests))
 
 @app.route('/analytics')
 def analytics():
