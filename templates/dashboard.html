@@ -154,12 +154,9 @@
             });
         }
 
-        // THIS IS THE FIX: The timer logic is now more robust.
         function updateTimestampAndColor() {
-            console.log("Updating time and color for request: " + data.id); // For debugging
             var now = new Date();
-            var seconds = Math.round((now - requestTime) / 1000);
-            var minutes = Math.floor(seconds / 60);
+            var minutes = Math.round((now - requestTime) / 60000);
             var timestampSpan = item.querySelector('.timestamp');
             
             if (timestampSpan) {
@@ -173,17 +170,16 @@
             item.classList.remove('wait-level-1', 'wait-level-2', 'wait-level-3');
 
             if (minutes >= 10) {
-                item.classList.add('wait-level-3'); // Red
+                item.classList.add('wait-level-3');
             } else if (minutes >= 5) {
-                item.classList.add('wait-level-2'); // Yellow
+                item.classList.add('wait-level-2');
             } else {
-                item.classList.add('wait-level-1'); // Green
+                item.classList.add('wait-level-1');
             }
         }
 
-        // Run the update function every 10 seconds for faster testing
-        var intervalId = setInterval(updateTimestampAndColor, 10000);
-        updateTimestampAndColor(); // Run once immediately
+        var intervalId = setInterval(updateTimestampAndColor, 60000);
+        updateTimestampAndColor();
 
         completeButton.addEventListener('click', function() {
             socket.emit('complete_request', { request_id: data.id });
@@ -209,6 +205,7 @@
 
     document.addEventListener('DOMContentLoaded', function() {
         try {
+            // THIS IS THE FIX: Using `tojson` is safer than JSON.parse with single quotes
             var activeRequests = {{ active_requests | tojson | safe }};
             if (activeRequests && activeRequests.length > 0) {
                 activeRequests.reverse().forEach(function(requestData) {
