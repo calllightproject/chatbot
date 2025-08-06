@@ -15,7 +15,7 @@ from flask_socketio import SocketIO, join_room
 from sqlalchemy import create_engine, text
 
 # --- App Configuration ---
-app = Flask(__name__, template_folder='templates')
+app = Flask(__name__, template_folder='templates', static_folder='static')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-strong-fallback-secret-key-for-local-development")
 socketio = SocketIO(app, async_mode='eventlet')
 
@@ -35,7 +35,7 @@ engine = create_engine(DATABASE_URL)
 # --- Database Setup ---
 def setup_database():
     try:
-        with engine.connect() as connection:
+        with engine.begin() as connection: # Use begin() for transactional safety
             connection.execute(text("""
                 CREATE TABLE IF NOT EXISTS requests (
                     id SERIAL PRIMARY KEY,
@@ -58,7 +58,6 @@ def setup_database():
                     UNIQUE(assignment_date, room_number)
                 );
             """))
-            connection.commit()
         print("Database setup complete. Tables are ready.")
     except Exception as e:
         print(f"CRITICAL ERROR during database setup: {e}")
@@ -68,7 +67,7 @@ def log_request_to_db(request_id, category, user_input, reply):
     room = session.get("room_number", "Unknown Room")
     is_first_baby = session.get("is_first_baby", None)
     try:
-        with engine.connect() as connection:
+        with engine.begin() as connection:
             connection.execute(text("""
                 INSERT INTO requests (request_id, timestamp, room, category, user_input, reply, is_first_baby)
                 VALUES (:request_id, :timestamp, :room, :category, :user_input, :reply, :is_first_baby);
@@ -81,7 +80,6 @@ def log_request_to_db(request_id, category, user_input, reply):
                 "reply": reply,
                 "is_first_baby": is_first_baby
             })
-            connection.commit()
     except Exception as e:
         print(f"ERROR logging to database: {e}")
 
@@ -148,14 +146,13 @@ def get_ai_response(question, context):
     longest_keyword_len = 0
 
     for keyword, title in topic_map.items():
-        if keyword in question_lower:
-            if len(keyword) > longest_keyword_len:
-                longest_keyword_len = len(keyword)
-                best_match_title = title
+        if keyword in question_lower and len(keyword) > longest_keyword_len:
+            longest_keyword_len = len(keyword)
+            best_match_title = title
 
     if best_match_title:
         for p in paragraphs:
-            if p.startswith(title):
+            if p.startswith(best_match_title):
                 return p
 
     cna_keywords = ["pillow", "water", "blanket", "ice", "pad", "diaper", "formula"]
@@ -305,7 +302,7 @@ def reset_language():
 def dashboard():
     active_requests = []
     try:
-        with engine.connect() as connection:
+        with engine.begin() as connection:
             result = connection.execute(text("""
                 SELECT request_id, room, user_input, category as role, timestamp
                 FROM requests 
@@ -323,7 +320,7 @@ def dashboard():
     except Exception as e:
         print(f"ERROR fetching active requests: {e}")
     
-    return render_template("dashboard.html", active_requests=json.dumps(active_requests))
+    return render_template("dashboard.html", active_requests=active_requests)
 
 @app.route('/analytics')
 def analytics():
@@ -356,23 +353,22 @@ def assignments():
     if request.method == 'POST':
         today = date.today()
         try:
-            with engine.connect() as connection:
-                with connection.begin():
-                    for key, nurse_name in request.form.items():
-                        if key.startswith('nurse_for_room_'):
-                            room_number = key.replace('nurse_for_room_', '')
-                            if nurse_name and nurse_name != 'unassigned':
-                                connection.execute(text("""
-                                    INSERT INTO assignments (assignment_date, room_number, nurse_name)
-                                    VALUES (:date, :room, :nurse)
-                                    ON CONFLICT (assignment_date, room_number)
-                                    DO UPDATE SET nurse_name = EXCLUDED.nurse_name;
-                                """), {"date": today, "room": room_number, "nurse": nurse_name})
-                            else:
-                                connection.execute(text("""
-                                    DELETE FROM assignments 
-                                    WHERE assignment_date = :date AND room_number = :room;
-                                """), {"date": today, "room": room_number})
+            with engine.begin() as connection:
+                for key, nurse_name in request.form.items():
+                    if key.startswith('nurse_for_room_'):
+                        room_number = key.replace('nurse_for_room_', '')
+                        if nurse_name and nurse_name != 'unassigned':
+                            connection.execute(text("""
+                                INSERT INTO assignments (assignment_date, room_number, nurse_name)
+                                VALUES (:date, :room, :nurse)
+                                ON CONFLICT (assignment_date, room_number)
+                                DO UPDATE SET nurse_name = EXCLUDED.nurse_name;
+                            """), {"date": today, "room": room_number, "nurse": nurse_name})
+                        else:
+                            connection.execute(text("""
+                                DELETE FROM assignments 
+                                WHERE assignment_date = :date AND room_number = :room;
+                            """), {"date": today, "room": room_number})
             print("Assignments saved successfully.")
         except Exception as e:
             print(f"ERROR saving assignments: {e}")
@@ -400,13 +396,12 @@ def handle_complete_request(data):
     request_id = data.get('request_id')
     if request_id:
         try:
-            with engine.connect() as connection:
+            with engine.begin() as connection:
                 connection.execute(text("""
                     UPDATE requests 
                     SET completion_timestamp = :now 
                     WHERE request_id = :request_id;
                 """), {"now": datetime.now(), "request_id": request_id})
-                connection.commit()
             print(f"Request {request_id} marked as complete.")
         except Exception as e:
             print(f"ERROR updating completion timestamp: {e}")
@@ -415,4 +410,4 @@ with app.app_context():
     setup_database()
 
 if __name__ == "__main__":
-    socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+    socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
