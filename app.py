@@ -1,7 +1,3 @@
-# These two lines MUST be the very first lines in the file.
-import eventlet
-eventlet.monkey_patch()
-
 import os
 import json
 import smtplib
@@ -13,12 +9,11 @@ from email.message import EmailMessage
 from flask import Flask, render_template, request, session, redirect, url_for
 from flask_socketio import SocketIO, join_room
 from sqlalchemy import create_engine, text
-from sqlalchemy.pool import NullPool
 
 # --- App Configuration ---
 app = Flask(__name__, template_folder='templates')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-strong-fallback-secret-key-for-local-development")
-socketio = SocketIO(app, async_mode='eventlet')
+socketio = SocketIO(app)
 
 # --- Database Configuration ---
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -26,36 +21,35 @@ if not DATABASE_URL:
     print("WARNING: DATABASE_URL environment variable not found. Using a local SQLite database.")
     DATABASE_URL = "sqlite:///local_call_light.db"
 
-# THIS IS THE FIX: Configure the database engine for a real-time server environment
-engine = create_engine(DATABASE_URL, poolclass=NullPool)
+engine = create_engine(DATABASE_URL)
 
 # --- Database Setup ---
 def setup_database():
     try:
-        with engine.connect() as connection:
-            with connection.begin():
-                connection.execute(text("""
-                    CREATE TABLE IF NOT EXISTS requests (
-                        id SERIAL PRIMARY KEY,
-                        request_id VARCHAR(255) UNIQUE,
-                        timestamp TIMESTAMP WITHOUT TIME ZONE,
-                        completion_timestamp TIMESTAMP WITHOUT TIME ZONE,
-                        room VARCHAR(255),
-                        user_input TEXT,
-                        category VARCHAR(255),
-                        reply TEXT,
-                        is_first_baby BOOLEAN
-                    );
-                """))
-                connection.execute(text("""
-                    CREATE TABLE IF NOT EXISTS assignments (
-                        id SERIAL PRIMARY KEY,
-                        assignment_date DATE NOT NULL,
-                        room_number VARCHAR(255) NOT NULL,
-                        nurse_name VARCHAR(255) NOT NULL,
-                        UNIQUE(assignment_date, room_number)
-                    );
-                """))
+        # CORRECTED: Use begin() for transactional safety
+        with engine.begin() as connection:
+            connection.execute(text("""
+                CREATE TABLE IF NOT EXISTS requests (
+                    id SERIAL PRIMARY KEY,
+                    request_id VARCHAR(255) UNIQUE,
+                    timestamp TIMESTAMP WITHOUT TIME ZONE,
+                    completion_timestamp TIMESTAMP WITHOUT TIME ZONE,
+                    room VARCHAR(255),
+                    user_input TEXT,
+                    category VARCHAR(255),
+                    reply TEXT,
+                    is_first_baby BOOLEAN
+                );
+            """))
+            connection.execute(text("""
+                CREATE TABLE IF NOT EXISTS assignments (
+                    id SERIAL PRIMARY KEY,
+                    assignment_date DATE NOT NULL,
+                    room_number VARCHAR(255) NOT NULL,
+                    nurse_name VARCHAR(255) NOT NULL,
+                    UNIQUE(assignment_date, room_number)
+                );
+            """))
         print("Database setup complete. Tables are ready.")
     except Exception as e:
         print(f"CRITICAL ERROR during database setup: {e}")
@@ -65,20 +59,19 @@ def log_request_to_db(request_id, category, user_input, reply):
     room = session.get("room_number", "Unknown Room")
     is_first_baby = session.get("is_first_baby", None)
     try:
-        with engine.connect() as connection:
-            with connection.begin():
-                connection.execute(text("""
-                    INSERT INTO requests (request_id, timestamp, room, category, user_input, reply, is_first_baby)
-                    VALUES (:request_id, :timestamp, :room, :category, :user_input, :reply, :is_first_baby);
-                """), {
-                    "request_id": request_id,
-                    "timestamp": datetime.now(),
-                    "room": room,
-                    "category": category,
-                    "user_input": user_input,
-                    "reply": reply,
-                    "is_first_baby": is_first_baby
-                })
+        with engine.begin() as connection:
+            connection.execute(text("""
+                INSERT INTO requests (request_id, timestamp, room, category, user_input, reply, is_first_baby)
+                VALUES (:request_id, :timestamp, :room, :category, :user_input, :reply, :is_first_baby);
+            """), {
+                "request_id": request_id,
+                "timestamp": datetime.now(),
+                "room": room,
+                "category": category,
+                "user_input": user_input,
+                "reply": reply,
+                "is_first_baby": is_first_baby
+            })
     except Exception as e:
         print(f"ERROR logging to database: {e}")
 
@@ -103,10 +96,8 @@ def send_email_alert(subject, body):
 
 def process_request(role, subject, user_input, reply_message):
     request_id = 'req_' + str(datetime.now().timestamp()).replace('.', '')
-    
-    socketio.start_background_task(send_email_alert, subject, user_input)
-    socketio.start_background_task(log_request_to_db, request_id, role, user_input, reply_message)
-    
+    send_email_alert(subject, user_input)
+    log_request_to_db(request_id, role, user_input, reply_message)
     socketio.emit('new_request', {
         'id': request_id,
         'room': session.get('room_number', 'N/A'),
@@ -239,14 +230,15 @@ def dashboard():
             for row in result:
                 active_requests.append({
                     'id': row.request_id,
-                    'room': row.room,
+                    'room': row.room if row.room else "N/A",
                     'request': row.user_input,
                     'role': row.role,
-                    'timestamp': row.timestamp.isoformat()
+                    'timestamp': row.timestamp.isoformat() if row.timestamp else datetime.now().isoformat()
                 })
     except Exception as e:
         print(f"ERROR fetching active requests: {e}")
     
+    # CORRECTED: Pass the raw Python list to the template
     return render_template("dashboard.html", active_requests=active_requests)
 
 @app.route('/analytics')
@@ -337,4 +329,4 @@ with app.app_context():
     setup_database()
 
 if __name__ == "__main__":
-    socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
+    socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
