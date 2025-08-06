@@ -225,19 +225,19 @@ def reset_language():
 
 @app.route("/dashboard")
 def dashboard():
-    active_requests = []
+    # THIS IS THE FIX: The logic now groups requests by room
+    active_requests_by_room = defaultdict(list)
     try:
         with engine.connect() as connection:
             result = connection.execute(text("""
                 SELECT request_id, room, user_input, category as role, timestamp
                 FROM requests 
                 WHERE completion_timestamp IS NULL 
-                ORDER BY timestamp DESC;
+                ORDER BY room, timestamp ASC;
             """))
             for row in result:
-                active_requests.append({
+                active_requests_by_room[row.room].append({
                     'id': row.request_id,
-                    'room': row.room,
                     'request': row.user_input,
                     'role': row.role,
                     'timestamp': row.timestamp.isoformat()
@@ -245,8 +245,7 @@ def dashboard():
     except Exception as e:
         print(f"ERROR fetching active requests: {e}")
     
-    # THIS IS THE FIX: Pass the Python list directly to the template, not a JSON string
-    return render_template("dashboard.html", active_requests=active_requests)
+    return render_template("dashboard.html", active_requests_by_room=active_requests_by_room)
 
 @app.route('/analytics')
 def analytics():
