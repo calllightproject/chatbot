@@ -319,7 +319,6 @@ def handle_acknowledge(data):
 def handle_defer_request(data):
     socketio.emit('request_deferred', data)
 
-# CORRECTED: This function now uses a robust transaction block to guarantee the save.
 @socketio.on('complete_request')
 def handle_complete_request(data):
     request_id = data.get('request_id')
@@ -346,4 +345,3 @@ with app.app_context():
 
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
-
