@@ -43,7 +43,7 @@
             border-radius: 5px;
             background-color: #fff;
             gap: 15px;
-            transition: background-color 0.5s ease, opacity 0.5s ease; /* Added opacity transition */
+            transition: background-color 0.5s ease, opacity 0.5s ease;
         }
         .request-item.cna { border-left: 5px solid var(--accent-blue); }
         .request-item.nurse { border-left: 5px solid #d43f27; }
@@ -181,30 +181,24 @@
         var intervalId = setInterval(updateTimestampAndColor, 60000);
         updateTimestampAndColor();
 
-        // --- CHANGE #1: The 'Complete' button now ONLY tells the server it's complete.
-        // It no longer removes the item from the page itself.
-        // --- Make this change ---
-    completeButton.addEventListener('click', function() {
-        console.log("Complete button clicked for request:", data.id); // <-- ADD THIS LINE
-        socket.emit('complete_request', { request_id: data.id });
-        clearInterval(intervalId);
-    });
+        completeButton.addEventListener('click', function() {
+            socket.emit('complete_request', { request_id: data.id });
+            clearInterval(intervalId);
+        });
+    } // <-- THIS IS THE MISSING BRACE THAT WAS ADDED
 
     socket.on('new_request', function(data) {
         addRequestToDashboard(data);
     });
     
-    // --- CHANGE #2: Added this new listener. It waits for the server's confirmation
-    // before removing the item from the dashboard. This is the fix.
     socket.on('remove_request', function(data) {
         const requestId = data.id;
         const requestElement = document.getElementById(requestId);
         if (requestElement) {
-            // Optional: Add a fade-out effect for a smoother UI
             requestElement.style.opacity = '0';
             setTimeout(() => {
                 requestElement.remove();
-            }, 500); // 500ms matches the CSS transition
+            }, 500);
         }
     });
 
@@ -235,4 +229,3 @@
 
 </body>
 </html>
-
