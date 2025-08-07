@@ -101,35 +101,8 @@
 <script type="text/javascript">
     var socket = io();
 
-    function addRequestToDashboard(data) {
-        var list = document.getElementById('requests-list');
-        if (document.getElementById(data.id)) {
-            return;
-        }
-
-        var item = document.createElement('li');
-        var requestTime = new Date(data.timestamp);
-
-        item.id = data.id;
-        item.className = 'request-item ' + data.role;
-
-        var deferButtonHtml = '';
-        if (data.role === 'cna') {
-            deferButtonHtml = '<button class="defer-btn">Defer to Nurse</button>';
-        }
-
-        item.innerHTML =
-            '<p>' + data.request + '</p>' +
-            '<span>Room: ' + data.room + '</span>' +
-            '<span class="role-span">For: ' + data.role.toUpperCase() + '</span>' +
-            '<span class="timestamp">Just now</span>' +
-            '<button class="ack-button">Acknowledge</button>' +
-            '<button class="omw-button">On my way</button>' +
-            deferButtonHtml +
-            '<button class="complete-btn">Complete</button>';
-
-        list.prepend(item);
-
+    // --- NEW FUNCTION TO ATTACH ALL EVENT LISTENERS ---
+    function attachEventListeners(item, data, requestTime) {
         var ackButton = item.querySelector('.ack-button');
         var omwButton = item.querySelector('.omw-button');
         var deferButton = item.querySelector('.defer-btn');
@@ -185,7 +158,40 @@
             socket.emit('complete_request', { request_id: data.id });
             clearInterval(intervalId);
         });
-    } // <-- THIS IS THE MISSING BRACE THAT WAS ADDED
+    }
+
+    function addRequestToDashboard(data) {
+        var list = document.getElementById('requests-list');
+        if (document.getElementById(data.id)) {
+            return;
+        }
+
+        var item = document.createElement('li');
+        var requestTime = new Date(data.timestamp);
+
+        item.id = data.id;
+        item.className = 'request-item ' + data.role;
+
+        var deferButtonHtml = '';
+        if (data.role === 'cna') {
+            deferButtonHtml = '<button class="defer-btn">Defer to Nurse</button>';
+        }
+
+        item.innerHTML =
+            '<p>' + data.request + '</p>' +
+            '<span>Room: ' + data.room + '</span>' +
+            '<span class="role-span">For: ' + data.role.toUpperCase() + '</span>' +
+            '<span class="timestamp">Just now</span>' +
+            '<button class="ack-button">Acknowledge</button>' +
+            '<button class="omw-button">On my way</button>' +
+            deferButtonHtml +
+            '<button class="complete-btn">Complete</button>';
+
+        list.prepend(item);
+
+        // Call the new function to attach listeners
+        attachEventListeners(item, data, requestTime);
+    }
 
     socket.on('new_request', function(data) {
         addRequestToDashboard(data);
@@ -217,7 +223,8 @@
         try {
             var activeRequests = {{ active_requests | tojson | safe }};
             if (activeRequests && activeRequests.length > 0) {
-                activeRequests.reverse().forEach(function(requestData) {
+                activeRequests.forEach(function(requestData) {
+                    // This now just adds the item to the page. Listeners are attached inside.
                     addRequestToDashboard(requestData);
                 });
             }
