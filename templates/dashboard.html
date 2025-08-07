@@ -90,7 +90,8 @@
 <body>
 
 <div class="dashboard-container">
-    <h1>Real-Time Request Dashboard</h1>
+    <!-- THIS IS THE VISIBLE TRACER. CHECK IF THIS TEXT APPEARS AFTER DEPLOYMENT. -->
+    <h1>Dashboard - LATEST VERSION</h1>
     
     <ul id="requests-list">
         {% for request in active_requests %}
@@ -184,7 +185,6 @@
         var intervalId = setInterval(updateTimestampAndColor, 60000);
         updateTimestampAndColor();
         
-        // Store the interval ID on the element itself so we can clear it later
         item.intervalId = intervalId;
 
         completeButton.addEventListener('click', function() {
@@ -234,7 +234,6 @@
         const requestId = data.id;
         const requestElement = document.getElementById(requestId);
         if (requestElement) {
-            // Clear the interval timer to prevent memory leaks
             if (requestElement.intervalId) {
                 clearInterval(requestElement.intervalId);
             }
