@@ -193,14 +193,11 @@
         addRequestToDashboard(data);
     });
 
-    socket.on('request_deferred', (data) => {
-        const item = document.getElementById(data.id);
-        if (item) {
-            item.className = 'request-item nurse';
-            const roleSpan = item.querySelector('.role-span');
-            if (roleSpan) roleSpan.textContent = 'For: NURSE';
-        }
+    socket.on('remove_request', function(data) {
+    const card = document.getElementById(data.request_id);
+    if (card) card.remove();
     });
+
 
     // ✅ NEW: Remove request when marked complete on any dashboard
     socket.on('request_completed', (data) => {
@@ -222,3 +219,4 @@
 
 </body>
 </html>
+
