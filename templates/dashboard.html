@@ -92,7 +92,6 @@
 <div class="dashboard-container">
     <h1>Real-Time Request Dashboard</h1>
     
-    <!-- CORRECTED: Initial requests are now rendered directly by the server -->
     <ul id="requests-list">
         {% for request in active_requests %}
             <li class="request-item {{ request.role }}" 
@@ -132,7 +131,7 @@
         var deferButton = item.querySelector('.defer-btn');
         var completeButton = item.querySelector('.complete-btn');
         
-        if (!completeButton) return; // Safety check
+        if (!completeButton) return;
 
         ackButton.addEventListener('click', function() {
             socket.emit('acknowledge_request', { room: data.room, message: "✅ Your request was received and will be addressed shortly." });
@@ -180,8 +179,11 @@
         var intervalId = setInterval(updateTimestampAndColor, 60000);
         updateTimestampAndColor();
 
+        // CORRECTED: This now sends the correct ID for the specific button clicked.
         completeButton.addEventListener('click', function() {
-            socket.emit('complete_request', { request_id: data.id });
+            // Get the ID directly from the parent list item's data attribute.
+            const requestId = item.dataset.id; 
+            socket.emit('complete_request', { request_id: requestId });
             clearInterval(intervalId);
         });
     }
@@ -197,6 +199,12 @@
 
         item.id = data.id;
         item.className = 'request-item ' + data.role;
+        // Also add data attributes for consistency
+        item.dataset.id = data.id;
+        item.dataset.room = data.room;
+        item.dataset.request = data.request;
+        item.dataset.role = data.role;
+        item.dataset.timestamp = data.timestamp;
 
         var deferButtonHtml = '';
         if (data.role === 'cna') {
@@ -243,7 +251,6 @@
         }
     });
 
-    // CORRECTED: This block now finds the server-rendered items and makes them interactive.
     document.addEventListener('DOMContentLoaded', function() {
         const initialRequestItems = document.querySelectorAll('#requests-list .request-item');
         
