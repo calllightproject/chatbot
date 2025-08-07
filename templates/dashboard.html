@@ -183,12 +183,12 @@
 
         // --- CHANGE #1: The 'Complete' button now ONLY tells the server it's complete.
         // It no longer removes the item from the page itself.
-        completeButton.addEventListener('click', function() {
-            socket.emit('complete_request', { request_id: data.id });
-            clearInterval(intervalId);
-            // The item.remove() line that was here has been DELETED.
-        });
-    }
+        // --- Make this change ---
+    completeButton.addEventListener('click', function() {
+        console.log("Complete button clicked for request:", data.id); // <-- ADD THIS LINE
+        socket.emit('complete_request', { request_id: data.id });
+        clearInterval(intervalId);
+    });
 
     socket.on('new_request', function(data) {
         addRequestToDashboard(data);
@@ -235,3 +235,4 @@
 
 </body>
 </html>
+
