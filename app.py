@@ -17,7 +17,6 @@ from sqlalchemy import create_engine, text
 # --- App Configuration ---
 app = Flask(__name__, template_folder='templates')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-strong-fallback-secret-key-for-local-development")
-# Corrected SocketIO initialization for CORS
 socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*")
 
 
@@ -33,56 +32,53 @@ engine = create_engine(DATABASE_URL)
 def setup_database():
     try:
         with engine.connect() as connection:
-            connection.execute(text("""
-                CREATE TABLE IF NOT EXISTS requests (
-                    id SERIAL PRIMARY KEY,
-                    request_id VARCHAR(255) UNIQUE,
-                    timestamp TIMESTAMP WITHOUT TIME ZONE,
-                    completion_timestamp TIMESTAMP WITHOUT TIME ZONE,
-                    room VARCHAR(255),
-                    user_input TEXT,
-                    category VARCHAR(255),
-                    reply TEXT,
-                    is_first_baby BOOLEAN
-                );
-            """))
-            connection.execute(text("""
-                CREATE TABLE IF NOT EXISTS assignments (
-                    id SERIAL PRIMARY KEY,
-                    assignment_date DATE NOT NULL,
-                    room_number VARCHAR(255) NOT NULL,
-                    nurse_name VARCHAR(255) NOT NULL,
-                    UNIQUE(assignment_date, room_number)
-                );
-            """))
-            connection.commit()
+            with connection.begin(): # Use transaction for setup
+                connection.execute(text("""
+                    CREATE TABLE IF NOT EXISTS requests (
+                        id SERIAL PRIMARY KEY,
+                        request_id VARCHAR(255) UNIQUE,
+                        timestamp TIMESTAMP WITHOUT TIME ZONE,
+                        completion_timestamp TIMESTAMP WITHOUT TIME ZONE,
+                        room VARCHAR(255),
+                        user_input TEXT,
+                        category VARCHAR(255),
+                        reply TEXT,
+                        is_first_baby BOOLEAN
+                    );
+                """))
+                connection.execute(text("""
+                    CREATE TABLE IF NOT EXISTS assignments (
+                        id SERIAL PRIMARY KEY,
+                        assignment_date DATE NOT NULL,
+                        room_number VARCHAR(255) NOT NULL,
+                        nurse_name VARCHAR(255) NOT NULL,
+                        UNIQUE(assignment_date, room_number)
+                    );
+                """))
         print("Database setup complete. Tables are ready.")
     except Exception as e:
         print(f"CRITICAL ERROR during database setup: {e}")
 
-# --- Core Helper Functions (Corrected) ---
-
-# CORRECTED: This function now accepts room and is_first_baby as arguments
+# --- Core Helper Functions ---
 def log_request_to_db(request_id, category, user_input, reply, room, is_first_baby):
     try:
         with engine.connect() as connection:
-            connection.execute(text("""
-                INSERT INTO requests (request_id, timestamp, room, category, user_input, reply, is_first_baby)
-                VALUES (:request_id, :timestamp, :room, :category, :user_input, :reply, :is_first_baby);
-            """), {
-                "request_id": request_id,
-                "timestamp": datetime.now(),
-                "room": room,
-                "category": category,
-                "user_input": user_input,
-                "reply": reply,
-                "is_first_baby": is_first_baby
-            })
-            connection.commit()
+            with connection.begin(): # Use transaction for insert
+                connection.execute(text("""
+                    INSERT INTO requests (request_id, timestamp, room, category, user_input, reply, is_first_baby)
+                    VALUES (:request_id, :timestamp, :room, :category, :user_input, :reply, :is_first_baby);
+                """), {
+                    "request_id": request_id,
+                    "timestamp": datetime.now(),
+                    "room": room,
+                    "category": category,
+                    "user_input": user_input,
+                    "reply": reply,
+                    "is_first_baby": is_first_baby
+                })
     except Exception as e:
         print(f"ERROR logging to database: {e}")
 
-# CORRECTED: This function now accepts room_number as an argument
 def send_email_alert(subject, body, room_number):
     sender_email = os.getenv("EMAIL_USER")
     sender_password = os.getenv("EMAIL_PASSWORD")
@@ -91,7 +87,6 @@ def send_email_alert(subject, body, room_number):
         print("WARNING: Email credentials not set. Cannot send email.")
         return
     msg = EmailMessage()
-    # Use the 'room_number' argument here
     msg["Subject"] = f"Room {room_number} - {subject}"
     msg["From"] = sender_email
     msg["To"] = recipient_email
@@ -103,15 +98,11 @@ def send_email_alert(subject, body, room_number):
     except Exception as e:
         print(f"ERROR: Email failed to send: {e}")
 
-# CORRECTED: This function now gets session data BEFORE starting background tasks
 def process_request(role, subject, user_input, reply_message):
     request_id = 'req_' + str(datetime.now().timestamp()).replace('.', '')
-    
-    # Get session data BEFORE starting the background task
     room_number = session.get('room_number', 'N/A')
     is_first_baby = session.get('is_first_baby')
 
-    # Pass the session data as arguments
     socketio.start_background_task(send_email_alert, subject, user_input, room_number)
     socketio.start_background_task(log_request_to_db, request_id, role, user_input, reply_message, room_number, is_first_baby)
     
@@ -328,18 +319,20 @@ def handle_acknowledge(data):
 def handle_defer_request(data):
     socketio.emit('request_deferred', data)
 
+# CORRECTED: This function now uses a robust transaction block to guarantee the save.
 @socketio.on('complete_request')
 def handle_complete_request(data):
     request_id = data.get('request_id')
     if request_id:
         try:
             with engine.connect() as connection:
-                connection.execute(text("""
-                    UPDATE requests 
-                    SET completion_timestamp = :now 
-                    WHERE request_id = :request_id;
-                """), {"now": datetime.now(), "request_id": request_id})
-                connection.commit()
+                with connection.begin(): # Start a transaction
+                    connection.execute(text("""
+                        UPDATE requests 
+                        SET completion_timestamp = :now 
+                        WHERE request_id = :request_id;
+                    """), {"now": datetime.now(), "request_id": request_id})
+                # The transaction is automatically committed here if no errors occurred
             
             socketio.emit('remove_request', {'id': request_id})
             
