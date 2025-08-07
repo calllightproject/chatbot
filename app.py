@@ -117,6 +117,36 @@ def process_request(role, subject, user_input, reply_message):
     return reply_message
 
 # --- App Routes ---
+
+# !!!!!!!!!!! TEMPORARY DEBUGGING ROUTE !!!!!!!!!!!
+@app.route("/check-permissions")
+def check_permissions():
+    try:
+        with engine.connect() as connection:
+            # Get the current user
+            user_result = connection.execute(text("SELECT current_user;"))
+            current_user = user_result.scalar()
+            
+            # Check permissions for that user on the 'requests' table
+            query = text("SELECT grantee, privilege_type FROM information_schema.role_table_grants WHERE table_name='requests' AND grantee=:user;")
+            permissions_result = connection.execute(query, {"user": current_user})
+            
+            permissions = permissions_result.fetchall()
+            
+            print(f"!!!!!!!!!! DATABASE PERMISSIONS FOR USER '{current_user}' ON TABLE 'requests' !!!!!!!!!!!")
+            if permissions:
+                for p in permissions:
+                    print(f"!!!!!!!!!! -> {p.grantee} has {p.privilege_type} !!!!!!!!!!!")
+            else:
+                print("!!!!!!!!!! -> NO EXPLICIT PERMISSIONS FOUND. RELYING ON DEFAULTS. !!!!!!!!!!!")
+            
+            return "OK. Check logs for permission details.", 200
+
+    except Exception as e:
+        print(f"!!!!!!!!!! ERROR CHECKING PERMISSIONS: {e} !!!!!!!!!!!")
+        return "Error checking permissions. See logs.", 500
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 @app.route("/room/<room_id>")
 def set_room(room_id):
     session.clear()
@@ -324,27 +354,17 @@ def handle_defer_request(data):
 def handle_complete_request(data):
     request_id = data.get('request_id')
     if request_id:
-        print(f"!!!!!!!!!! RECEIVED 'complete_request' FOR ID: {request_id} !!!!!!!!!!!")
         try:
             with engine.connect() as connection:
-                # Use an explicit transaction to guarantee the commit
-                trans = connection.begin()
-                try:
+                with connection.begin(): # Start a transaction
                     connection.execute(text("""
                         UPDATE requests 
                         SET completion_timestamp = :now 
                         WHERE request_id = :request_id;
                     """), {"now": datetime.now(), "request_id": request_id})
-                    
-                    trans.commit() # Explicitly commit the change
-                    print("!!!!!!!!!! TRANSACTION COMMITTED SUCCESSFULLY !!!!!!!!!!!")
-
-                except Exception as e:
-                    print(f"!!!!!!!!!! ERROR DURING TRANSACTION, ROLLING BACK: {e} !!!!!!!!!!!")
-                    trans.rollback()
-                    raise # Re-raise the exception after rolling back
-
+            
             socketio.emit('remove_request', {'id': request_id})
+            
             print(f"Request {request_id} marked as complete and removal event sent.")
         except Exception as e:
             print(f"ERROR updating completion timestamp: {e}")
