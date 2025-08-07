@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -103,21 +102,21 @@
     var socket = io();
 
     function addRequestToDashboard(data) {
-        var list = document.getElementById('requests-list');
+        const list = document.getElementById('requests-list');
         if (document.getElementById(data.id)) {
             return;
         }
 
-        var item = document.createElement('li');
-        var requestTime = new Date(data.timestamp);
+        const item = document.createElement('li');
+        let requestTime = new Date(Date.parse(data.timestamp)); // Safe parsing
+        if (isNaN(requestTime)) requestTime = new Date(); // Fallback
 
         item.id = data.id;
         item.className = 'request-item ' + data.role;
 
-        var deferButtonHtml = '';
-        if (data.role === 'cna') {
-            deferButtonHtml = '<button class="defer-btn">Defer to Nurse</button>';
-        }
+        const deferButtonHtml = data.role === 'cna'
+            ? '<button class="defer-btn">Defer to Nurse</button>'
+            : '';
 
         item.innerHTML =
             '<p>' + data.request + '</p>' +
@@ -131,45 +130,46 @@
 
         list.prepend(item);
 
-        var ackButton = item.querySelector('.ack-button');
-        var omwButton = item.querySelector('.omw-button');
-        var deferButton = item.querySelector('.defer-btn');
-        var completeButton = item.querySelector('.complete-btn');
-        
-        ackButton.addEventListener('click', function() {
-            socket.emit('acknowledge_request', { room: data.room, message: "✅ Your request was received and will be addressed shortly." });
+        const ackButton = item.querySelector('.ack-button');
+        const omwButton = item.querySelector('.omw-button');
+        const deferButton = item.querySelector('.defer-btn');
+        const completeButton = item.querySelector('.complete-btn');
+
+        ackButton.addEventListener('click', () => {
+            socket.emit('acknowledge_request', {
+                room: data.room,
+                message: "✅ Your request was received and will be addressed shortly."
+            });
             ackButton.disabled = true;
             omwButton.disabled = true;
         });
 
-        omwButton.addEventListener('click', function() {
-            socket.emit('acknowledge_request', { room: data.room, message: "✅ A team member is on their way." });
+        omwButton.addEventListener('click', () => {
+            socket.emit('acknowledge_request', {
+                room: data.room,
+                message: "✅ A team member is on their way."
+            });
             ackButton.disabled = true;
             omwButton.disabled = true;
         });
 
         if (deferButton) {
-            deferButton.addEventListener('click', function() {
+            deferButton.addEventListener('click', () => {
                 socket.emit('defer_request', { id: item.id });
                 deferButton.remove();
             });
         }
 
         function updateTimestampAndColor() {
-            var now = new Date();
-            var minutes = Math.round((now - requestTime) / 60000);
-            var timestampSpan = item.querySelector('.timestamp');
-            
+            const now = new Date();
+            const minutes = Math.round((now - requestTime) / 60000);
+            const timestampSpan = item.querySelector('.timestamp');
+
             if (timestampSpan) {
-                if (minutes > 0) {
-                    timestampSpan.textContent = String(minutes) + 'm ago';
-                } else {
-                    timestampSpan.textContent = 'Just now';
-                }
+                timestampSpan.textContent = minutes > 0 ? `${minutes}m ago` : 'Just now';
             }
 
             item.classList.remove('wait-level-1', 'wait-level-2', 'wait-level-3');
-
             if (minutes >= 10) {
                 item.classList.add('wait-level-3');
             } else if (minutes >= 5) {
@@ -179,38 +179,40 @@
             }
         }
 
-        var intervalId = setInterval(updateTimestampAndColor, 60000);
+        const intervalId = setInterval(updateTimestampAndColor, 60000);
         updateTimestampAndColor();
 
-        completeButton.addEventListener('click', function() {
+        completeButton.addEventListener('click', () => {
             socket.emit('complete_request', { request_id: data.id });
             clearInterval(intervalId);
             item.remove();
         });
     }
 
-    socket.on('new_request', function(data) {
+    socket.on('new_request', (data) => {
         addRequestToDashboard(data);
     });
 
-    socket.on('request_deferred', function(data) {
-        var itemToUpdate = document.getElementById(data.id);
-        if (itemToUpdate) {
-            itemToUpdate.className = 'request-item nurse';
-            var roleSpan = itemToUpdate.querySelector('.role-span');
-            if (roleSpan) {
-                roleSpan.textContent = 'For: NURSE';
-            }
+    socket.on('request_deferred', (data) => {
+        const item = document.getElementById(data.id);
+        if (item) {
+            item.className = 'request-item nurse';
+            const roleSpan = item.querySelector('.role-span');
+            if (roleSpan) roleSpan.textContent = 'For: NURSE';
         }
     });
 
-    document.addEventListener('DOMContentLoaded', function() {
+    // ✅ NEW: Remove request when marked complete on any dashboard
+    socket.on('request_completed', (data) => {
+        const item = document.getElementById(data.request_id);
+        if (item) item.remove();
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
         try {
-            var activeRequests = {{ active_requests | tojson | safe }};
+            const activeRequests = {{ active_requests | tojson | safe }};
             if (activeRequests && activeRequests.length > 0) {
-                activeRequests.reverse().forEach(function(requestData) {
-                    addRequestToDashboard(requestData);
-                });
+                activeRequests.reverse().forEach(addRequestToDashboard);
             }
         } catch (e) {
             console.error("Could not parse or render active requests:", e);
