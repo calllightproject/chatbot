@@ -90,7 +90,8 @@
 <body>
 
 <div class="dashboard-container">
-    <h1>Dashboard - LATEST VERSION</h1>
+    <!-- Title has been changed back -->
+    <h1>Real-Time Request Dashboard</h1>
     
     <ul id="requests-list">
         {% for request in active_requests %}
@@ -186,9 +187,12 @@
         
         item.intervalId = intervalId;
 
-        // CORRECTED: This now sends the correct ID for the specific button clicked.
+        // CORRECTED: This is a more robust way to get the ID, eliminating potential closure issues.
         completeButton.addEventListener('click', function() {
-            socket.emit('complete_request', { request_id: requestData.id });
+            const requestId = item.dataset.id;
+            console.log(`Sending 'complete_request' for ID: ${requestId}`); // For client-side debugging
+            socket.emit('complete_request', { request_id: requestId });
+            clearInterval(item.intervalId);
         });
     }
 
