@@ -117,6 +117,25 @@ def process_request(role, subject, user_input, reply_message):
     return reply_message
 
 # --- App Routes ---
+
+# !!!!!!!!!!! TEMPORARY DEBUGGING ROUTE !!!!!!!!!!!
+@app.route("/clear-requests")
+def clear_requests():
+    try:
+        with engine.connect() as connection:
+            with connection.begin():
+                connection.execute(text("""
+                    UPDATE requests 
+                    SET completion_timestamp = :now 
+                    WHERE completion_timestamp IS NULL;
+                """), {"now": datetime.now()})
+        print("!!!!!!!!!! All active requests have been cleared. !!!!!!!!!!!")
+        return "All active requests have been cleared. You can now return to the dashboard.", 200
+    except Exception as e:
+        print(f"!!!!!!!!!! ERROR clearing requests: {e} !!!!!!!!!!!")
+        return "Error clearing requests. See logs.", 500
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 @app.route("/room/<room_id>")
 def set_room(room_id):
     session.clear()
@@ -326,7 +345,6 @@ def handle_complete_request(data):
     if request_id:
         try:
             with engine.connect() as connection:
-                # Use an explicit transaction to guarantee the commit
                 trans = connection.begin()
                 try:
                     connection.execute(text("""
@@ -334,17 +352,13 @@ def handle_complete_request(data):
                         SET completion_timestamp = :now 
                         WHERE request_id = :request_id;
                     """), {"now": datetime.now(), "request_id": request_id})
-                    
-                    trans.commit() # Explicitly commit the change
-                    print("!!!!!!!!!! TRANSACTION COMMITTED SUCCESSFULLY !!!!!!!!!!!")
-
+                    trans.commit()
+                    print(f"!!!!!!!!!! TRANSACTION COMMITTED for {request_id} !!!!!!!!!!!")
                 except Exception as e:
                     print(f"!!!!!!!!!! ERROR DURING TRANSACTION, ROLLING BACK: {e} !!!!!!!!!!!")
                     trans.rollback()
-                    raise # Re-raise the exception after rolling back
-
+                    raise
             socketio.emit('remove_request', {'id': request_id})
-            print(f"Request {request_id} marked as complete and removal event sent.")
         except Exception as e:
             print(f"ERROR updating completion timestamp: {e}")
 
