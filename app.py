@@ -330,7 +330,12 @@ def handle_complete_request(data):
                     WHERE request_id = :request_id;
                 """), {"now": datetime.now(), "request_id": request_id})
                 connection.commit()
-            print(f"Request {request_id} marked as complete.")
+            
+            # --- THIS IS THE FIX ---
+            # Tell all connected dashboards to remove this item
+            socketio.emit('remove_request', {'id': request_id})
+            
+            print(f"Request {request_id} marked as complete and removal event sent.")
         except Exception as e:
             print(f"ERROR updating completion timestamp: {e}")
 
@@ -339,3 +344,4 @@ with app.app_context():
 
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
