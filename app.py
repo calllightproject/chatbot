@@ -1,4 +1,3 @@
-#triggering hard refresh please
 # These two lines MUST be the very first lines in the file.
 import eventlet
 eventlet.monkey_patch()
@@ -27,7 +26,8 @@ if not DATABASE_URL:
     print("WARNING: DATABASE_URL environment variable not found. Using a local SQLite database.")
     DATABASE_URL = "sqlite:///local_call_light.db"
 
-engine = create_engine(DATABASE_URL)
+# CORRECTED: Added pool_recycle and pool_pre_ping for stable, long-running connections.
+engine = create_engine(DATABASE_URL, pool_recycle=280, pool_pre_ping=True)
 
 # --- Database Setup ---
 def setup_database():
@@ -346,4 +346,3 @@ with app.app_context():
 
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
-
