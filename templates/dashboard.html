@@ -223,10 +223,12 @@
         try {
             var activeRequests = {{ active_requests | tojson | safe }};
             if (activeRequests && activeRequests.length > 0) {
-                activeRequests.forEach(function(requestData) {
-                    // This now just adds the item to the page. Listeners are attached inside.
-                    addRequestToDashboard(requestData);
-                });
+                // CORRECTED: Reverse the array to maintain newest-first order after prepending
+                activeRequests.reverse();
+                // CORRECTED: Use a standard for loop for robustness
+                for (var i = 0; i < activeRequests.length; i++) {
+                    addRequestToDashboard(activeRequests[i]);
+                }
             }
         } catch (e) {
             console.error("Could not parse or render active requests:", e);
