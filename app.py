@@ -322,22 +322,26 @@ def handle_defer_request(data):
 def handle_complete_request(data):
     request_id = data.get('request_id')
     if request_id:
-        try:
-            with engine.connect() as connection:
-                connection.execute(text("""
-                    UPDATE requests 
-                    SET completion_timestamp = :now 
-                    WHERE request_id = :request_id;
-                """), {"now": datetime.now(), "request_id": request_id})
-                connection.commit()
-            print(f"Request {request_id} marked as complete.")
-            socketio.emit('request_completed', {'request_id': request_id})
-        except Exception as e:
-            print(f"ERROR updating completion timestamp: {e}")
+        socketio.start_background_task(mark_request_as_complete, request_id)
+
+def mark_request_as_complete(request_id):
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("""
+                UPDATE requests 
+                SET completion_timestamp = :now 
+                WHERE request_id = :request_id;
+            """), {"now": datetime.now(), "request_id": request_id})
+            connection.commit()
+        print(f"Request {request_id} marked as complete.")
+    except Exception as e:
+        print(f"ERROR updating completion timestamp: {e}")
+
 
 with app.app_context():
     setup_database()
 
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
