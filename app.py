@@ -324,6 +324,8 @@ def handle_defer_request(data):
 def handle_complete_request(data):
     request_id = data.get('request_id')
     if request_id:
+        # ADDED: A unique tracer message to confirm this code is running.
+        print("!!!!!!!!!! RUNNING LATEST 'complete_request' FUNCTION !!!!!!!!!!!")
         try:
             with engine.connect() as connection:
                 with connection.begin(): # Start a transaction
