@@ -1,4 +1,3 @@
-#please #please
 # These two lines MUST be the very first lines in the file.
 import eventlet
 eventlet.monkey_patch()
@@ -27,7 +26,7 @@ if not DATABASE_URL:
     print("WARNING: DATABASE_URL environment variable not found. Using a local SQLite database.")
     DATABASE_URL = "sqlite:///local_call_light.db"
 
-# CORRECTED: Added pool_recycle and pool_pre_ping for stable, long-running connections.
+# Added pool_recycle and pool_pre_ping for stable, long-running connections.
 engine = create_engine(DATABASE_URL, pool_recycle=280, pool_pre_ping=True)
 
 # --- Database Setup ---
@@ -333,7 +332,8 @@ def handle_complete_request(data):
                         SET completion_timestamp = :now 
                         WHERE request_id = :request_id;
                     """), {"now": datetime.now(), "request_id": request_id})
-                # The transaction is automatically committed here if no errors occurred
+                    # ADDED: A unique tracer message to confirm this block is running.
+                    print("!!!!!!!!!! DATABASE UPDATE EXECUTED !!!!!!!!!!!")
             
             socketio.emit('remove_request', {'id': request_id})
             
@@ -347,6 +347,3 @@ with app.app_context():
 
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
-
-
-
