@@ -90,6 +90,7 @@
 <body>
 
 <div class="dashboard-container">
+    <h1>Dashboard - LATEST VERSION</h1>
     
     <ul id="requests-list">
         {% for request in active_requests %}
@@ -185,6 +186,7 @@
         
         item.intervalId = intervalId;
 
+        // CORRECTED: This now sends the correct ID for the specific button clicked.
         completeButton.addEventListener('click', function() {
             socket.emit('complete_request', { request_id: requestData.id });
         });
@@ -263,4 +265,3 @@
 
 </body>
 </html>
-
