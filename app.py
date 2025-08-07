@@ -332,8 +332,6 @@ def handle_complete_request(data):
                         SET completion_timestamp = :now 
                         WHERE request_id = :request_id;
                     """), {"now": datetime.now(), "request_id": request_id})
-                    # ADDED: A unique tracer message to confirm this block is running.
-                    print("!!!!!!!!!! DATABASE UPDATE EXECUTED !!!!!!!!!!!")
             
             socketio.emit('remove_request', {'id': request_id})
             
@@ -347,3 +345,4 @@ with app.app_context():
 
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
