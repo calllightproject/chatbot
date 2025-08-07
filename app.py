@@ -17,8 +17,9 @@ from sqlalchemy import create_engine, text
 # --- App Configuration ---
 app = Flask(__name__, template_folder='templates')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-strong-fallback-secret-key-for-local-development")
-# Make this change
+# Corrected SocketIO initialization for CORS
 socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*")
+
 
 # --- Database Configuration ---
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -59,10 +60,10 @@ def setup_database():
     except Exception as e:
         print(f"CRITICAL ERROR during database setup: {e}")
 
-# --- Core Helper Functions ---
-def log_request_to_db(request_id, category, user_input, reply):
-    room = session.get("room_number", "Unknown Room")
-    is_first_baby = session.get("is_first_baby", None)
+# --- Core Helper Functions (Corrected) ---
+
+# CORRECTED: This function now accepts room and is_first_baby as arguments
+def log_request_to_db(request_id, category, user_input, reply, room, is_first_baby):
     try:
         with engine.connect() as connection:
             connection.execute(text("""
@@ -81,7 +82,8 @@ def log_request_to_db(request_id, category, user_input, reply):
     except Exception as e:
         print(f"ERROR logging to database: {e}")
 
-def send_email_alert(subject, body):
+# CORRECTED: This function now accepts room_number as an argument
+def send_email_alert(subject, body, room_number):
     sender_email = os.getenv("EMAIL_USER")
     sender_password = os.getenv("EMAIL_PASSWORD")
     recipient_email = os.getenv("RECIPIENT_EMAIL", "call.light.project@gmail.com")
@@ -89,7 +91,8 @@ def send_email_alert(subject, body):
         print("WARNING: Email credentials not set. Cannot send email.")
         return
     msg = EmailMessage()
-    msg["Subject"] = f"Room {session.get('room_number', 'N/A')} - {subject}"
+    # Use the 'room_number' argument here
+    msg["Subject"] = f"Room {room_number} - {subject}"
     msg["From"] = sender_email
     msg["To"] = recipient_email
     msg.set_content(body)
@@ -100,15 +103,21 @@ def send_email_alert(subject, body):
     except Exception as e:
         print(f"ERROR: Email failed to send: {e}")
 
+# CORRECTED: This function now gets session data BEFORE starting background tasks
 def process_request(role, subject, user_input, reply_message):
     request_id = 'req_' + str(datetime.now().timestamp()).replace('.', '')
     
-    socketio.start_background_task(send_email_alert, subject, user_input)
-    socketio.start_background_task(log_request_to_db, request_id, role, user_input, reply_message)
+    # Get session data BEFORE starting the background task
+    room_number = session.get('room_number', 'N/A')
+    is_first_baby = session.get('is_first_baby')
+
+    # Pass the session data as arguments
+    socketio.start_background_task(send_email_alert, subject, user_input, room_number)
+    socketio.start_background_task(log_request_to_db, request_id, role, user_input, reply_message, room_number, is_first_baby)
     
     socketio.emit('new_request', {
         'id': request_id,
-        'room': session.get('room_number', 'N/A'),
+        'room': room_number,
         'request': user_input,
         'role': role,
         'timestamp': datetime.now().isoformat()
@@ -246,7 +255,6 @@ def dashboard():
     except Exception as e:
         print(f"ERROR fetching active requests: {e}")
     
-    # THIS IS THE FIX: Pass the Python list directly to the template, not a JSON string
     return render_template("dashboard.html", active_requests=active_requests)
 
 @app.route('/analytics')
@@ -304,6 +312,7 @@ def assignments():
 
     return render_template('assignments.html')
 
+# --- SocketIO Event Handlers ---
 @socketio.on('join')
 def on_join(data):
     room = data['room']
@@ -332,18 +341,16 @@ def handle_complete_request(data):
                 """), {"now": datetime.now(), "request_id": request_id})
                 connection.commit()
             
-            # --- THIS IS THE FIX ---
-            # Tell all connected dashboards to remove this item
             socketio.emit('remove_request', {'id': request_id})
             
             print(f"Request {request_id} marked as complete and removal event sent.")
         except Exception as e:
             print(f"ERROR updating completion timestamp: {e}")
 
+# --- App Startup ---
 with app.app_context():
     setup_database()
 
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
-
 
