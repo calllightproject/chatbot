@@ -125,7 +125,14 @@
 <script type="text/javascript">
     var socket = io();
 
-    function attachEventListeners(item, data, requestTime) {
+    function attachEventListeners(item) {
+        const requestData = {
+            id: item.dataset.id,
+            room: item.dataset.room,
+            timestamp: item.dataset.timestamp
+        };
+        const requestTime = new Date(requestData.timestamp);
+
         var ackButton = item.querySelector('.ack-button');
         var omwButton = item.querySelector('.omw-button');
         var deferButton = item.querySelector('.defer-btn');
@@ -134,20 +141,20 @@
         if (!completeButton) return;
 
         ackButton.addEventListener('click', function() {
-            socket.emit('acknowledge_request', { room: data.room, message: "✅ Your request was received and will be addressed shortly." });
+            socket.emit('acknowledge_request', { room: requestData.room, message: "✅ Your request was received and will be addressed shortly." });
             ackButton.disabled = true;
             omwButton.disabled = true;
         });
 
         omwButton.addEventListener('click', function() {
-            socket.emit('acknowledge_request', { room: data.room, message: "✅ A team member is on their way." });
-            ackButton.disabled = true;
+            socket.emit('acknowledge_request', { room: requestData.room, message: "✅ A team member is on their way." });
+            omwButton.disabled = true;
             omwButton.disabled = true;
         });
 
         if (deferButton) {
             deferButton.addEventListener('click', function() {
-                socket.emit('defer_request', { id: item.id });
+                socket.emit('defer_request', { id: requestData.id });
                 deferButton.remove();
             });
         }
@@ -164,9 +171,7 @@
                     timestampSpan.textContent = 'Just now';
                 }
             }
-
             item.classList.remove('wait-level-1', 'wait-level-2', 'wait-level-3');
-
             if (minutes >= 10) {
                 item.classList.add('wait-level-3');
             } else if (minutes >= 5) {
@@ -178,13 +183,12 @@
 
         var intervalId = setInterval(updateTimestampAndColor, 60000);
         updateTimestampAndColor();
+        
+        // Store the interval ID on the element itself so we can clear it later
+        item.intervalId = intervalId;
 
-        // CORRECTED: This now sends the correct ID for the specific button clicked.
         completeButton.addEventListener('click', function() {
-            // Get the ID directly from the parent list item's data attribute.
-            const requestId = item.dataset.id; 
-            socket.emit('complete_request', { request_id: requestId });
-            clearInterval(intervalId);
+            socket.emit('complete_request', { request_id: requestData.id });
         });
     }
 
@@ -195,11 +199,8 @@
         }
 
         var item = document.createElement('li');
-        var requestTime = new Date(data.timestamp);
-
         item.id = data.id;
         item.className = 'request-item ' + data.role;
-        // Also add data attributes for consistency
         item.dataset.id = data.id;
         item.dataset.room = data.room;
         item.dataset.request = data.request;
@@ -212,17 +213,17 @@
         }
 
         item.innerHTML =
-            '<p>' + data.request + '</p>' +
-            '<span>Room: ' + data.room + '</span>' +
-            '<span class="role-span">For: ' + data.role.toUpperCase() + '</span>' +
-            '<span class="timestamp">Just now</span>' +
-            '<button class="ack-button">Acknowledge</button>' +
-            '<button class="omw-button">On my way</button>' +
-            deferButtonHtml +
-            '<button class="complete-btn">Complete</button>';
+            `<p>${data.request}</p>
+             <span>Room: ${data.room}</span>
+             <span class="role-span">For: ${data.role.toUpperCase()}</span>
+             <span class="timestamp">Just now</span>
+             <button class="ack-button">Acknowledge</button>
+             <button class="omw-button">On my way</button>
+             ${deferButtonHtml}
+             <button class="complete-btn">Complete</button>`;
 
         list.prepend(item);
-        attachEventListeners(item, data, requestTime);
+        attachEventListeners(item);
     }
 
     socket.on('new_request', function(data) {
@@ -233,6 +234,10 @@
         const requestId = data.id;
         const requestElement = document.getElementById(requestId);
         if (requestElement) {
+            // Clear the interval timer to prevent memory leaks
+            if (requestElement.intervalId) {
+                clearInterval(requestElement.intervalId);
+            }
             requestElement.style.opacity = '0';
             setTimeout(() => {
                 requestElement.remove();
@@ -253,18 +258,8 @@
 
     document.addEventListener('DOMContentLoaded', function() {
         const initialRequestItems = document.querySelectorAll('#requests-list .request-item');
-        
         initialRequestItems.forEach(function(item) {
-            const requestData = {
-                id: item.dataset.id,
-                room: item.dataset.room,
-                request: item.dataset.request,
-                role: item.dataset.role,
-                timestamp: item.dataset.timestamp
-            };
-            const requestTime = new Date(requestData.timestamp);
-            
-            attachEventListeners(item, requestData, requestTime);
+            attachEventListeners(item);
         });
     });
 </script>
