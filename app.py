@@ -169,13 +169,18 @@ def defer(data):
 
 @socketio.on("complete_request")
 def complete(data):
-    try:
-        with engine.begin() as connection:
-            connection.execute(text("""
-                UPDATE requests SET completion_timestamp = :now WHERE request_id = :rid
-            """), {"now": datetime.now(), "rid": data["request_id"]})
-    except Exception as e:
-        print(f"[COMPLETE ERROR] {e}")
+    def mark_complete():
+        try:
+            with engine.begin() as connection:
+                connection.execute(text("""
+                    UPDATE requests SET completion_timestamp = :now WHERE request_id = :rid
+                """), {"now": datetime.now(), "rid": data["request_id"]})
+            socketio.emit("remove_request", {"request_id": data["request_id"]})
+        except Exception as e:
+            print(f"[COMPLETE ERROR] {e}")
+
+    socketio.start_background_task(mark_complete)
+
 
 # --- Init ---
 with app.app_context():
@@ -183,3 +188,4 @@ with app.app_context():
 
 if __name__ == "__main__":
     socketio.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
+
