@@ -3,135 +3,235 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Call Light Dashboard</title>
+    <title>Real-Time Request Dashboard</title>
     <style>
-        body { font-family: sans-serif; background-color: #f4f4f9; color: #333; margin: 0; padding: 20px; }
-        h1 { text-align: center; color: #4a4a4a; }
-        #requests-container { display: flex; flex-direction: column; align-items: center; gap: 15px; }
-        .request-card { background-color: white; border-left: 5px solid #007bff; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); padding: 15px; width: 80%; max-width: 600px; transition: opacity 0.5s; }
-        .request-card.nurse { border-left-color: #dc3545; }
-        .request-card.cna { border-left-color: #28a745; }
-        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .room-number { font-size: 1.5em; font-weight: bold; }
-        .timestamp { font-size: 0.9em; color: #6c757d; }
-        .request-body { font-size: 1.1em; margin-bottom: 15px; }
-        .complete-btn { background-color: #28a745; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; float: right; }
-        .complete-btn:hover { background-color: #218838; }
+        :root {
+            --core-blue: #00205b;
+            --accent-blue: #007eb4;
+            --neutral-gray-text: #303235;
+            --light-gray-background: #f5f5f5;
+            --white: #ffffff;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            padding: 20px;
+            background-color: var(--light-gray-background);
+            color: var(--neutral-gray-text);
+        }
+        .dashboard-container {
+            max-width: 900px;
+            margin: 20px auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: var(--core-blue);
+            text-align: center;
+        }
+        #requests-list {
+            list-style-type: none;
+            padding: 0;
+        }
+        .request-item {
+            display: flex;
+            align-items: center;
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            background-color: #fff;
+            gap: 15px;
+            transition: background-color 0.5s ease, opacity 0.5s ease; /* Added opacity transition */
+        }
+        .request-item.cna { border-left: 5px solid var(--accent-blue); }
+        .request-item.nurse { border-left: 5px solid #d43f27; }
+        .request-item p {
+            margin: 0;
+            font-size: 1.1em;
+            flex-grow: 1;
+        }
+        .request-item span {
+            font-size: 0.9em;
+            color: #555;
+            white-space: nowrap;
+        }
+        .request-item button {
+            padding: 8px 12px;
+            border: none;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: opacity 0.3s;
+        }
+        .ack-button { background-color: #ffc107; color: black; }
+        .omw-button { background-color: #28a745; }
+        .complete-btn { background-color: #6c757d; }
+        .defer-btn { background-color: #17a2b8; }
+        .request-item button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+        }
+        .footer a {
+            color: var(--accent-blue);
+            text-decoration: none;
+        }
+        .wait-level-1 { background-color: #d4edda; }
+        .wait-level-2 { background-color: #fff3cd; }
+        .wait-level-3 { background-color: #f8d7da; }
     </style>
 </head>
 <body>
 
-    <h1>Active Requests</h1>
-    <div id="requests-container">
-        {% for request in active_requests %}
-            <div class="request-card {{ request.role }}" id="{{ request.id }}">
-                <div class="card-header">
-                    <span class="room-number">Room: {{ request.room }}</span>
-                    <span class="timestamp" data-timestamp="{{ request.timestamp }}"></span>
-                </div>
-                <p class="request-body">{{ request.request }}</p>
-                <button class="complete-btn" data-id="{{ request.id }}">Complete</button>
-            </div>
-        {% endfor %}
+<div class="dashboard-container">
+    <h1>Real-Time Request Dashboard</h1>
+    <ul id="requests-list"></ul>
+    <div class="footer">
+        <a href="{{ url_for('analytics') }}">View Analytics Dashboard</a>
     </div>
+</div>
 
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script type="text/javascript">
+    var socket = io();
 
-    <script>
-        // Establish connection to the server
-        const socket = io();
-
-        // Function to calculate and display "time ago"
-        function updateTimestamps() {
-            document.querySelectorAll('.timestamp').forEach(span => {
-                const timestamp = new Date(span.dataset.timestamp);
-                const now = new Date();
-                const seconds = Math.floor((now - timestamp) / 1000);
-                let interval = seconds / 31536000;
-                if (interval > 1) {
-                    span.textContent = Math.floor(interval) + " years ago";
-                    return;
-                }
-                interval = seconds / 2592000;
-                if (interval > 1) {
-                    span.textContent = Math.floor(interval) + " months ago";
-                    return;
-                }
-                interval = seconds / 86400;
-                if (interval > 1) {
-                    span.textContent = Math.floor(interval) + " days ago";
-                    return;
-                }
-                interval = seconds / 3600;
-                if (interval > 1) {
-                    span.textContent = Math.floor(interval) + " hours ago";
-                    return;
-                }
-                interval = seconds / 60;
-                if (interval > 1) {
-                    span.textContent = Math.floor(interval) + " minutes ago";
-                    return;
-                }
-                span.textContent = Math.floor(seconds) + " seconds ago";
-            });
+    function addRequestToDashboard(data) {
+        var list = document.getElementById('requests-list');
+        if (document.getElementById(data.id)) {
+            return;
         }
+
+        var item = document.createElement('li');
+        var requestTime = new Date(data.timestamp);
+
+        item.id = data.id;
+        item.className = 'request-item ' + data.role;
+
+        var deferButtonHtml = '';
+        if (data.role === 'cna') {
+            deferButtonHtml = '<button class="defer-btn">Defer to Nurse</button>';
+        }
+
+        item.innerHTML =
+            '<p>' + data.request + '</p>' +
+            '<span>Room: ' + data.room + '</span>' +
+            '<span class="role-span">For: ' + data.role.toUpperCase() + '</span>' +
+            '<span class="timestamp">Just now</span>' +
+            '<button class="ack-button">Acknowledge</button>' +
+            '<button class="omw-button">On my way</button>' +
+            deferButtonHtml +
+            '<button class="complete-btn">Complete</button>';
+
+        list.prepend(item);
+
+        var ackButton = item.querySelector('.ack-button');
+        var omwButton = item.querySelector('.omw-button');
+        var deferButton = item.querySelector('.defer-btn');
+        var completeButton = item.querySelector('.complete-btn');
         
-        // --- Event Listener for new requests ---
-        socket.on('new_request', function(data) {
-            const container = document.getElementById('requests-container');
-            const card = document.createElement('div');
-            card.className = `request-card ${data.role}`;
-            // Also apply the unique ID to new requests that arrive in real-time
-            card.id = data.id; 
-            
-            card.innerHTML = `
-                <div class="card-header">
-                    <span class="room-number">Room: ${data.room}</span>
-                    <span class="timestamp" data-timestamp="${data.timestamp}">Just now</span>
-                </div>
-                <p class="request-body">${data.request}</p>
-                <button class="complete-btn" data-id="${data.id}">Complete</button>
-            `;
-            container.prepend(card);
-            // Re-attach event listener to the new button
-            addClickListener(card.querySelector('.complete-btn'));
+        ackButton.addEventListener('click', function() {
+            socket.emit('acknowledge_request', { room: data.room, message: "✅ Your request was received and will be addressed shortly." });
+            ackButton.disabled = true;
+            omwButton.disabled = true;
         });
 
-        /*
-          CHANGE #2: Added this new event listener.
-          It listens for the 'remove_request' event sent by the server.
-        */
-        socket.on('remove_request', function(data) {
-            const requestId = data.id;
-            console.log(`Received command to remove request: ${requestId}`); // For debugging
+        omwButton.addEventListener('click', function() {
+            socket.emit('acknowledge_request', { room: data.room, message: "✅ A team member is on their way." });
+            ackButton.disabled = true;
+            omwButton.disabled = true;
+        });
+
+        if (deferButton) {
+            deferButton.addEventListener('click', function() {
+                socket.emit('defer_request', { id: item.id });
+                deferButton.remove();
+            });
+        }
+
+        function updateTimestampAndColor() {
+            var now = new Date();
+            var minutes = Math.round((now - requestTime) / 60000);
+            var timestampSpan = item.querySelector('.timestamp');
             
-            const requestElement = document.getElementById(requestId);
-            if (requestElement) {
-                // Fade out and then remove the element for a smooth effect
-                requestElement.style.opacity = '0';
-                setTimeout(() => requestElement.remove(), 500);
+            if (timestampSpan) {
+                if (minutes > 0) {
+                    timestampSpan.textContent = String(minutes) + 'm ago';
+                } else {
+                    timestampSpan.textContent = 'Just now';
+                }
             }
-        });
-        
-        // Function to add a click listener to a button
-        function addClickListener(button) {
-             button.addEventListener('click', function() {
-                const requestId = this.getAttribute('data-id');
-                // When a "complete" button is clicked, tell the server.
-                socket.emit('complete_request', { 'request_id': requestId });
-            });
+
+            item.classList.remove('wait-level-1', 'wait-level-2', 'wait-level-3');
+
+            if (minutes >= 10) {
+                item.classList.add('wait-level-3');
+            } else if (minutes >= 5) {
+                item.classList.add('wait-level-2');
+            } else {
+                item.classList.add('wait-level-1');
+            }
         }
 
-        // --- Initial Setup ---
-        // Add listeners to all buttons that were loaded with the page
-        document.querySelectorAll('.complete-btn').forEach(button => {
-            addClickListener(button);
-        });
+        var intervalId = setInterval(updateTimestampAndColor, 60000);
+        updateTimestampAndColor();
 
-        // Update timestamps on page load and then every 30 seconds
-        updateTimestamps();
-        setInterval(updateTimestamps, 30000);
-    </script>
+        // --- CHANGE #1: The 'Complete' button now ONLY tells the server it's complete.
+        // It no longer removes the item from the page itself.
+        completeButton.addEventListener('click', function() {
+            socket.emit('complete_request', { request_id: data.id });
+            clearInterval(intervalId);
+            // The item.remove() line that was here has been DELETED.
+        });
+    }
+
+    socket.on('new_request', function(data) {
+        addRequestToDashboard(data);
+    });
+    
+    // --- CHANGE #2: Added this new listener. It waits for the server's confirmation
+    // before removing the item from the dashboard. This is the fix.
+    socket.on('remove_request', function(data) {
+        const requestId = data.id;
+        const requestElement = document.getElementById(requestId);
+        if (requestElement) {
+            // Optional: Add a fade-out effect for a smoother UI
+            requestElement.style.opacity = '0';
+            setTimeout(() => {
+                requestElement.remove();
+            }, 500); // 500ms matches the CSS transition
+        }
+    });
+
+    socket.on('request_deferred', function(data) {
+        var itemToUpdate = document.getElementById(data.id);
+        if (itemToUpdate) {
+            itemToUpdate.className = 'request-item nurse';
+            var roleSpan = itemToUpdate.querySelector('.role-span');
+            if (roleSpan) {
+                roleSpan.textContent = 'For: NURSE';
+            }
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+        try {
+            var activeRequests = {{ active_requests | tojson | safe }};
+            if (activeRequests && activeRequests.length > 0) {
+                activeRequests.reverse().forEach(function(requestData) {
+                    addRequestToDashboard(requestData);
+                });
+            }
+        } catch (e) {
+            console.error("Could not parse or render active requests:", e);
+        }
+    });
+</script>
 
 </body>
 </html>
