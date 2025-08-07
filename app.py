@@ -324,19 +324,25 @@ def handle_defer_request(data):
 def handle_complete_request(data):
     request_id = data.get('request_id')
     if request_id:
+        print(f"!!!!!!!!!! RECEIVED 'complete_request' FOR ID: {request_id} !!!!!!!!!!!")
         try:
             with engine.connect() as connection:
-                with connection.begin(): # Start a transaction
+                # Use an explicit transaction to guarantee the commit
+                trans = connection.begin()
+                try:
                     connection.execute(text("""
                         UPDATE requests 
                         SET completion_timestamp = :now 
                         WHERE request_id = :request_id;
                     """), {"now": datetime.now(), "request_id": request_id})
                     
-                    # ADDED: Read-after-write check
-                    result = connection.execute(text("SELECT completion_timestamp FROM requests WHERE request_id = :request_id"), {"request_id": request_id})
-                    timestamp = result.scalar()
-                    print(f"!!!!!!!!!! READ-AFTER-WRITE CHECK: Timestamp is {timestamp} !!!!!!!!!!!")
+                    trans.commit() # Explicitly commit the change
+                    print("!!!!!!!!!! TRANSACTION COMMITTED SUCCESSFULLY !!!!!!!!!!!")
+
+                except Exception as e:
+                    print(f"!!!!!!!!!! ERROR DURING TRANSACTION, ROLLING BACK: {e} !!!!!!!!!!!")
+                    trans.rollback()
+                    raise # Re-raise the exception after rolling back
 
             socketio.emit('remove_request', {'id': request_id})
             print(f"Request {request_id} marked as complete and removal event sent.")
