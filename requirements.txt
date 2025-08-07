@@ -3,5 +3,6 @@ Flask-SocketIO==5.3.6
 SQLAlchemy==2.0.23
 psycopg2-binary==2.9.9
 gunicorn==21.2.0
-eventlet==0.33.3
+eventlet==0.35.2      # <-- UPDATED to a newer version
 requests==2.31.0
+setuptools==69.0.3    # <-- ADDED for compatibility
