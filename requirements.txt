@@ -1,7 +1,7 @@
-Flask
-Flask-SocketIO
-SQLAlchemy
-psycopg2-binary
-gunicorn
-eventlet
-requests
+Flask==2.3.3
+Flask-SocketIO==5.3.6
+SQLAlchemy==2.0.23
+psycopg2-binary==2.9.9
+gunicorn==21.2.0
+eventlet==0.33.3
+requests==2.31.0
