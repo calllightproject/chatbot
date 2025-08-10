@@ -20,6 +20,11 @@ app = Flask(__name__, template_folder='templates')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-strong-fallback-secret-key-for-local-development")
 socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*")
 
+# --- Master Data Lists ---
+# In a larger application, these would come from a database.
+ALL_ROOMS = ['201', '202', '203', '204', '205', '206']
+ALL_NURSES = ['Nurse Jackie', 'Nurse Carol', 'Nurse John', 'Nurse Maria']
+
 
 # --- Database Configuration ---
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -69,7 +74,7 @@ def setup_database():
     except Exception as e:
         print(f"CRITICAL ERROR during database setup: {e}")
 
-# --- Core Helper Functions ---
+# --- Core Helper Functions (no changes here) ---
 def log_request_to_db(request_id, category, user_input, reply, room, is_first_baby):
     try:
         with engine.connect() as connection:
@@ -78,13 +83,8 @@ def log_request_to_db(request_id, category, user_input, reply, room, is_first_ba
                     INSERT INTO requests (request_id, timestamp, room, category, user_input, reply, is_first_baby)
                     VALUES (:request_id, :timestamp, :room, :category, :user_input, :reply, :is_first_baby);
                 """), {
-                    "request_id": request_id,
-                    "timestamp": datetime.now(timezone.utc),
-                    "room": room,
-                    "category": category,
-                    "user_input": user_input,
-                    "reply": reply,
-                    "is_first_baby": is_first_baby
+                    "request_id": request_id, "timestamp": datetime.now(timezone.utc), "room": room,
+                    "category": category, "user_input": user_input, "reply": reply, "is_first_baby": is_first_baby
                 })
     except Exception as e:
         print(f"ERROR logging to database: {e}")
@@ -112,16 +112,11 @@ def process_request(role, subject, user_input, reply_message):
     request_id = 'req_' + str(datetime.now(timezone.utc).timestamp()).replace('.', '')
     room_number = session.get('room_number', 'N/A')
     is_first_baby = session.get('is_first_baby')
-
     socketio.start_background_task(send_email_alert, subject, user_input, room_number)
     socketio.start_background_task(log_request_to_db, request_id, role, user_input, reply_message, room_number, is_first_baby)
-    
     socketio.emit('new_request', {
-        'id': request_id,
-        'room': room_number,
-        'request': user_input,
-        'role': role,
-        'timestamp': datetime.now(timezone.utc).isoformat()
+        'id': request_id, 'room': room_number, 'request': user_input,
+        'role': role, 'timestamp': datetime.now(timezone.utc).isoformat()
     })
     return reply_message
 
@@ -145,51 +140,42 @@ def language_selector():
     if request.method == "POST":
         session["language"] = request.form.get("language")
         pathway = session.get("pathway", "standard")
-        
         if pathway == "bereavement":
             session["is_first_baby"] = None
             return redirect(url_for("handle_chat"))
         else:
             return redirect(url_for("demographics"))
-            
     return render_template("language.html")
 
 @app.route("/demographics", methods=["GET", "POST"])
 def demographics():
     lang = session.get("language", "en")
     config_module_name = f"button_config_{lang}"
-    
     try:
         button_config = importlib.import_module(config_module_name)
         button_data = button_config.button_data
     except (ImportError, AttributeError):
         return "Error: Language configuration file is missing or invalid."
-
     if request.method == "POST":
         is_first_baby_response = request.form.get("is_first_baby")
         session["is_first_baby"] = True if is_first_baby_response == 'yes' else False
         return redirect(url_for("handle_chat"))
-
     question_text = button_data.get("demographic_question", "Is this your first baby?")
     yes_text = button_data.get("demographic_yes", "Yes")
     no_text = button_data.get("demographic_no", "No")
-    
     return render_template("demographics.html", question_text=question_text, yes_text=yes_text, no_text=no_text)
 
 @app.route("/chat", methods=["GET", "POST"])
 def handle_chat():
     pathway = session.get("pathway", "standard")
     lang = session.get("language", "en")
-    
     config_module_name = f"button_config_bereavement_{lang}" if pathway == "bereavement" else f"button_config_{lang}"
-    
     try:
         button_config = importlib.import_module(config_module_name)
         button_data = button_config.button_data
     except (ImportError, AttributeError) as e:
         print(f"ERROR: Could not load configuration module '{config_module_name}'. Error: {e}")
         return f"Error: Configuration file '{config_module_name}.py' is missing or invalid. Please contact support."
-
     if request.method == 'POST':
         if request.form.get("action") == "send_note":
             note_text = request.form.get("custom_note")
@@ -198,22 +184,18 @@ def handle_chat():
             else:
                 reply = "Please type a message in the box."
             return render_template("chat.html", reply=reply, options=button_data["main_buttons"], button_data=button_data)
-        
         user_input = request.form.get("user_input", "").strip()
         if user_input == button_data.get("back_text", "⬅ Back"):
             return redirect(url_for('handle_chat'))
-
         if user_input in button_data:
             button_info = button_data[user_input]
             reply = button_info.get("question") or button_info.get("note", "")
             options = button_info.get("options", [])
-            
             back_text = button_data.get("back_text", "⬅ Back")
             if options and back_text not in options:
                 options.append(back_text)
             elif not options:
                 options = button_data["main_buttons"]
-
             if "action" in button_info:
                 action = button_info["action"]
                 role = "cna" if action == "Notify CNA" else "nurse"
@@ -224,9 +206,7 @@ def handle_chat():
         else:
             reply = "I'm sorry, I didn't understand that. Please use the buttons provided."
             options = button_data["main_buttons"]
-
         return render_template("chat.html", reply=reply, options=options, button_data=button_data)
-
     return render_template("chat.html", reply=button_data["greeting"], options=button_data["main_buttons"], button_data=button_data)
 
 @app.route("/reset-language")
@@ -239,132 +219,99 @@ def dashboard():
     active_requests = []
     try:
         with engine.connect() as connection:
-            result = connection.execute(text("""
-                SELECT request_id, room, user_input, category as role, timestamp
-                FROM requests 
-                WHERE completion_timestamp IS NULL 
-                ORDER BY timestamp DESC;
-            """))
+            result = connection.execute(text("SELECT request_id, room, user_input, category as role, timestamp FROM requests WHERE completion_timestamp IS NULL ORDER BY timestamp DESC;"))
             for row in result:
                 active_requests.append({
-                    'id': row.request_id,
-                    'room': row.room,
-                    'request': row.user_input,
-                    'role': row.role,
-                    'timestamp': row.timestamp.isoformat()
+                    'id': row.request_id, 'room': row.room, 'request': row.user_input,
+                    'role': row.role, 'timestamp': row.timestamp.isoformat()
                 })
     except Exception as e:
         print(f"ERROR fetching active requests: {e}")
-    
     return render_template("dashboard.html", active_requests=active_requests)
 
 @app.route('/analytics')
 def analytics():
-    # Initialize all variables
     avg_response_time = "N/A"
     top_categories_labels, top_categories_values = [], []
     most_requested_labels, most_requested_values = [], []
     requests_by_hour_labels, requests_by_hour_values = [], []
     first_baby_labels, first_baby_values = [], []
     multi_baby_labels, multi_baby_values = [], []
-
     try:
         with engine.connect() as connection:
-            # --- Average Response Time ---
-            avg_time_result = connection.execute(text("""
-                SELECT AVG(EXTRACT(EPOCH FROM (completion_timestamp - timestamp))) as avg_seconds
-                FROM requests
-                WHERE completion_timestamp IS NOT NULL;
-            """)).scalar_one_or_none()
+            avg_time_result = connection.execute(text("SELECT AVG(EXTRACT(EPOCH FROM (completion_timestamp - timestamp))) as avg_seconds FROM requests WHERE completion_timestamp IS NOT NULL;")).scalar_one_or_none()
             if avg_time_result is not None:
-                total_seconds = int(avg_time_result)
-                minutes, seconds = divmod(total_seconds, 60)
+                minutes, seconds = divmod(int(avg_time_result), 60)
                 avg_response_time = f"{minutes}m {seconds}s"
-
-            # --- Top Request Categories ---
             top_categories_result = connection.execute(text("SELECT category, COUNT(id) FROM requests GROUP BY category ORDER BY COUNT(id) DESC;")).fetchall()
             top_categories_labels = [row[0] for row in top_categories_result]
             top_categories_values = [row[1] for row in top_categories_result]
-
-            # --- Top 5 Most Requested Items (Overall) ---
             most_requested_result = connection.execute(text("SELECT user_input, COUNT(id) as count FROM requests GROUP BY user_input ORDER BY count DESC LIMIT 5;")).fetchall()
             most_requested_labels = [row[0] for row in most_requested_result]
             most_requested_values = [row[1] for row in most_requested_result]
-
-            # --- Requests by Hour ---
             requests_by_hour_result = connection.execute(text("SELECT EXTRACT(HOUR FROM timestamp) as hour, COUNT(id) FROM requests GROUP BY hour ORDER BY hour;")).fetchall()
             hourly_counts = defaultdict(int)
             for hour, count in requests_by_hour_result:
                 hourly_counts[int(hour)] = count
             requests_by_hour_labels = [f"{h}:00" for h in range(24)]
             requests_by_hour_values = [hourly_counts[h] for h in range(24)]
-
-            # --- NEW: Top Requests for First-Time Parents ---
-            first_baby_result = connection.execute(text("""
-                SELECT user_input, COUNT(id) as count FROM requests
-                WHERE is_first_baby IS TRUE
-                GROUP BY user_input ORDER BY count DESC LIMIT 5;
-            """)).fetchall()
+            first_baby_result = connection.execute(text("SELECT user_input, COUNT(id) as count FROM requests WHERE is_first_baby IS TRUE GROUP BY user_input ORDER BY count DESC LIMIT 5;")).fetchall()
             first_baby_labels = [row[0] for row in first_baby_result]
             first_baby_values = [row[1] for row in first_baby_result]
-
-            # --- NEW: Top Requests for Multiparous Parents ---
-            multi_baby_result = connection.execute(text("""
-                SELECT user_input, COUNT(id) as count FROM requests
-                WHERE is_first_baby IS FALSE
-                GROUP BY user_input ORDER BY count DESC LIMIT 5;
-            """)).fetchall()
+            multi_baby_result = connection.execute(text("SELECT user_input, COUNT(id) as count FROM requests WHERE is_first_baby IS FALSE GROUP BY user_input ORDER BY count DESC LIMIT 5;")).fetchall()
             multi_baby_labels = [row[0] for row in multi_baby_result]
             multi_baby_values = [row[1] for row in multi_baby_result]
-
     except Exception as e:
         print(f"ERROR fetching analytics data: {e}")
-
     return render_template(
-        'analytics.html',
-        avg_response_time=avg_response_time,
-        top_requests_labels=json.dumps(top_categories_labels),
-        top_requests_values=json.dumps(top_categories_values),
-        most_requested_labels=json.dumps(most_requested_labels),
-        most_requested_values=json.dumps(most_requested_values),
-        requests_by_hour_labels=json.dumps(requests_by_hour_labels),
-        requests_by_hour_values=json.dumps(requests_by_hour_values),
-        first_baby_labels=json.dumps(first_baby_labels),
-        first_baby_values=json.dumps(first_baby_values),
-        multi_baby_labels=json.dumps(multi_baby_labels),
-        multi_baby_values=json.dumps(multi_baby_values)
+        'analytics.html', avg_response_time=avg_response_time,
+        top_requests_labels=json.dumps(top_categories_labels), top_requests_values=json.dumps(top_categories_values),
+        most_requested_labels=json.dumps(most_requested_labels), most_requested_values=json.dumps(most_requested_values),
+        requests_by_hour_labels=json.dumps(requests_by_hour_labels), requests_by_hour_values=json.dumps(requests_by_hour_values),
+        first_baby_labels=json.dumps(first_baby_labels), first_baby_values=json.dumps(first_baby_values),
+        multi_baby_labels=json.dumps(multi_baby_labels), multi_baby_values=json.dumps(multi_baby_values)
     )
     
+# MODIFIED: This route now fetches current assignments and passes all necessary data to the template.
 @app.route('/assignments', methods=['GET', 'POST'])
 def assignments():
+    today = date.today()
     if request.method == 'POST':
-        today = date.today()
         try:
             with engine.connect() as connection:
                 with connection.begin():
-                    for key, nurse_name in request.form.items():
-                        if key.startswith('nurse_for_room_'):
-                            room_number = key.replace('nurse_for_room_', '')
-                            if nurse_name and nurse_name != 'unassigned':
-                                connection.execute(text("""
-                                    INSERT INTO assignments (assignment_date, room_number, nurse_name)
-                                    VALUES (:date, :room, :nurse)
-                                    ON CONFLICT (assignment_date, room_number)
-                                    DO UPDATE SET nurse_name = EXCLUDED.nurse_name;
-                                """), {"date": today, "room": room_number, "nurse": nurse_name})
-                            else:
-                                connection.execute(text("""
-                                    DELETE FROM assignments 
-                                    WHERE assignment_date = :date AND room_number = :room;
-                                """), {"date": today, "room": room_number})
+                    for room_number in ALL_ROOMS:
+                        nurse_name = request.form.get(f'nurse_for_room_{room_number}')
+                        if nurse_name and nurse_name != 'unassigned':
+                            connection.execute(text("""
+                                INSERT INTO assignments (assignment_date, room_number, nurse_name)
+                                VALUES (:date, :room, :nurse)
+                                ON CONFLICT (assignment_date, room_number)
+                                DO UPDATE SET nurse_name = EXCLUDED.nurse_name;
+                            """), {"date": today, "room": room_number, "nurse": nurse_name})
+                        else:
+                            connection.execute(text("""
+                                DELETE FROM assignments 
+                                WHERE assignment_date = :date AND room_number = :room;
+                            """), {"date": today, "room": room_number})
             print("Assignments saved successfully.")
         except Exception as e:
             print(f"ERROR saving assignments: {e}")
         return redirect(url_for('dashboard'))
 
-    return render_template('assignments.html')
+    # For a GET request, fetch the current assignments for today
+    current_assignments = {}
+    try:
+        with engine.connect() as connection:
+            result = connection.execute(text("SELECT room_number, nurse_name FROM assignments WHERE assignment_date = :date;"), {"date": today})
+            for row in result:
+                current_assignments[row.room_number] = row.nurse_name
+    except Exception as e:
+        print(f"ERROR fetching assignments: {e}")
 
-# --- SocketIO Event Handlers ---
+    return render_template('assignments.html', rooms=ALL_ROOMS, nurses=ALL_NURSES, assignments=current_assignments)
+
+# --- SocketIO Event Handlers (no changes here) ---
 @socketio.on('join')
 def on_join(data):
     room = data['room']
@@ -379,31 +326,20 @@ def handle_acknowledge(data):
 @socketio.on('defer_request')
 def handle_defer_request(data):
     request_id = data.get('id')
-    if not request_id:
-        return
-
+    if not request_id: return
     now_utc = datetime.now(timezone.utc)
     new_timestamp_iso = now_utc.isoformat()
-
     try:
         with engine.connect() as connection:
             with connection.begin():
                 connection.execute(text("""
-                    UPDATE requests
-                    SET
-                        category = 'nurse',
-                        timestamp = :now,
-                        deferral_timestamp = :now
+                    UPDATE requests SET category = 'nurse', timestamp = :now, deferral_timestamp = :now
                     WHERE request_id = :request_id;
                 """), {"now": now_utc, "request_id": request_id})
-
         socketio.emit('request_updated', {
-            'id': request_id,
-            'new_role': 'nurse',
-            'new_timestamp': new_timestamp_iso
+            'id': request_id, 'new_role': 'nurse', 'new_timestamp': new_timestamp_iso
         })
         print(f"Request {request_id} deferred to nurse.")
-
     except Exception as e:
         print(f"ERROR deferring request {request_id}: {e}")
 
@@ -415,11 +351,7 @@ def handle_complete_request(data):
             with engine.connect() as connection:
                 trans = connection.begin()
                 try:
-                    connection.execute(text("""
-                        UPDATE requests 
-                        SET completion_timestamp = :now 
-                        WHERE request_id = :request_id;
-                    """), {"now": datetime.now(timezone.utc), "request_id": request_id})
+                    connection.execute(text("UPDATE requests SET completion_timestamp = :now WHERE request_id = :request_id;"), {"now": datetime.now(timezone.utc), "request_id": request_id})
                     trans.commit()
                 except Exception as e:
                     trans.rollback()
