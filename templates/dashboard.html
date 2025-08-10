@@ -156,35 +156,34 @@
 
     // --- FINAL FIX: This function is now fully robust and self-contained ---
     function attachEventListeners(item) {
-        // Use event delegation on the item itself for all buttons
+        // Use a single click listener for the entire item for efficiency.
         item.addEventListener('click', function(event) {
-            const target = event.target; // The actual button that was clicked
+            const buttonClicked = event.target;
+            
+            // Ensure the click was on a button, not the list item itself.
+            if (buttonClicked.tagName !== 'BUTTON') return;
 
-            // Find the parent list item, just in case
-            const parentItem = target.closest('.request-item');
+            const parentItem = buttonClicked.closest('.request-item');
             if (!parentItem) return;
 
             const requestId = parentItem.dataset.id;
             const room = parentItem.dataset.room;
 
-            if (target.classList.contains('ack-button')) {
-                console.log(`Acknowledge clicked for ${requestId}`);
+            if (buttonClicked.classList.contains('ack-button')) {
+                // Directly disable the buttons on the correct parent item.
                 parentItem.querySelector('.ack-button').disabled = true;
                 parentItem.querySelector('.omw-button').disabled = true;
                 socket.emit('acknowledge_request', { room: room, message: "✅ Your request was received and will be addressed shortly." });
             } 
-            else if (target.classList.contains('omw-button')) {
-                console.log(`On My Way clicked for ${requestId}`);
+            else if (buttonClicked.classList.contains('omw-button')) {
                 parentItem.querySelector('.ack-button').disabled = true;
                 parentItem.querySelector('.omw-button').disabled = true;
                 socket.emit('acknowledge_request', { room: room, message: "✅ A team member is on their way." });
             } 
-            else if (target.classList.contains('defer-btn')) {
-                console.log(`Defer clicked for ${requestId}`);
+            else if (buttonClicked.classList.contains('defer-btn')) {
                 socket.emit('defer_request', { id: requestId });
             } 
-            else if (target.classList.contains('complete-btn')) {
-                console.log(`Complete clicked for ${requestId}`);
+            else if (buttonClicked.classList.contains('complete-btn')) {
                 if (parentItem.intervalId) {
                     clearInterval(parentItem.intervalId);
                 }
