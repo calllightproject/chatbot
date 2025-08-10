@@ -18,10 +18,11 @@ from sqlalchemy.exc import ProgrammingError
 # --- App Configuration ---
 app = Flask(__name__, template_folder='templates')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-strong-fallback-secret-key-for-local-development")
-socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*", manage_session=False)
+# MODIFIED: Added ping/timeout settings for connection stability on Render
+socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*", manage_session=False, ping_timeout=20, ping_interval=10)
 
 # --- Master Data Lists ---
-ALL_ROOMS = ['301', '302', '303', '304', '305', '306', '307', '308', '309', '310', '311', '312']
+ALL_ROOMS = [str(room) for room in range(231, 261)]
 ALL_NURSES = ['Jackie', 'Carol', 'John', 'Maria', 'David', 'Susan', 'Peter', 'Linda']
 
 
@@ -211,7 +212,6 @@ def handle_chat():
             reply = "I'm sorry, I didn't understand that. Please use the buttons provided."
             options = button_data["main_buttons"]
         
-        # THIS IS THE FIX: This line was incorrectly indented inside the 'else' block.
         return render_template("chat.html", reply=reply, options=options, button_data=button_data)
 
     return render_template("chat.html", reply=button_data["greeting"], options=button_data["main_buttons"], button_data=button_data)
