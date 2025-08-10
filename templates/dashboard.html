@@ -154,57 +154,45 @@
         updateTimestampAndColor();
     }
 
-    // --- CORRECTED: This function is now more robust ---
+    // --- FINAL FIX: This function is now fully robust and self-contained ---
     function attachEventListeners(item) {
-        const ackButton = item.querySelector('.ack-button');
-        const omwButton = item.querySelector('.omw-button');
-        const deferButton = item.querySelector('.defer-btn');
-        const completeButton = item.querySelector('.complete-btn');
-        
-        if (!ackButton || !omwButton || !completeButton) {
-            console.error(`CRITICAL ERROR: Could not find one or more essential buttons for item: ${item.id}`);
-            return;
-        }
+        // Use event delegation on the item itself for all buttons
+        item.addEventListener('click', function(event) {
+            const target = event.target; // The actual button that was clicked
 
-        ackButton.addEventListener('click', function(event) {
-            const clickedItem = event.target.closest('.request-item');
-            if (!clickedItem) return;
+            // Find the parent list item, just in case
+            const parentItem = target.closest('.request-item');
+            if (!parentItem) return;
 
-            const thisAckButton = clickedItem.querySelector('.ack-button');
-            const thisOmwButton = clickedItem.querySelector('.omw-button');
+            const requestId = parentItem.dataset.id;
+            const room = parentItem.dataset.room;
 
-            if(thisAckButton) thisAckButton.disabled = true;
-            if(thisOmwButton) thisOmwButton.disabled = true;
-            
-            socket.emit('acknowledge_request', { room: clickedItem.dataset.room, message: "✅ Your request was received and will be addressed shortly." });
-        });
-
-        omwButton.addEventListener('click', function(event) {
-            const clickedItem = event.target.closest('.request-item');
-            if (!clickedItem) return;
-
-            const thisAckButton = clickedItem.querySelector('.ack-button');
-            const thisOmwButton = clickedItem.querySelector('.omw-button');
-
-            if(thisOmwButton) thisOmwButton.disabled = true;
-            if(thisAckButton) thisAckButton.disabled = true;
-
-            socket.emit('acknowledge_request', { room: clickedItem.dataset.room, message: "✅ A team member is on their way." });
-        });
-
-        if (deferButton) {
-            deferButton.addEventListener('click', function() {
-                socket.emit('defer_request', { id: item.dataset.id });
-            });
-        }
-
-        completeButton.addEventListener('click', function() {
-            if (item.intervalId) {
-                clearInterval(item.intervalId);
+            if (target.classList.contains('ack-button')) {
+                console.log(`Acknowledge clicked for ${requestId}`);
+                parentItem.querySelector('.ack-button').disabled = true;
+                parentItem.querySelector('.omw-button').disabled = true;
+                socket.emit('acknowledge_request', { room: room, message: "✅ Your request was received and will be addressed shortly." });
+            } 
+            else if (target.classList.contains('omw-button')) {
+                console.log(`On My Way clicked for ${requestId}`);
+                parentItem.querySelector('.ack-button').disabled = true;
+                parentItem.querySelector('.omw-button').disabled = true;
+                socket.emit('acknowledge_request', { room: room, message: "✅ A team member is on their way." });
+            } 
+            else if (target.classList.contains('defer-btn')) {
+                console.log(`Defer clicked for ${requestId}`);
+                socket.emit('defer_request', { id: requestId });
+            } 
+            else if (target.classList.contains('complete-btn')) {
+                console.log(`Complete clicked for ${requestId}`);
+                if (parentItem.intervalId) {
+                    clearInterval(parentItem.intervalId);
+                }
+                socket.emit('complete_request', { request_id: requestId });
             }
-            socket.emit('complete_request', { request_id: item.dataset.id });
         });
 
+        // The timer is still attached directly to the item
         startOrResetTimer(item, item.dataset.timestamp);
     }
 
