@@ -82,10 +82,9 @@
             color: var(--accent-blue);
             text-decoration: none;
         }
-        /* Status colors are now more descriptive */
-        .status-new { background-color: #d4edda; } /* Green */
-        .status-warn { background-color: #fff3cd; } /* Yellow */
-        .status-urgent { background-color: #f8d7da; } /* Red */
+        .status-new { background-color: #d4edda; }
+        .status-warn { background-color: #fff3cd; }
+        .status-urgent { background-color: #f8d7da; }
     </style>
 </head>
 <body>
@@ -155,10 +154,8 @@
         updateTimestampAndColor();
     }
 
-    // --- MODIFIED: Added more detailed logging ---
+    // --- CORRECTED: This function is now more robust ---
     function attachEventListeners(item) {
-        console.log(`Attaching listeners to item: ${item.dataset.id}`);
-
         const ackButton = item.querySelector('.ack-button');
         const omwButton = item.querySelector('.omw-button');
         const deferButton = item.querySelector('.defer-btn');
@@ -169,48 +166,43 @@
             return;
         }
 
-        ackButton.addEventListener('click', function() {
-            const currentId = item.dataset.id;
-            const currentRoom = item.dataset.room;
-            console.log(`Acknowledge button clicked for request: ${currentId}`);
+        ackButton.addEventListener('click', function(event) {
+            const clickedItem = event.target.closest('.request-item');
+            if (!clickedItem) return;
+
+            const thisAckButton = clickedItem.querySelector('.ack-button');
+            const thisOmwButton = clickedItem.querySelector('.omw-button');
+
+            if(thisAckButton) thisAckButton.disabled = true;
+            if(thisOmwButton) thisOmwButton.disabled = true;
             
-            // UI update happens first
-            ackButton.disabled = true;
-            omwButton.disabled = true;
-            console.log(` -> Buttons for ${currentId} should now be disabled.`);
-            
-            socket.emit('acknowledge_request', { room: currentRoom, message: "✅ Your request was received and will be addressed shortly." });
+            socket.emit('acknowledge_request', { room: clickedItem.dataset.room, message: "✅ Your request was received and will be addressed shortly." });
         });
 
-        omwButton.addEventListener('click', function() {
-            const currentId = item.dataset.id;
-            const currentRoom = item.dataset.room;
-            console.log(`On My Way button clicked for request: ${currentId}`);
+        omwButton.addEventListener('click', function(event) {
+            const clickedItem = event.target.closest('.request-item');
+            if (!clickedItem) return;
 
-            // UI update happens first
-            omwButton.disabled = true;
-            ackButton.disabled = true;
-            console.log(` -> Buttons for ${currentId} should now be disabled.`);
+            const thisAckButton = clickedItem.querySelector('.ack-button');
+            const thisOmwButton = clickedItem.querySelector('.omw-button');
 
-            socket.emit('acknowledge_request', { room: currentRoom, message: "✅ A team member is on their way." });
+            if(thisOmwButton) thisOmwButton.disabled = true;
+            if(thisAckButton) thisAckButton.disabled = true;
+
+            socket.emit('acknowledge_request', { room: clickedItem.dataset.room, message: "✅ A team member is on their way." });
         });
 
         if (deferButton) {
             deferButton.addEventListener('click', function() {
-                const currentId = item.dataset.id;
-                console.log(`Defer button clicked for request: ${currentId}`);
-                socket.emit('defer_request', { id: currentId });
+                socket.emit('defer_request', { id: item.dataset.id });
             });
         }
 
         completeButton.addEventListener('click', function() {
-            const currentId = item.dataset.id;
-            console.log(`Complete button clicked for request: ${currentId}`);
             if (item.intervalId) {
-                console.log(` -> Clearing timer for ${currentId}.`);
                 clearInterval(item.intervalId);
             }
-            socket.emit('complete_request', { request_id: currentId });
+            socket.emit('complete_request', { request_id: item.dataset.id });
         });
 
         startOrResetTimer(item, item.dataset.timestamp);
