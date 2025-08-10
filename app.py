@@ -76,6 +76,8 @@ def setup_database():
 
 # --- Core Helper Functions ---
 def log_request_to_db(request_id, category, user_input, reply, room, is_first_baby):
+    # ADDED: This debugging line will show us what's being saved.
+    print(f"DEBUG: Logging request. is_first_baby = {is_first_baby}")
     try:
         with engine.connect() as connection:
             with connection.begin():
