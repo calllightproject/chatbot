@@ -161,7 +161,7 @@
 
         function updateTimestampAndColor() {
             var now = new Date();
-            var minutes = Math.round((now - requestTime) / 60000);
+            var minutes = Math.floor((now - requestTime) / 60000);
             var timestampSpan = item.querySelector('.timestamp');
             
             if (timestampSpan) {
@@ -267,3 +267,4 @@
 
 </body>
 </html>
+
