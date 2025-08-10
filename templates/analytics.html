@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Clinical Operations Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- THIS IS THE FIX: Added the script tag to load Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -28,15 +27,34 @@
             <p class="text-md text-gray-500 mt-1">Real-time insights from the postpartum unit call light system.</p>
         </header>
 
+        <!-- NEW: Key Metrics Section -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div class="bg-white p-6 rounded-xl shadow-md text-center">
+                <h2 class="text-lg font-semibold text-gray-500">Average Response Time</h2>
+                <p class="text-4xl font-bold text-blue-600 mt-2">{{ avg_response_time }}</p>
+            </div>
+            <!-- You can add more key metric cards here in the future -->
+        </div>
+
+        <!-- Existing Charts -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- MODIFIED: Renamed from Top Patient Requests to Top Request Categories -->
             <div class="bg-white p-6 rounded-xl shadow-md">
-                <h2 class="text-xl font-semibold text-gray-700 mb-4">Top Patient Requests</h2>
+                <h2 class="text-xl font-semibold text-gray-700 mb-4">Top Request Categories</h2>
                 <div class="chart-container">
-                    <canvas id="topRequestsChart"></canvas>
+                    <canvas id="topCategoriesChart"></canvas>
                 </div>
             </div>
 
+            <!-- NEW: Most Requested Items Chart -->
             <div class="bg-white p-6 rounded-xl shadow-md">
+                <h2 class="text-xl font-semibold text-gray-700 mb-4">Top 5 Most Requested Items</h2>
+                <div class="chart-container">
+                    <canvas id="mostRequestedChart"></canvas>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow-md lg:col-span-2">
                 <h2 class="text-xl font-semibold text-gray-700 mb-4">Peak Request Hours</h2>
                 <div class="chart-container">
                     <canvas id="requestsByHourChart"></canvas>
@@ -50,19 +68,23 @@
     </div>
 
     <script>
-        const topRequestsLabels = JSON.parse('{{ top_requests_labels | safe }}');
-        const topRequestsValues = JSON.parse('{{ top_requests_values | safe }}');
+        // --- Parse ALL data from server ---
+        const topCategoriesLabels = JSON.parse('{{ top_requests_labels | safe }}');
+        const topCategoriesValues = JSON.parse('{{ top_requests_values | safe }}');
+        const mostRequestedLabels = JSON.parse('{{ most_requested_labels | safe }}');
+        const mostRequestedValues = JSON.parse('{{ most_requested_values | safe }}');
         const requestsByHourLabels = JSON.parse('{{ requests_by_hour_labels | safe }}');
         const requestsByHourValues = JSON.parse('{{ requests_by_hour_values | safe }}');
 
-        const ctxTopRequests = document.getElementById('topRequestsChart').getContext('2d');
-        new Chart(ctxTopRequests, {
+        // --- Chart 1: Top Request Categories ---
+        const ctxTopCategories = document.getElementById('topCategoriesChart').getContext('2d');
+        new Chart(ctxTopCategories, {
             type: 'bar',
             data: {
-                labels: topRequestsLabels,
+                labels: topCategoriesLabels,
                 datasets: [{
                     label: 'Total Requests',
-                    data: topRequestsValues,
+                    data: topCategoriesValues,
                     backgroundColor: 'rgba(0, 91, 148, 0.6)',
                     borderColor: 'rgba(0, 91, 148, 1)',
                     borderWidth: 1,
@@ -84,6 +106,42 @@
             }
         });
 
+        // --- NEW Chart 2: Top 5 Most Requested Items ---
+        const ctxMostRequested = document.getElementById('mostRequestedChart').getContext('2d');
+        new Chart(ctxMostRequested, {
+            type: 'doughnut',
+            data: {
+                labels: mostRequestedLabels,
+                datasets: [{
+                    label: 'Request Count',
+                    data: mostRequestedValues,
+                    backgroundColor: [
+                        'rgba(255, 99, 132, 0.7)',
+                        'rgba(54, 162, 235, 0.7)',
+                        'rgba(255, 206, 86, 0.7)',
+                        'rgba(75, 192, 192, 0.7)',
+                        'rgba(153, 102, 255, 0.7)',
+                    ],
+                    borderColor: '#fff',
+                    borderWidth: 2,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    title: {
+                        display: false,
+                        text: 'Top 5 Items'
+                    }
+                }
+            }
+        });
+
+        // --- Chart 3: Requests by Hour ---
         const ctxRequestsByHour = document.getElementById('requestsByHourChart').getContext('2d');
         new Chart(ctxRequestsByHour, {
             type: 'line',
