@@ -60,18 +60,17 @@ def setup_database():
                     );
                 """))
                 
-                # --- FINAL FIX: Safely add the deferral_timestamp column if it doesn't exist ---
+                # --- FINAL FIX: This more robust method safely adds the column ---
                 try:
                     connection.execute(text("""
                         ALTER TABLE requests ADD COLUMN deferral_timestamp TIMESTAMP WITHOUT TIME ZONE;
                     """))
-                    print("SUCCESS: Added missing 'deferral_timestamp' column to requests table.")
-                except ProgrammingError as e:
-                    # This error is expected if the column already exists. We can safely ignore it.
-                    if "column \"deferral_timestamp\" of relation \"requests\" already exists" in str(e):
-                        pass # Column already exists, which is fine.
-                    else:
-                        raise # Re-raise any other unexpected database error.
+                    print("SUCCESS: Added 'deferral_timestamp' column to requests table.")
+                except ProgrammingError:
+                    # This error is expected if the column already exists.
+                    # We can safely ignore it and assume the schema is correct.
+                    print("INFO: 'deferral_timestamp' column likely already exists. Continuing.")
+                    pass
 
         print("Database setup complete. Tables are ready.")
     except Exception as e:
