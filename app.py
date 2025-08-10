@@ -27,21 +27,20 @@ if not DATABASE_URL:
     print("WARNING: DATABASE_URL environment variable not found. Using a local SQLite database.")
     DATABASE_URL = "sqlite:///local_call_light.db"
 
-# Added pool_recycle and pool_pre_ping for stable, long-running connections.
 engine = create_engine(DATABASE_URL, pool_recycle=280, pool_pre_ping=True)
 
 # --- Database Setup ---
 def setup_database():
     try:
         with engine.connect() as connection:
-            with connection.begin(): # Use transaction for setup
-                # Create the main requests table
+            with connection.begin():
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS requests (
                         id SERIAL PRIMARY KEY,
                         request_id VARCHAR(255) UNIQUE,
                         timestamp TIMESTAMP WITHOUT TIME ZONE,
                         completion_timestamp TIMESTAMP WITHOUT TIME ZONE,
+                        deferral_timestamp TIMESTAMP WITHOUT TIME ZONE,
                         room VARCHAR(255),
                         user_input TEXT,
                         category VARCHAR(255),
@@ -49,7 +48,6 @@ def setup_database():
                         is_first_baby BOOLEAN
                     );
                 """))
-                # Create the assignments table
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS assignments (
                         id SERIAL PRIMARY KEY,
@@ -59,19 +57,14 @@ def setup_database():
                         UNIQUE(assignment_date, room_number)
                     );
                 """))
-                
-                # --- FINAL FIX: This more robust method safely adds the column ---
                 try:
                     connection.execute(text("""
                         ALTER TABLE requests ADD COLUMN deferral_timestamp TIMESTAMP WITHOUT TIME ZONE;
                     """))
                     print("SUCCESS: Added 'deferral_timestamp' column to requests table.")
                 except ProgrammingError:
-                    # This error is expected if the column already exists.
-                    # We can safely ignore it and assume the schema is correct.
                     print("INFO: 'deferral_timestamp' column likely already exists. Continuing.")
                     pass
-
         print("Database setup complete. Tables are ready.")
     except Exception as e:
         print(f"CRITICAL ERROR during database setup: {e}")
@@ -80,7 +73,7 @@ def setup_database():
 def log_request_to_db(request_id, category, user_input, reply, room, is_first_baby):
     try:
         with engine.connect() as connection:
-            with connection.begin(): # Use transaction for insert
+            with connection.begin():
                 connection.execute(text("""
                     INSERT INTO requests (request_id, timestamp, room, category, user_input, reply, is_first_baby)
                     VALUES (:request_id, :timestamp, :room, :category, :user_input, :reply, :is_first_baby);
@@ -133,7 +126,6 @@ def process_request(role, subject, user_input, reply_message):
     return reply_message
 
 # --- App Routes ---
-
 @app.route("/room/<room_id>")
 def set_room(room_id):
     session.clear()
@@ -266,31 +258,63 @@ def dashboard():
     
     return render_template("dashboard.html", active_requests=active_requests)
 
+# MODIFIED: This route now calculates and passes more data to the template.
 @app.route('/analytics')
 def analytics():
+    # Initialize variables with default values
+    avg_response_time = "N/A"
+    most_requested_labels, most_requested_values = [], []
+    requests_by_hour_labels, requests_by_hour_values = [], []
+
     try:
         with engine.connect() as connection:
-            top_requests_result = connection.execute(text("SELECT category, COUNT(id) FROM requests GROUP BY category ORDER BY COUNT(id) DESC;"))
-            top_requests_data = top_requests_result.fetchall()
-            top_requests_labels = [row[0] for row in top_requests_data]
-            top_requests_values = [row[1] for row in top_requests_data]
+            # --- NEW: Calculate Average Response Time ---
+            # This query calculates the difference in seconds between completion and creation.
+            avg_time_result = connection.execute(text("""
+                SELECT AVG(EXTRACT(EPOCH FROM (completion_timestamp - timestamp))) as avg_seconds
+                FROM requests
+                WHERE completion_timestamp IS NOT NULL;
+            """)).scalar_one_or_none()
 
+            if avg_time_result is not None:
+                # Format the time nicely into minutes and seconds
+                total_seconds = int(avg_time_result)
+                minutes = total_seconds // 60
+                seconds = total_seconds % 60
+                avg_response_time = f"{minutes}m {seconds}s"
+
+            # --- NEW: Get Top 5 Most Requested Items ---
+            # This query counts the occurrences of each specific user_input.
+            most_requested_result = connection.execute(text("""
+                SELECT user_input, COUNT(id) as count
+                FROM requests
+                GROUP BY user_input
+                ORDER BY count DESC
+                LIMIT 5;
+            """)).fetchall()
+            most_requested_labels = [row[0] for row in most_requested_result]
+            most_requested_values = [row[1] for row in most_requested_result]
+
+            # --- EXISTING: Get Requests by Hour ---
             requests_by_hour_result = connection.execute(text("SELECT EXTRACT(HOUR FROM timestamp) as hour, COUNT(id) FROM requests GROUP BY hour ORDER BY hour;"))
             requests_by_hour_data = requests_by_hour_result.fetchall()
-
             hourly_counts = defaultdict(int)
             for hour, count in requests_by_hour_data:
                 hourly_counts[int(hour)] = count
-            
             requests_by_hour_labels = [f"{h}:00" for h in range(24)]
             requests_by_hour_values = [hourly_counts[h] for h in range(24)]
 
     except Exception as e:
         print(f"ERROR fetching analytics data: {e}")
-        top_requests_labels, top_requests_values = [], []
-        requests_by_hour_labels, requests_by_hour_values = [], []
 
-    return render_template('analytics.html', top_requests_labels=json.dumps(top_requests_labels), top_requests_values=json.dumps(top_requests_values), requests_by_hour_labels=json.dumps(requests_by_hour_labels), requests_by_hour_values=json.dumps(requests_by_hour_values))
+    return render_template(
+        'analytics.html',
+        avg_response_time=avg_response_time,
+        most_requested_labels=json.dumps(most_requested_labels),
+        most_requested_values=json.dumps(most_requested_values),
+        requests_by_hour_labels=json.dumps(requests_by_hour_labels),
+        requests_by_hour_values=json.dumps(requests_by_hour_values)
+    )
     
 @app.route('/assignments', methods=['GET', 'POST'])
 def assignments():
@@ -363,7 +387,6 @@ def handle_defer_request(data):
 
     except Exception as e:
         print(f"ERROR deferring request {request_id}: {e}")
-
 
 @socketio.on('complete_request')
 def handle_complete_request(data):
