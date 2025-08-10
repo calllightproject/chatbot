@@ -4,115 +4,80 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Staff Assignments</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --core-blue: #00205b;
-            --accent-blue: #007eb4;
-            --neutral-gray-text: #303235;
-            --light-gray-background: #f5f5f5;
-            --white: #ffffff;
-        }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            padding: 20px;
-            background-color: var(--light-gray-background);
-            color: var(--neutral-gray-text);
+            font-family: 'Inter', sans-serif;
+            background-color: #f4f7f9;
         }
-        .container {
-            max-width: 700px;
-            margin: 20px auto;
-            background: var(--white);
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        }
-        h1 {
-            color: var(--core-blue);
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .assignment-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-        }
-        .assignment-table th, .assignment-table td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid #e1e1e2;
-        }
-        .assignment-table th {
-            font-weight: bold;
-            color: var(--neutral-gray-text);
-        }
-        .assignment-table select {
-            width: 100%;
-            padding: 8px;
-            border-radius: 5px;
-            border: 1px solid #ccc;
-            font-size: 16px;
-        }
-        .save-button {
-            display: block;
-            width: 100%;
-            padding: 15px;
-            font-size: 18px;
-            border: none;
-            border-radius: 5px;
-            background-color: var(--core-blue);
-            color: var(--white);
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-        .save-button:hover {
-            background-color: #093582;
-        }
-        .footer {
-            text-align: center;
-            margin-top: 20px;
-        }
-        .footer a {
-            color: var(--accent-blue);
-            text-decoration: none;
-        }
+        /* Minimal custom styles as Tailwind is handling most of it */
     </style>
 </head>
-<body>
-    <div class="container">
-        <h1>Staff Assignments</h1>
+<body class="p-4 sm:p-6 lg:p-8">
+    <div class="container mx-auto max-w-4xl bg-white p-6 sm:p-8 rounded-xl shadow-md">
+        <header class="mb-6 text-center">
+            <h1 class="text-3xl font-bold text-gray-800">Staff Assignments</h1>
+            <p class="text-md text-gray-500 mt-1">Assign nurses to rooms for the current shift.</p>
+        </header>
         
-        <!-- In a real version, the rooms and nurses would be loaded from the database -->
         <form method="POST" action="{{ url_for('assignments') }}">
-            <table class="assignment-table">
-                <thead>
-                    <tr>
-                        <th>Room Number</th>
-                        <th>Assigned Nurse</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <!-- This is a placeholder loop. We will make this dynamic later. -->
-                    {% for room in ['201', '202', '203', '204', '205', '206'] %}
-                    <tr>
-                        <td>{{ room }}</td>
-                        <td>
-                            <select name="nurse_for_room_{{ room }}">
-                                <option value="unassigned">Unassigned</option>
-                                <option value="Nurse Jackie">Nurse Jackie</option>
-                                <option value="Nurse Carol">Nurse Carol</option>
-                                <option value="Nurse John">Nurse John</option>
-                                <option value="Nurse Maria">Nurse Maria</option>
-                            </select>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            <button type="submit" class="save-button">Save Assignments</button>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Room Number
+                            </th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Assigned Nurse
+                            </th>
+                            <!-- NEW: Column for the patient view link -->
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Patient View Link
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        <!-- MODIFIED: Loop now uses dynamic data from app.py -->
+                        {% for room in rooms %}
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                {{ room }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <select name="nurse_for_room_{{ room }}" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                                    <option value="unassigned">Unassigned</option>
+                                    <!-- MODIFIED: Dynamically create options and pre-select the current assignment -->
+                                    {% for nurse in nurses %}
+                                        <option value="{{ nurse }}" {% if assignments.get(room) == nurse %}selected{% endif %}>
+                                            {{ nurse }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                            <!-- NEW: Link to the patient-facing page for this room -->
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-blue-600 hover:text-blue-800">
+                                <a href="{{ url_for('set_room', room_id=room) }}" target="_blank" rel="noopener noreferrer">
+                                    Open Patient View
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="mt-6">
+                <button type="submit" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    Save Assignments
+                </button>
+            </div>
         </form>
         
-        <div class="footer">
-            <a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+        <!-- MODIFIED: Added a link to the Analytics page -->
+        <div class="text-center mt-8 space-x-6">
+            <a href="{{ url_for('dashboard') }}" class="text-blue-600 hover:text-blue-800 transition-colors">← Back to Dashboard</a>
+            <a href="{{ url_for('analytics') }}" class="text-blue-600 hover:text-blue-800 transition-colors">View Analytics →</a>
         </div>
     </div>
 </body>
