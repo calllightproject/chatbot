@@ -175,6 +175,7 @@ def handle_chat():
     except (ImportError, AttributeError) as e:
         print(f"ERROR: Could not load configuration module '{config_module_name}'. Error: {e}")
         return f"Error: Configuration file '{config_module_name}.py' is missing or invalid. Please contact support."
+
     if request.method == 'POST':
         if request.form.get("action") == "send_note":
             note_text = request.form.get("custom_note")
@@ -183,18 +184,22 @@ def handle_chat():
             else:
                 reply = "Please type a message in the box."
             return render_template("chat.html", reply=reply, options=button_data["main_buttons"], button_data=button_data)
+        
         user_input = request.form.get("user_input", "").strip()
         if user_input == button_data.get("back_text", "⬅ Back"):
             return redirect(url_for('handle_chat'))
+
         if user_input in button_data:
             button_info = button_data[user_input]
             reply = button_info.get("question") or button_info.get("note", "")
             options = button_info.get("options", [])
+            
             back_text = button_data.get("back_text", "⬅ Back")
             if options and back_text not in options:
                 options.append(back_text)
             elif not options:
                 options = button_data["main_buttons"]
+
             if "action" in button_info:
                 action = button_info["action"]
                 role = "cna" if action == "Notify CNA" else "nurse"
@@ -205,7 +210,10 @@ def handle_chat():
         else:
             reply = "I'm sorry, I didn't understand that. Please use the buttons provided."
             options = button_data["main_buttons"]
+        
+        # THIS IS THE FIX: This line was incorrectly indented inside the 'else' block.
         return render_template("chat.html", reply=reply, options=options, button_data=button_data)
+
     return render_template("chat.html", reply=button_data["greeting"], options=button_data["main_buttons"], button_data=button_data)
 
 @app.route("/reset-language")
@@ -223,7 +231,7 @@ def dashboard():
                 active_requests.append({
                     'id': row.request_id,
                     'room': row.room,
-                    'request': row.user_input, # THIS IS THE FIX
+                    'request': row.user_input,
                     'role': row.role,
                     'timestamp': row.timestamp.isoformat()
                 })
