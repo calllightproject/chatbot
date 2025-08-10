@@ -6,7 +6,7 @@ import os
 import json
 import smtplib
 import importlib
-from datetime import datetime, date, timezone # MODIFIED: Added timezone
+from datetime import datetime, date, timezone
 from collections import defaultdict
 from email.message import EmailMessage
 
@@ -40,6 +40,7 @@ def setup_database():
                         request_id VARCHAR(255) UNIQUE,
                         timestamp TIMESTAMP WITHOUT TIME ZONE,
                         completion_timestamp TIMESTAMP WITHOUT TIME ZONE,
+                        deferral_timestamp TIMESTAMP WITHOUT TIME ZONE, -- ADDED FOR ANALYTICS
                         room VARCHAR(255),
                         user_input TEXT,
                         category VARCHAR(255),
@@ -70,7 +71,7 @@ def log_request_to_db(request_id, category, user_input, reply, room, is_first_ba
                     VALUES (:request_id, :timestamp, :room, :category, :user_input, :reply, :is_first_baby);
                 """), {
                     "request_id": request_id,
-                    "timestamp": datetime.now(timezone.utc), # MODIFIED: Use UTC
+                    "timestamp": datetime.now(timezone.utc),
                     "room": room,
                     "category": category,
                     "user_input": user_input,
@@ -100,7 +101,7 @@ def send_email_alert(subject, body, room_number):
         print(f"ERROR: Email failed to send: {e}")
 
 def process_request(role, subject, user_input, reply_message):
-    request_id = 'req_' + str(datetime.now(timezone.utc).timestamp()).replace('.', '') # MODIFIED: Use UTC for unique ID generation
+    request_id = 'req_' + str(datetime.now(timezone.utc).timestamp()).replace('.', '')
     room_number = session.get('room_number', 'N/A')
     is_first_baby = session.get('is_first_baby')
 
@@ -112,7 +113,7 @@ def process_request(role, subject, user_input, reply_message):
         'room': room_number,
         'request': user_input,
         'role': role,
-        'timestamp': datetime.now(timezone.utc).isoformat() # MODIFIED: Use UTC
+        'timestamp': datetime.now(timezone.utc).isoformat()
     })
     return reply_message
 
@@ -317,9 +318,39 @@ def handle_acknowledge(data):
     message = data['message']
     socketio.emit('status_update', {'message': message}, to=room)
 
+# MODIFIED: This function now updates the database and resets the timer.
 @socketio.on('defer_request')
 def handle_defer_request(data):
-    socketio.emit('request_deferred', data)
+    request_id = data.get('id')
+    if not request_id:
+        return
+
+    now_utc = datetime.now(timezone.utc)
+    new_timestamp_iso = now_utc.isoformat()
+
+    try:
+        with engine.connect() as connection:
+            with connection.begin():
+                connection.execute(text("""
+                    UPDATE requests
+                    SET
+                        category = 'nurse',
+                        timestamp = :now,
+                        deferral_timestamp = :now
+                    WHERE request_id = :request_id;
+                """), {"now": now_utc, "request_id": request_id})
+
+        # Emit an event to all clients to update this specific request
+        socketio.emit('request_updated', {
+            'id': request_id,
+            'new_role': 'nurse',
+            'new_timestamp': new_timestamp_iso
+        })
+        print(f"Request {request_id} deferred to nurse.")
+
+    except Exception as e:
+        print(f"ERROR deferring request {request_id}: {e}")
+
 
 @socketio.on('complete_request')
 def handle_complete_request(data):
@@ -333,7 +364,7 @@ def handle_complete_request(data):
                         UPDATE requests 
                         SET completion_timestamp = :now 
                         WHERE request_id = :request_id;
-                    """), {"now": datetime.now(timezone.utc), "request_id": request_id}) # MODIFIED: Use UTC
+                    """), {"now": datetime.now(timezone.utc), "request_id": request_id})
                     trans.commit()
                     print(f"!!!!!!!!!! TRANSACTION COMMITTED for {request_id} !!!!!!!!!!!")
                 except Exception as e:
