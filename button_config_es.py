@@ -10,8 +10,6 @@ button_data = {
     "demographic_question": "¿Es este su primer bebé?",
     "demographic_yes": "Sí",
     "demographic_no": "No",
-
-    # NEW: Text for the AI follow-up
     "ai_follow_up_question": "¿Le gustaría hablar con su enfermera?",
     "ai_yes": "Sí, hablar con la enfermera",
     "ai_no": "No, estoy bien",
@@ -21,16 +19,19 @@ button_data = {
         "Tengo una emergencia",
         "Necesito suministros",
         "Necesito medicamentos",
+        "Mi bomba de IV está sonando", # NEW
         "Tengo preguntas",
         "Quiero saber sobre el alta",
         "Baño / Ducha",
         "Necesito ayuda para amamantar",
         "Azúcar en la sangre",
-        "Hielo / Agua"
+        "Hielo / Agua",
+        "Información General" # NEW
     ],
 
     # --- Direct Actions & Simple Sub-menus ---
     "Tengo una emergencia": {"action": "Notify Nurse"},
+    "Mi bomba de IV está sonando": {"action": "Notify Nurse"}, # NEW
     "Necesito ayuda para amamantar": {
         "action": "Notify Nurse",
         "note": "✅ Se ha notificado a su enfermera. Mientras tanto, puede prepararse asegurándose de que su bebé tenga un pañal limpio y esté desvestido para el contacto piel con piel."
@@ -66,7 +67,6 @@ button_data = {
     },
     "Necesito ayuda para ir al baño": {"action": "Notify CNA"},
     "Necesito cubrir mi vía IV para bañarme": {"action": "Notify CNA"},
-    # THIS IS THE FIX: Added a "follow_up" flag to this specific note
     "¿Puedo tomar una ducha?": {
         "note": "Normalmente sí, pero consulte con su enfermera si tiene una vía intravenosa u otras restricciones.",
         "follow_up": True
@@ -175,7 +175,20 @@ button_data = {
     "¿Tengo que usar una silla de ruedas?": {"note": "No, pero un miembro del personal tiene que acompañarla. Si el personal de enfermería está ocupado, un transportista la acompañará a la salida."},
     "Parto vaginal": {"note": "Si tuvo un parto vaginal, la estadía mínima es de 24 horas después del parto. Un ginecólogo debe dar el visto bueno para el alta y actualizar el sistema. Típicamente, siempre que su sangrado, presión arterial y dolor estén bajo control, se le permitirá el alta. Sin embargo, el ginecólogo toma la decisión final."},
     "Parto por cesárea": {"note": "Si tuvo un parto por cesárea, la estadía mínima es de 48 horas. El ginecólogo dará la orden de alta si es apropiado. Típicamente, siempre que su dolor, presión arterial y sangrado sean normales, será dada de alta."},
-    "Bebé": {"note": "El pediatra necesita evaluar a su bebé todos los días que esté en el hospital. La estadía mínima para el bebé es de 24 horas. Su bebé necesita alimentarse bien del pecho o del biberón, tener una pérdida de peso adecuada, pasar las pruebas de 24 horas, la prueba de audición, y estar orinando y defecando. Si nació antes de las 37 semanas o si fue positivo para GBS sin los antibióticos adecuados, es posible que el bebé deba quedarse 48 horas. Discuta el plan de alta de su bebé con la enfermera y el pediatra."}
+    "Bebé": {"note": "El pediatra necesita evaluar a su bebé todos los días que esté en el hospital. La estadía mínima para el bebé es de 24 horas. Su bebé necesita alimentarse bien del pecho o del biberón, tener una pérdida de peso adecuada, pasar las pruebas de 24 horas, la prueba de audición, y estar orinando y defecando. Si nació antes de las 37 semanas o si fue positivo para GBS sin los antibióticos adecuados, es posible que el bebé deba quedarse 48 horas. Discuta el plan de alta de su bebé con la enfermera y el pediatra."},
+    
+    # --- NEW: General Information Category ---
+    "Información General": {
+        "question": "¿Qué información necesita?",
+        "options": [
+            "Tengo preguntas para el registrador de nacimientos",
+            "Farmacia Banner Family",
+            "Preguntas sobre AHCCCS",
+            "Centro Médico Banner Thunderbird"
+        ]
+    },
+    "Tengo preguntas para el registrador de nacimientos": {"action": "Notify Nurse"},
+    "Farmacia Banner Family": {"note": "Número de teléfono: 602-865-2378"},
+    "Preguntas sobre AHCCCS": {"note": "Número de teléfono: 602-865-5938"},
+    "Centro Médico Banner Thunderbird": {"note": "5555 W. Thunderbird Road, Glendale, AZ 85306\nTeléfono: 602-865-5555"}
 }
-
-
