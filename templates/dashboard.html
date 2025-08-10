@@ -198,6 +198,10 @@
 
         completeButton.addEventListener('click', function() {
             console.log(`Complete button clicked for request: ${requestData.id}`);
+            // CORRECTED: This now clears the interval specific to this item
+            if (item.intervalId) {
+                clearInterval(item.intervalId);
+            }
             socket.emit('complete_request', { request_id: requestData.id });
         });
 
