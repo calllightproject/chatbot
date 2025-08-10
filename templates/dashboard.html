@@ -154,49 +154,6 @@
         updateTimestampAndColor();
     }
 
-    // --- FINAL FIX: This function now attaches a separate listener to each button ---
-    function attachEventListeners(item) {
-        const ackButton = item.querySelector('.ack-button');
-        const omwButton = item.querySelector('.omw-button');
-        const deferButton = item.querySelector('.defer-btn');
-        const completeButton = item.querySelector('.complete-btn');
-
-        if (ackButton) {
-            ackButton.addEventListener('click', () => {
-                // Disable buttons on this specific item
-                item.querySelector('.ack-button').disabled = true;
-                item.querySelector('.omw-button').disabled = true;
-                socket.emit('acknowledge_request', { room: item.dataset.room, message: "✅ Your request was received and will be addressed shortly." });
-            });
-        }
-
-        if (omwButton) {
-            omwButton.addEventListener('click', () => {
-                // Disable buttons on this specific item
-                item.querySelector('.ack-button').disabled = true;
-                item.querySelector('.omw-button').disabled = true;
-                socket.emit('acknowledge_request', { room: item.dataset.room, message: "✅ A team member is on their way." });
-            });
-        }
-
-        if (deferButton) {
-            deferButton.addEventListener('click', () => {
-                socket.emit('defer_request', { id: item.dataset.id });
-            });
-        }
-
-        if (completeButton) {
-            completeButton.addEventListener('click', () => {
-                if (item.intervalId) {
-                    clearInterval(item.intervalId);
-                }
-                socket.emit('complete_request', { request_id: item.dataset.id });
-            });
-        }
-
-        startOrResetTimer(item, item.dataset.timestamp);
-    }
-
     function addRequestToDashboard(data) {
         const list = document.getElementById('requests-list');
         if (document.getElementById(data.id)) {
@@ -224,7 +181,8 @@
              ${deferButtonHtml}
              <button class="complete-btn">Complete</button>`;
         list.prepend(item);
-        attachEventListeners(item);
+        // We only need to start the timer here. The main listener will handle the clicks.
+        startOrResetTimer(item, data.timestamp);
     }
 
     // --- SocketIO Event Listeners ---
@@ -262,10 +220,51 @@
         }
     });
 
+    // --- FINAL FIX: A single, robust event listener for the entire list ---
     document.addEventListener('DOMContentLoaded', function() {
+        const requestsList = document.getElementById('requests-list');
+
+        // Attach one listener to the parent list.
+        requestsList.addEventListener('click', function(event) {
+            const button = event.target;
+            // Make sure the click was on a button.
+            if (button.tagName !== 'BUTTON') {
+                return;
+            }
+
+            const parentItem = button.closest('.request-item');
+            if (!parentItem) {
+                return;
+            }
+
+            const requestId = parentItem.dataset.id;
+            const room = parentItem.dataset.room;
+
+            if (button.classList.contains('ack-button')) {
+                parentItem.querySelector('.ack-button').disabled = true;
+                parentItem.querySelector('.omw-button').disabled = true;
+                socket.emit('acknowledge_request', { room: room, message: "✅ Your request was received and will be addressed shortly." });
+            } 
+            else if (button.classList.contains('omw-button')) {
+                parentItem.querySelector('.ack-button').disabled = true;
+                parentItem.querySelector('.omw-button').disabled = true;
+                socket.emit('acknowledge_request', { room: room, message: "✅ A team member is on their way." });
+            } 
+            else if (button.classList.contains('defer-btn')) {
+                socket.emit('defer_request', { id: requestId });
+            } 
+            else if (button.classList.contains('complete-btn')) {
+                if (parentItem.intervalId) {
+                    clearInterval(parentItem.intervalId);
+                }
+                socket.emit('complete_request', { request_id: requestId });
+            }
+        });
+
+        // Start timers for items that were loaded from the server.
         const initialRequestItems = document.querySelectorAll('#requests-list .request-item');
         initialRequestItems.forEach(function(item) {
-            attachEventListeners(item);
+            startOrResetTimer(item, item.dataset.timestamp);
         });
     });
 </script>
