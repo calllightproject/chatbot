@@ -19,16 +19,19 @@ button_data = {
         "I'm having an emergency",
         "I need supplies",
         "I need medication",
+        "My IV pump is beeping", # NEW
         "I have questions",
         "I want to know about going home",
         "Bathroom/Shower",
         "I need help breastfeeding",
         "Blood sugar",
-        "Ice Chips/Water"
+        "Ice Chips/Water",
+        "General Information" # NEW
     ],
 
     # --- Direct Actions & Simple Sub-menus ---
     "I'm having an emergency": {"action": "Notify Nurse"},
+    "My IV pump is beeping": {"action": "Notify Nurse"}, # NEW
     "I need help breastfeeding": {
         "action": "Notify Nurse",
         "note": "✅ Your nurse has been notified. In the meantime, you can prepare by making sure your baby has a clean diaper and is undressed for skin-to-skin contact."
@@ -64,7 +67,6 @@ button_data = {
     },
     "I need help to the bathroom": {"action": "Notify CNA"},
     "I need my IV covered to shower": {"action": "Notify CNA"},
-    # THIS IS THE FIX: Added a "follow_up" flag to this specific note
     "Can I take a shower?": {
         "note": "Usually yes, but check with your nurse if you have an IV or other restrictions.",
         "follow_up": True
@@ -169,8 +171,20 @@ button_data = {
     "C-section delivery": {"note": "If you delivered by C-section, the minimum stay is 48 hours. The OB-GYN will give the discharge order if appropriate. Typically, as long as your pain, blood pressure, and bleeding are normal, you will be discharged."},
     "Baby": {"note": "The pediatrician needs to assess your baby every day that you're in the hospital. The minimum stay for baby is 24 hours. Your baby needs to be feeding from the breast or bottle well, have an appropriate weight loss, passed the 24-hour tests, hearing test, and be peeing and pooping. If born before 37 weeks or if GBS positive without adequate antibiotics, baby may need to stay 48 hours. Discuss your baby's discharge plan with the nurse and pediatrician."},
     "When will I get my discharge paperwork?": {"note": "Once the OB-GYN and the pediatrician has put in their notes and discharge orders, your nurse can print out paperwork."},
-    "Do I have to take a wheelchair?": {"note": "No, but a staff member has to go with you. If the nursing staff is busy, a transport worker will be the one to escort you out."}
+    "Do I have to take a wheelchair?": {"note": "No, but a staff member has to go with you. If the nursing staff is busy, a transport worker will be the one to escort you out."},
+
+    # --- NEW: General Information Category ---
+    "General Information": {
+        "question": "What information do you need?",
+        "options": [
+            "I have questions for the birth recorder",
+            "Banner Family Pharmacy",
+            "AHCCCS Questions",
+            "Banner Thunderbird Medical Center"
+        ]
+    },
+    "I have questions for the birth recorder": {"action": "Notify Nurse"},
+    "Banner Family Pharmacy": {"note": "Phone Number: 602-865-2378"},
+    "AHCCCS Questions": {"note": "Phone Number: 602-865-5938"},
+    "Banner Thunderbird Medical Center": {"note": "5555 W. Thunderbird Road, Glendale, AZ 85306\nPhone: 602-865-5555"}
 }
-
-
-
