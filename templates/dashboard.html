@@ -82,9 +82,10 @@
             color: var(--accent-blue);
             text-decoration: none;
         }
-        .wait-level-1 { background-color: #d4edda; }
-        .wait-level-2 { background-color: #fff3cd; }
-        .wait-level-3 { background-color: #f8d7da; }
+        /* Status colors are now more descriptive */
+        .status-new { background-color: #d4edda; } /* Green */
+        .status-warn { background-color: #fff3cd; } /* Yellow */
+        .status-urgent { background-color: #f8d7da; } /* Red */
     </style>
 </head>
 <body>
@@ -125,95 +126,94 @@
 <script type="text/javascript">
     var socket = io();
 
-    function attachEventListeners(item) {
-    // DEBUGGING: Log when the function starts for a specific request
-    console.log("Attaching listeners and timer for request ID:", item.dataset.id);
+    // --- REFACTORED: This function now handles all timer and color updates ---
+    // It can be called to start the timer for a new item or reset it for a deferred item.
+    function startOrResetTimer(item, timestamp) {
+        // Clear any previous timer to prevent memory leaks
+        if (item.intervalId) {
+            clearInterval(item.intervalId);
+        }
 
-    const requestData = {
-        id: item.dataset.id,
-        room: item.dataset.room,
-        timestamp: item.dataset.timestamp
-    };
-    
-    // DEBUGGING: Log the timestamp string we are reading from the HTML
-    console.log(" -> Timestamp string from HTML:", requestData.timestamp);
-    
-    const requestTime = new Date(requestData.timestamp);
+        const requestTime = new Date(timestamp);
 
-    // DEBUGGING: Log the Date object that was created
-    console.log(" -> Parsed as Date object:", requestTime);
+        function updateTimestampAndColor() {
+            const now = new Date();
+            const minutes = Math.floor((now - requestTime) / 60000);
+            const timestampSpan = item.querySelector('.timestamp');
+            
+            if (timestampSpan) {
+                if (minutes > 0) {
+                    timestampSpan.textContent = String(minutes) + 'm ago';
+                } else {
+                    timestampSpan.textContent = 'Just now';
+                }
+            }
 
-    var ackButton = item.querySelector('.ack-button');
-    var omwButton = item.querySelector('.omw-button');
-    var deferButton = item.querySelector('.defer-btn');
-    var completeButton = item.querySelector('.complete-btn');
-    
-    if (!completeButton) return;
-
-    ackButton.addEventListener('click', function() {
-        socket.emit('acknowledge_request', { room: requestData.room, message: "✅ Your request was received and will be addressed shortly." });
-        ackButton.disabled = true;
-        omwButton.disabled = true;
-    });
-
-    omwButton.addEventListener('click', function() {
-        socket.emit('acknowledge_request', { room: requestData.room, message: "✅ A team member is on their way." });
-        omwButton.disabled = true;
-        omwButton.disabled = true;
-    });
-
-    if (deferButton) {
-        deferButton.addEventListener('click', function() {
-            socket.emit('defer_request', { id: requestData.id });
-            deferButton.remove();
-        });
-    }
-
-    function updateTimestampAndColor() {
-        var now = new Date();
-        var minutes = Math.floor((now - requestTime) / 60000);
-        
-        // DEBUGGING: Log the calculation every time the timer runs
-        console.log(`Checking status for ${item.dataset.id}. Age: ${minutes} minutes.`);
-        
-        var timestampSpan = item.querySelector('.timestamp');
-        
-        if (timestampSpan) {
-            if (minutes > 0) {
-                timestampSpan.textContent = String(minutes) + 'm ago';
+            // Use the new, more descriptive class names
+            item.classList.remove('status-new', 'status-warn', 'status-urgent');
+            if (minutes >= 10) {
+                item.classList.add('status-urgent'); // Red
+            } else if (minutes >= 5) {
+                item.classList.add('status-warn');   // Yellow
             } else {
-                timestampSpan.textContent = 'Just now';
+                item.classList.add('status-new');    // Green
             }
         }
-        item.classList.remove('wait-level-1', 'wait-level-2', 'wait-level-3');
-        if (minutes >= 10) {
-            item.classList.add('wait-level-3');
-        } else if (minutes >= 5) {
-            item.classList.add('wait-level-2');
-        } else {
-            item.classList.add('wait-level-1');
-        }
+
+        // Run the update logic every minute and store the interval ID on the item
+        item.intervalId = setInterval(updateTimestampAndColor, 60000);
+        // Run it once immediately to set the initial state
+        updateTimestampAndColor();
     }
 
-    var intervalId = setInterval(updateTimestampAndColor, 60000);
-    updateTimestampAndColor();
-    
-    item.intervalId = intervalId;
+    // This function attaches button listeners that only need to be set up once.
+    function attachEventListeners(item) {
+        const requestData = {
+            id: item.dataset.id,
+            room: item.dataset.room
+        };
 
-    completeButton.addEventListener('click', function() {
-        const requestId = item.dataset.id;
-        socket.emit('complete_request', { request_id: requestId });
-        clearInterval(item.intervalId);
-    });
-}
+        const ackButton = item.querySelector('.ack-button');
+        const omwButton = item.querySelector('.omw-button');
+        const deferButton = item.querySelector('.defer-btn');
+        const completeButton = item.querySelector('.complete-btn');
+        
+        if (!completeButton) return;
 
-    function addRequestToDashboard(data) {
-        var list = document.getElementById('requests-list');
-        if (document.getElementById(data.id)) {
-            return;
+        ackButton.addEventListener('click', function() {
+            socket.emit('acknowledge_request', { room: requestData.room, message: "✅ Your request was received and will be addressed shortly." });
+            ackButton.disabled = true;
+            omwButton.disabled = true;
+        });
+
+        omwButton.addEventListener('click', function() {
+            socket.emit('acknowledge_request', { room: requestData.room, message: "✅ A team member is on their way." });
+            omwButton.disabled = true;
+            ackButton.disabled = true; // Also disable the other button
+        });
+
+        if (deferButton) {
+            deferButton.addEventListener('click', function() {
+                socket.emit('defer_request', { id: requestData.id });
+            });
         }
 
-        var item = document.createElement('li');
+        completeButton.addEventListener('click', function() {
+            socket.emit('complete_request', { request_id: requestData.id });
+        });
+
+        // Start the timer logic using the initial timestamp
+        startOrResetTimer(item, item.dataset.timestamp);
+    }
+
+    // This function creates a new request item and adds it to the dashboard.
+    function addRequestToDashboard(data) {
+        const list = document.getElementById('requests-list');
+        if (document.getElementById(data.id)) {
+            return; // Avoid duplicates
+        }
+
+        const item = document.createElement('li');
         item.id = data.id;
         item.className = 'request-item ' + data.role;
         item.dataset.id = data.id;
@@ -222,7 +222,7 @@
         item.dataset.role = data.role;
         item.dataset.timestamp = data.timestamp;
 
-        var deferButtonHtml = '';
+        let deferButtonHtml = '';
         if (data.role === 'cna') {
             deferButtonHtml = '<button class="defer-btn">Defer to Nurse</button>';
         }
@@ -241,13 +241,39 @@
         attachEventListeners(item);
     }
 
+    // --- SocketIO Event Listeners ---
+
     socket.on('new_request', function(data) {
         addRequestToDashboard(data);
     });
     
+    // ADDED: This new listener handles deferred requests.
+    socket.on('request_updated', function(data) {
+        const itemToUpdate = document.getElementById(data.id);
+        if (itemToUpdate) {
+            // 1. Update the role and visuals
+            itemToUpdate.className = 'request-item ' + data.new_role; // e.g., 'request-item nurse'
+            const roleSpan = itemToUpdate.querySelector('.role-span');
+            if (roleSpan) {
+                roleSpan.textContent = 'For: ' + data.new_role.toUpperCase();
+            }
+
+            // 2. Remove the defer button as it's no longer needed
+            const deferButton = itemToUpdate.querySelector('.defer-btn');
+            if (deferButton) {
+                deferButton.remove();
+            }
+
+            // 3. Update the item's timestamp in the HTML
+            itemToUpdate.dataset.timestamp = data.new_timestamp;
+
+            // 4. Reset the timer and color using the new timestamp
+            startOrResetTimer(itemToUpdate, data.new_timestamp);
+        }
+    });
+
     socket.on('remove_request', function(data) {
-        const requestId = data.id;
-        const requestElement = document.getElementById(requestId);
+        const requestElement = document.getElementById(data.id);
         if (requestElement) {
             if (requestElement.intervalId) {
                 clearInterval(requestElement.intervalId);
@@ -259,17 +285,7 @@
         }
     });
 
-    socket.on('request_deferred', function(data) {
-        var itemToUpdate = document.getElementById(data.id);
-        if (itemToUpdate) {
-            itemToUpdate.className = 'request-item nurse';
-            var roleSpan = itemToUpdate.querySelector('.role-span');
-            if (roleSpan) {
-                roleSpan.textContent = 'For: NURSE';
-            }
-        }
-    });
-
+    // When the page first loads, attach listeners to all server-rendered items.
     document.addEventListener('DOMContentLoaded', function() {
         const initialRequestItems = document.querySelectorAll('#requests-list .request-item');
         initialRequestItems.forEach(function(item) {
@@ -280,5 +296,3 @@
 
 </body>
 </html>
-
-
