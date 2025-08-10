@@ -18,7 +18,6 @@ from sqlalchemy.exc import ProgrammingError
 # --- App Configuration ---
 app = Flask(__name__, template_folder='templates')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-strong-fallback-secret-key-for-local-development")
-# MODIFIED: Added ping/timeout settings for connection stability on Render
 socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*", manage_session=False, ping_timeout=20, ping_interval=10)
 
 # --- Master Data Lists ---
@@ -74,9 +73,30 @@ def setup_database():
     except Exception as e:
         print(f"CRITICAL ERROR during database setup: {e}")
 
+# --- NEW: Smart Routing Logic ---
+def route_note_intelligently(note_text):
+    """
+    Analyzes the text of a patient's note to determine if it requires a nurse.
+    This is a simple keyword-based approach for now.
+    """
+    # List of keywords that indicate a nurse is needed.
+    # We make them all lowercase to ensure the check is case-insensitive.
+    NURSE_KEYWORDS = [
+        'pain', 'medication', 'bleeding', 'nausea', 'dizzy', 
+        'sick', 'iv', 'pump', 'staples', 'incision'
+    ]
+    
+    # Check if any of the keywords are in the note (also converted to lowercase).
+    note_lower = note_text.lower()
+    for keyword in NURSE_KEYWORDS:
+        if keyword in note_lower:
+            return 'nurse' # If a keyword is found, assign to nurse.
+            
+    # If no keywords are found, default to CNA.
+    return 'cna'
+
 # --- Core Helper Functions ---
 def log_request_to_db(request_id, category, user_input, reply, room, is_first_baby):
-    # ADDED: This debugging line will show us what's being saved.
     print(f"DEBUG: Logging request. is_first_baby = {is_first_baby}")
     try:
         with engine.connect() as connection:
@@ -180,10 +200,16 @@ def handle_chat():
         return f"Error: Configuration file '{config_module_name}.py' is missing or invalid. Please contact support."
 
     if request.method == 'POST':
+        # MODIFIED: This section now handles the smart routing for notes.
         if request.form.get("action") == "send_note":
             note_text = request.form.get("custom_note")
             if note_text:
-                reply = process_request(role="nurse", subject="Custom Patient Note", user_input=note_text, reply_message=button_data["nurse_notification"])
+                # 1. Get the role from our new smart function
+                role = route_note_intelligently(note_text)
+                # 2. Set the reply message based on the determined role
+                reply_message = button_data.get(f"{role}_notification", "Your request has been sent.")
+                # 3. Process the request
+                reply = process_request(role=role, subject="Custom Patient Note", user_input=note_text, reply_message=reply_message)
             else:
                 reply = "Please type a message in the box."
             return render_template("chat.html", reply=reply, options=button_data["main_buttons"], button_data=button_data)
