@@ -127,20 +127,15 @@
     var socket = io();
 
     // --- REFACTORED: This function now handles all timer and color updates ---
-    // It can be called to start the timer for a new item or reset it for a deferred item.
     function startOrResetTimer(item, timestamp) {
-        // Clear any previous timer to prevent memory leaks
         if (item.intervalId) {
             clearInterval(item.intervalId);
         }
-
         const requestTime = new Date(timestamp);
-
         function updateTimestampAndColor() {
             const now = new Date();
             const minutes = Math.floor((now - requestTime) / 60000);
             const timestampSpan = item.querySelector('.timestamp');
-            
             if (timestampSpan) {
                 if (minutes > 0) {
                     timestampSpan.textContent = String(minutes) + 'm ago';
@@ -148,26 +143,23 @@
                     timestampSpan.textContent = 'Just now';
                 }
             }
-
-            // Use the new, more descriptive class names
             item.classList.remove('status-new', 'status-warn', 'status-urgent');
             if (minutes >= 10) {
-                item.classList.add('status-urgent'); // Red
+                item.classList.add('status-urgent');
             } else if (minutes >= 5) {
-                item.classList.add('status-warn');   // Yellow
+                item.classList.add('status-warn');
             } else {
-                item.classList.add('status-new');    // Green
+                item.classList.add('status-new');
             }
         }
-
-        // Run the update logic every minute and store the interval ID on the item
         item.intervalId = setInterval(updateTimestampAndColor, 60000);
-        // Run it once immediately to set the initial state
         updateTimestampAndColor();
     }
 
-    // This function attaches button listeners that only need to be set up once.
+    // --- MODIFIED: Added extensive logging for debugging ---
     function attachEventListeners(item) {
+        console.log(`Attaching listeners to item: ${item.dataset.id}`);
+
         const requestData = {
             id: item.dataset.id,
             room: item.dataset.room
@@ -178,41 +170,45 @@
         const deferButton = item.querySelector('.defer-btn');
         const completeButton = item.querySelector('.complete-btn');
         
-        if (!completeButton) return;
+        if (!ackButton || !omwButton || !completeButton) {
+            console.error(`CRITICAL ERROR: Could not find one or more essential buttons for item: ${item.id}`);
+            return;
+        }
 
         ackButton.addEventListener('click', function() {
+            console.log(`Acknowledge button clicked for request: ${requestData.id}`);
             socket.emit('acknowledge_request', { room: requestData.room, message: "✅ Your request was received and will be addressed shortly." });
             ackButton.disabled = true;
             omwButton.disabled = true;
         });
 
         omwButton.addEventListener('click', function() {
+            console.log(`On My Way button clicked for request: ${requestData.id}`);
             socket.emit('acknowledge_request', { room: requestData.room, message: "✅ A team member is on their way." });
             omwButton.disabled = true;
-            ackButton.disabled = true; // Also disable the other button
+            ackButton.disabled = true;
         });
 
         if (deferButton) {
             deferButton.addEventListener('click', function() {
+                console.log(`Defer button clicked for request: ${requestData.id}`);
                 socket.emit('defer_request', { id: requestData.id });
             });
         }
 
         completeButton.addEventListener('click', function() {
+            console.log(`Complete button clicked for request: ${requestData.id}`);
             socket.emit('complete_request', { request_id: requestData.id });
         });
 
-        // Start the timer logic using the initial timestamp
         startOrResetTimer(item, item.dataset.timestamp);
     }
 
-    // This function creates a new request item and adds it to the dashboard.
     function addRequestToDashboard(data) {
         const list = document.getElementById('requests-list');
         if (document.getElementById(data.id)) {
-            return; // Avoid duplicates
+            return;
         }
-
         const item = document.createElement('li');
         item.id = data.id;
         item.className = 'request-item ' + data.role;
@@ -221,12 +217,10 @@
         item.dataset.request = data.request;
         item.dataset.role = data.role;
         item.dataset.timestamp = data.timestamp;
-
         let deferButtonHtml = '';
         if (data.role === 'cna') {
             deferButtonHtml = '<button class="defer-btn">Defer to Nurse</button>';
         }
-
         item.innerHTML =
             `<p>${data.request}</p>
              <span>Room: ${data.room}</span>
@@ -236,38 +230,28 @@
              <button class="omw-button">On my way</button>
              ${deferButtonHtml}
              <button class="complete-btn">Complete</button>`;
-
         list.prepend(item);
         attachEventListeners(item);
     }
 
     // --- SocketIO Event Listeners ---
-
     socket.on('new_request', function(data) {
         addRequestToDashboard(data);
     });
     
-    // ADDED: This new listener handles deferred requests.
     socket.on('request_updated', function(data) {
         const itemToUpdate = document.getElementById(data.id);
         if (itemToUpdate) {
-            // 1. Update the role and visuals
-            itemToUpdate.className = 'request-item ' + data.new_role; // e.g., 'request-item nurse'
+            itemToUpdate.className = 'request-item ' + data.new_role;
             const roleSpan = itemToUpdate.querySelector('.role-span');
             if (roleSpan) {
                 roleSpan.textContent = 'For: ' + data.new_role.toUpperCase();
             }
-
-            // 2. Remove the defer button as it's no longer needed
             const deferButton = itemToUpdate.querySelector('.defer-btn');
             if (deferButton) {
                 deferButton.remove();
             }
-
-            // 3. Update the item's timestamp in the HTML
             itemToUpdate.dataset.timestamp = data.new_timestamp;
-
-            // 4. Reset the timer and color using the new timestamp
             startOrResetTimer(itemToUpdate, data.new_timestamp);
         }
     });
@@ -285,7 +269,6 @@
         }
     });
 
-    // When the page first loads, attach listeners to all server-rendered items.
     document.addEventListener('DOMContentLoaded', function() {
         const initialRequestItems = document.querySelectorAll('#requests-list .request-item');
         initialRequestItems.forEach(function(item) {
