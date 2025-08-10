@@ -68,6 +68,7 @@
         }
         .ack-button { background-color: #ffc107; color: black; }
         .omw-button { background-color: #28a745; }
+        .asap-button { background-color: #6f42c1; } /* New Purple Button */
         .complete-btn { background-color: #6c757d; }
         .defer-btn { background-color: #17a2b8; }
         .request-item button:disabled {
@@ -108,6 +109,7 @@
                 <span class="timestamp"></span>
                 <button class="ack-button">Acknowledge</button>
                 <button class="omw-button">On my way</button>
+                <button class="asap-button">Be there ASAP</button>
                 {% if request.role == 'cna' %}
                     <button class="defer-btn">Defer to Nurse</button>
                 {% endif %}
@@ -178,10 +180,10 @@
              <span class="timestamp">Just now</span>
              <button class="ack-button">Acknowledge</button>
              <button class="omw-button">On my way</button>
+             <button class="asap-button">Be there ASAP</button>
              ${deferButtonHtml}
              <button class="complete-btn">Complete</button>`;
         list.prepend(item);
-        // We only need to start the timer here. The main listener will handle the clicks.
         startOrResetTimer(item, data.timestamp);
     }
 
@@ -220,36 +222,34 @@
         }
     });
 
-    // --- FINAL FIX: A single, robust event listener for the entire list ---
+    // --- Main Event Listener for all buttons ---
     document.addEventListener('DOMContentLoaded', function() {
         const requestsList = document.getElementById('requests-list');
 
-        // Attach one listener to the parent list.
         requestsList.addEventListener('click', function(event) {
             const button = event.target;
-            // Make sure the click was on a button.
-            if (button.tagName !== 'BUTTON') {
-                return;
-            }
+            if (button.tagName !== 'BUTTON') return;
 
             const parentItem = button.closest('.request-item');
-            if (!parentItem) {
-                return;
-            }
+            if (!parentItem) return;
 
             const requestId = parentItem.dataset.id;
             const room = parentItem.dataset.room;
 
             if (button.classList.contains('ack-button')) {
                 parentItem.querySelector('.ack-button').disabled = true;
-                parentItem.querySelector('.omw-button').disabled = true;
                 socket.emit('acknowledge_request', { room: room, message: "✅ Your request was received and will be addressed shortly." });
             } 
             else if (button.classList.contains('omw-button')) {
-                parentItem.querySelector('.ack-button').disabled = true;
                 parentItem.querySelector('.omw-button').disabled = true;
                 socket.emit('acknowledge_request', { room: room, message: "✅ A team member is on their way." });
-            } 
+            }
+            else if (button.classList.contains('asap-button')) {
+                parentItem.querySelector('.asap-button').disabled = true;
+                parentItem.querySelector('.ack-button').disabled = true;
+                parentItem.querySelector('.omw-button').disabled = true;
+                socket.emit('acknowledge_request', { room: room, message: "A team member is with another patient and will be with you as soon as possible." });
+            }
             else if (button.classList.contains('defer-btn')) {
                 socket.emit('defer_request', { id: requestId });
             } 
@@ -261,7 +261,6 @@
             }
         });
 
-        // Start timers for items that were loaded from the server.
         const initialRequestItems = document.querySelectorAll('#requests-list .request-item');
         initialRequestItems.forEach(function(item) {
             startOrResetTimer(item, item.dataset.timestamp);
