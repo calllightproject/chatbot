@@ -258,51 +258,64 @@ def dashboard():
     
     return render_template("dashboard.html", active_requests=active_requests)
 
-# MODIFIED: This route now calculates and passes more data to the template.
 @app.route('/analytics')
 def analytics():
-    # Initialize variables with default values
+    # Initialize all variables
     avg_response_time = "N/A"
+    top_categories_labels, top_categories_values = [], []
     most_requested_labels, most_requested_values = [], []
     requests_by_hour_labels, requests_by_hour_values = [], []
+    first_baby_labels, first_baby_values = [], []
+    multi_baby_labels, multi_baby_values = [], []
 
     try:
         with engine.connect() as connection:
-            # --- NEW: Calculate Average Response Time ---
-            # This query calculates the difference in seconds between completion and creation.
+            # --- Average Response Time ---
             avg_time_result = connection.execute(text("""
                 SELECT AVG(EXTRACT(EPOCH FROM (completion_timestamp - timestamp))) as avg_seconds
                 FROM requests
                 WHERE completion_timestamp IS NOT NULL;
             """)).scalar_one_or_none()
-
             if avg_time_result is not None:
-                # Format the time nicely into minutes and seconds
                 total_seconds = int(avg_time_result)
-                minutes = total_seconds // 60
-                seconds = total_seconds % 60
+                minutes, seconds = divmod(total_seconds, 60)
                 avg_response_time = f"{minutes}m {seconds}s"
 
-            # --- NEW: Get Top 5 Most Requested Items ---
-            # This query counts the occurrences of each specific user_input.
-            most_requested_result = connection.execute(text("""
-                SELECT user_input, COUNT(id) as count
-                FROM requests
-                GROUP BY user_input
-                ORDER BY count DESC
-                LIMIT 5;
-            """)).fetchall()
+            # --- Top Request Categories ---
+            top_categories_result = connection.execute(text("SELECT category, COUNT(id) FROM requests GROUP BY category ORDER BY COUNT(id) DESC;")).fetchall()
+            top_categories_labels = [row[0] for row in top_categories_result]
+            top_categories_values = [row[1] for row in top_categories_result]
+
+            # --- Top 5 Most Requested Items (Overall) ---
+            most_requested_result = connection.execute(text("SELECT user_input, COUNT(id) as count FROM requests GROUP BY user_input ORDER BY count DESC LIMIT 5;")).fetchall()
             most_requested_labels = [row[0] for row in most_requested_result]
             most_requested_values = [row[1] for row in most_requested_result]
 
-            # --- EXISTING: Get Requests by Hour ---
-            requests_by_hour_result = connection.execute(text("SELECT EXTRACT(HOUR FROM timestamp) as hour, COUNT(id) FROM requests GROUP BY hour ORDER BY hour;"))
-            requests_by_hour_data = requests_by_hour_result.fetchall()
+            # --- Requests by Hour ---
+            requests_by_hour_result = connection.execute(text("SELECT EXTRACT(HOUR FROM timestamp) as hour, COUNT(id) FROM requests GROUP BY hour ORDER BY hour;")).fetchall()
             hourly_counts = defaultdict(int)
-            for hour, count in requests_by_hour_data:
+            for hour, count in requests_by_hour_result:
                 hourly_counts[int(hour)] = count
             requests_by_hour_labels = [f"{h}:00" for h in range(24)]
             requests_by_hour_values = [hourly_counts[h] for h in range(24)]
+
+            # --- NEW: Top Requests for First-Time Parents ---
+            first_baby_result = connection.execute(text("""
+                SELECT user_input, COUNT(id) as count FROM requests
+                WHERE is_first_baby IS TRUE
+                GROUP BY user_input ORDER BY count DESC LIMIT 5;
+            """)).fetchall()
+            first_baby_labels = [row[0] for row in first_baby_result]
+            first_baby_values = [row[1] for row in first_baby_result]
+
+            # --- NEW: Top Requests for Multiparous Parents ---
+            multi_baby_result = connection.execute(text("""
+                SELECT user_input, COUNT(id) as count FROM requests
+                WHERE is_first_baby IS FALSE
+                GROUP BY user_input ORDER BY count DESC LIMIT 5;
+            """)).fetchall()
+            multi_baby_labels = [row[0] for row in multi_baby_result]
+            multi_baby_values = [row[1] for row in multi_baby_result]
 
     except Exception as e:
         print(f"ERROR fetching analytics data: {e}")
@@ -310,10 +323,16 @@ def analytics():
     return render_template(
         'analytics.html',
         avg_response_time=avg_response_time,
+        top_requests_labels=json.dumps(top_categories_labels),
+        top_requests_values=json.dumps(top_categories_values),
         most_requested_labels=json.dumps(most_requested_labels),
         most_requested_values=json.dumps(most_requested_values),
         requests_by_hour_labels=json.dumps(requests_by_hour_labels),
-        requests_by_hour_values=json.dumps(requests_by_hour_values)
+        requests_by_hour_values=json.dumps(requests_by_hour_values),
+        first_baby_labels=json.dumps(first_baby_labels),
+        first_baby_values=json.dumps(first_baby_values),
+        multi_baby_labels=json.dumps(multi_baby_labels),
+        multi_baby_values=json.dumps(multi_baby_values)
     )
     
 @app.route('/assignments', methods=['GET', 'POST'])
@@ -402,9 +421,7 @@ def handle_complete_request(data):
                         WHERE request_id = :request_id;
                     """), {"now": datetime.now(timezone.utc), "request_id": request_id})
                     trans.commit()
-                    print(f"!!!!!!!!!! TRANSACTION COMMITTED for {request_id} !!!!!!!!!!!")
                 except Exception as e:
-                    print(f"!!!!!!!!!! ERROR DURING TRANSACTION, ROLLING BACK: {e} !!!!!!!!!!!")
                     trans.rollback()
                     raise
             socketio.emit('remove_request', {'id': request_id})
