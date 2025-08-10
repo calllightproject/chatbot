@@ -13,6 +13,7 @@ from email.message import EmailMessage
 from flask import Flask, render_template, request, session, redirect, url_for
 from flask_socketio import SocketIO, join_room
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import ProgrammingError
 
 # --- App Configuration ---
 app = Flask(__name__, template_folder='templates')
@@ -34,13 +35,13 @@ def setup_database():
     try:
         with engine.connect() as connection:
             with connection.begin(): # Use transaction for setup
+                # Create the main requests table
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS requests (
                         id SERIAL PRIMARY KEY,
                         request_id VARCHAR(255) UNIQUE,
                         timestamp TIMESTAMP WITHOUT TIME ZONE,
                         completion_timestamp TIMESTAMP WITHOUT TIME ZONE,
-                        deferral_timestamp TIMESTAMP WITHOUT TIME ZONE, -- ADDED FOR ANALYTICS
                         room VARCHAR(255),
                         user_input TEXT,
                         category VARCHAR(255),
@@ -48,6 +49,7 @@ def setup_database():
                         is_first_baby BOOLEAN
                     );
                 """))
+                # Create the assignments table
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS assignments (
                         id SERIAL PRIMARY KEY,
@@ -57,6 +59,20 @@ def setup_database():
                         UNIQUE(assignment_date, room_number)
                     );
                 """))
+                
+                # --- FINAL FIX: Safely add the deferral_timestamp column if it doesn't exist ---
+                try:
+                    connection.execute(text("""
+                        ALTER TABLE requests ADD COLUMN deferral_timestamp TIMESTAMP WITHOUT TIME ZONE;
+                    """))
+                    print("SUCCESS: Added missing 'deferral_timestamp' column to requests table.")
+                except ProgrammingError as e:
+                    # This error is expected if the column already exists. We can safely ignore it.
+                    if "column \"deferral_timestamp\" of relation \"requests\" already exists" in str(e):
+                        pass # Column already exists, which is fine.
+                    else:
+                        raise # Re-raise any other unexpected database error.
+
         print("Database setup complete. Tables are ready.")
     except Exception as e:
         print(f"CRITICAL ERROR during database setup: {e}")
@@ -318,7 +334,6 @@ def handle_acknowledge(data):
     message = data['message']
     socketio.emit('status_update', {'message': message}, to=room)
 
-# MODIFIED: This function now updates the database and resets the timer.
 @socketio.on('defer_request')
 def handle_defer_request(data):
     request_id = data.get('id')
@@ -340,7 +355,6 @@ def handle_defer_request(data):
                     WHERE request_id = :request_id;
                 """), {"now": now_utc, "request_id": request_id})
 
-        # Emit an event to all clients to update this specific request
         socketio.emit('request_updated', {
             'id': request_id,
             'new_role': 'nurse',
