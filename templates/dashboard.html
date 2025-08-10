@@ -154,44 +154,46 @@
         updateTimestampAndColor();
     }
 
-    // --- FINAL FIX: This function is now fully robust and self-contained ---
+    // --- FINAL FIX: This function now attaches a separate listener to each button ---
     function attachEventListeners(item) {
-        // Use a single click listener for the entire item for efficiency.
-        item.addEventListener('click', function(event) {
-            const buttonClicked = event.target;
-            
-            // Ensure the click was on a button, not the list item itself.
-            if (buttonClicked.tagName !== 'BUTTON') return;
+        const ackButton = item.querySelector('.ack-button');
+        const omwButton = item.querySelector('.omw-button');
+        const deferButton = item.querySelector('.defer-btn');
+        const completeButton = item.querySelector('.complete-btn');
 
-            const parentItem = buttonClicked.closest('.request-item');
-            if (!parentItem) return;
+        if (ackButton) {
+            ackButton.addEventListener('click', () => {
+                // Disable buttons on this specific item
+                item.querySelector('.ack-button').disabled = true;
+                item.querySelector('.omw-button').disabled = true;
+                socket.emit('acknowledge_request', { room: item.dataset.room, message: "✅ Your request was received and will be addressed shortly." });
+            });
+        }
 
-            const requestId = parentItem.dataset.id;
-            const room = parentItem.dataset.room;
+        if (omwButton) {
+            omwButton.addEventListener('click', () => {
+                // Disable buttons on this specific item
+                item.querySelector('.ack-button').disabled = true;
+                item.querySelector('.omw-button').disabled = true;
+                socket.emit('acknowledge_request', { room: item.dataset.room, message: "✅ A team member is on their way." });
+            });
+        }
 
-            if (buttonClicked.classList.contains('ack-button')) {
-                // Directly disable the buttons on the correct parent item.
-                parentItem.querySelector('.ack-button').disabled = true;
-                parentItem.querySelector('.omw-button').disabled = true;
-                socket.emit('acknowledge_request', { room: room, message: "✅ Your request was received and will be addressed shortly." });
-            } 
-            else if (buttonClicked.classList.contains('omw-button')) {
-                parentItem.querySelector('.ack-button').disabled = true;
-                parentItem.querySelector('.omw-button').disabled = true;
-                socket.emit('acknowledge_request', { room: room, message: "✅ A team member is on their way." });
-            } 
-            else if (buttonClicked.classList.contains('defer-btn')) {
-                socket.emit('defer_request', { id: requestId });
-            } 
-            else if (buttonClicked.classList.contains('complete-btn')) {
-                if (parentItem.intervalId) {
-                    clearInterval(parentItem.intervalId);
+        if (deferButton) {
+            deferButton.addEventListener('click', () => {
+                socket.emit('defer_request', { id: item.dataset.id });
+            });
+        }
+
+        if (completeButton) {
+            completeButton.addEventListener('click', () => {
+                if (item.intervalId) {
+                    clearInterval(item.intervalId);
                 }
-                socket.emit('complete_request', { request_id: requestId });
-            }
-        });
+                socket.emit('complete_request', { request_id: item.dataset.id });
+            });
+        }
 
-        // The timer is still attached directly to the item
         startOrResetTimer(item, item.dataset.timestamp);
     }
 
