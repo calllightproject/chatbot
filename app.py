@@ -6,7 +6,7 @@ import os
 import json
 import smtplib
 import importlib
-from datetime import datetime, date
+from datetime import datetime, date, timezone # MODIFIED: Added timezone
 from collections import defaultdict
 from email.message import EmailMessage
 
@@ -70,7 +70,7 @@ def log_request_to_db(request_id, category, user_input, reply, room, is_first_ba
                     VALUES (:request_id, :timestamp, :room, :category, :user_input, :reply, :is_first_baby);
                 """), {
                     "request_id": request_id,
-                    "timestamp": datetime.now(),
+                    "timestamp": datetime.now(timezone.utc), # MODIFIED: Use UTC
                     "room": room,
                     "category": category,
                     "user_input": user_input,
@@ -100,7 +100,7 @@ def send_email_alert(subject, body, room_number):
         print(f"ERROR: Email failed to send: {e}")
 
 def process_request(role, subject, user_input, reply_message):
-    request_id = 'req_' + str(datetime.now().timestamp()).replace('.', '')
+    request_id = 'req_' + str(datetime.now(timezone.utc).timestamp()).replace('.', '') # MODIFIED: Use UTC for unique ID generation
     room_number = session.get('room_number', 'N/A')
     is_first_baby = session.get('is_first_baby')
 
@@ -112,29 +112,11 @@ def process_request(role, subject, user_input, reply_message):
         'room': room_number,
         'request': user_input,
         'role': role,
-        'timestamp': datetime.now().isoformat()
+        'timestamp': datetime.now(timezone.utc).isoformat() # MODIFIED: Use UTC
     })
     return reply_message
 
 # --- App Routes ---
-
-# !!!!!!!!!!! TEMPORARY DEBUGGING ROUTE !!!!!!!!!!!
-@app.route("/clear-requests")
-def clear_requests():
-    try:
-        with engine.connect() as connection:
-            with connection.begin():
-                connection.execute(text("""
-                    UPDATE requests 
-                    SET completion_timestamp = :now 
-                    WHERE completion_timestamp IS NULL;
-                """), {"now": datetime.now()})
-        print("!!!!!!!!!! All active requests have been cleared. !!!!!!!!!!!")
-        return "All active requests have been cleared. You can now return to the dashboard.", 200
-    except Exception as e:
-        print(f"!!!!!!!!!! ERROR clearing requests: {e} !!!!!!!!!!!")
-        return "Error clearing requests. See logs.", 500
-# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 @app.route("/room/<room_id>")
 def set_room(room_id):
@@ -351,7 +333,7 @@ def handle_complete_request(data):
                         UPDATE requests 
                         SET completion_timestamp = :now 
                         WHERE request_id = :request_id;
-                    """), {"now": datetime.now(), "request_id": request_id})
+                    """), {"now": datetime.now(timezone.utc), "request_id": request_id}) # MODIFIED: Use UTC
                     trans.commit()
                     print(f"!!!!!!!!!! TRANSACTION COMMITTED for {request_id} !!!!!!!!!!!")
                 except Exception as e:
