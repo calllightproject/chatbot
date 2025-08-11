@@ -25,8 +25,7 @@ button_data = {
         "Baño / Ducha",
         "Necesito ayuda para amamantar",
         "Azúcar en la sangre",
-        "Hielo / Agua",
-        "Información General" # NEW
+        "Hielo / Agua"
     ],
 
     # --- Direct Actions & Simple Sub-menus ---
@@ -175,20 +174,6 @@ button_data = {
     "¿Tengo que usar una silla de ruedas?": {"note": "No, pero un miembro del personal tiene que acompañarla. Si el personal de enfermería está ocupado, un transportista la acompañará a la salida."},
     "Parto vaginal": {"note": "Si tuvo un parto vaginal, la estadía mínima es de 24 horas después del parto. Un ginecólogo debe dar el visto bueno para el alta y actualizar el sistema. Típicamente, siempre que su sangrado, presión arterial y dolor estén bajo control, se le permitirá el alta. Sin embargo, el ginecólogo toma la decisión final."},
     "Parto por cesárea": {"note": "Si tuvo un parto por cesárea, la estadía mínima es de 48 horas. El ginecólogo dará la orden de alta si es apropiado. Típicamente, siempre que su dolor, presión arterial y sangrado sean normales, será dada de alta."},
-    "Bebé": {"note": "El pediatra necesita evaluar a su bebé todos los días que esté en el hospital. La estadía mínima para el bebé es de 24 horas. Su bebé necesita alimentarse bien del pecho o del biberón, tener una pérdida de peso adecuada, pasar las pruebas de 24 horas, la prueba de audición, y estar orinando y defecando. Si nació antes de las 37 semanas o si fue positivo para GBS sin los antibióticos adecuados, es posible que el bebé deba quedarse 48 horas. Discuta el plan de alta de su bebé con la enfermera y el pediatra."},
+    "Bebé": {"note": "El pediatra necesita evaluar a su bebé todos los días que esté en el hospital. La estadía mínima para el bebé es de 24 horas. Su bebé necesita alimentarse bien del pecho o del biberón, tener una pérdida de peso adecuada, pasar las pruebas de 24 horas, la prueba de audición, y estar orinando y defecando. Si nació antes de las 37 semanas o si fue positivo para GBS sin los antibióticos adecuados, es posible que el bebé deba quedarse 48 horas. Discuta el plan de alta de su bebé con la enfermera y el pediatra."}
     
-    # --- NEW: General Information Category ---
-    "Información General": {
-        "question": "¿Qué información necesita?",
-        "options": [
-            "Tengo preguntas para el registrador de nacimientos",
-            "Farmacia Banner Family",
-            "Preguntas sobre AHCCCS",
-            "Centro Médico Banner Thunderbird"
-        ]
-    },
-    "Tengo preguntas para el registrador de nacimientos": {"action": "Notify Nurse"},
-    "Farmacia Banner Family": {"note": "Número de teléfono: 602-865-2378"},
-    "Preguntas sobre AHCCCS": {"note": "Número de teléfono: 602-865-5938"},
-    "Centro Médico Banner Thunderbird": {"note": "5555 W. Thunderbird Road, Glendale, AZ 85306\nTeléfono: 602-865-5555"}
-}
+
