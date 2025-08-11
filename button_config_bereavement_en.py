@@ -13,19 +13,17 @@ button_data = {
         "I'm having an emergency",
         "I need supplies",
         "I need medication",
-        "My IV pump is beeping", # NEW
+        "My IV pump is beeping",
         "I have questions",
         "I want to know about going home",
         "Bathroom/Shower",
-        "Blood sugar check for me",
         "Ice Chips/Water",
-        "General Information" # NEW
+        "General Information"
     ],
 
     # --- Direct Actions & Simple Sub-menus ---
     "I'm having an emergency": {"action": "Notify Nurse"},
-    "My IV pump is beeping": {"action": "Notify Nurse"}, # NEW
-    "Blood sugar check for me": {"action": "Notify CNA"},
+    "My IV pump is beeping": {"action": "Notify Nurse"},
 
     "Ice Chips/Water": {
         "question": "If you have a support person with you, they are welcome to go into our nourishment room, which has water, ice chips, juice and small snacks. Staff can show you where it is located. What would you like?",
@@ -106,7 +104,7 @@ button_data = {
     "When will I get my discharge paperwork?": {"note": "Once the OB-GYN has put in their notes and discharge orders, your nurse can print out paperwork."},
     "Do I have to take a wheelchair?": {"note": "No, but a staff member has to go with you. If the nursing staff is busy, a transport worker will be the one to escort you out."},
 
-    # --- NEW: General Information Category ---
+    # --- General Information Category ---
     "General Information": {
         "question": "What information do you need?",
         "options": [
