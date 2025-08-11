@@ -18,8 +18,7 @@ button_data = {
         "Quiero saber sobre el alta",
         "Baño / Ducha",
         "Control de azúcar en la sangre para mí",
-        "Hielo / Agua",
-        "Información General" # NEW
+        "Hielo / Agua"
     ],
 
     # --- Direct Actions & Simple Sub-menus ---
@@ -117,20 +116,6 @@ button_data = {
     },
     "Parto por cesárea": {
         "note": "Si tuvo un parto por cesárea, la estadía mínima es de 48 horas. El ginecólogo dará la orden de alta si es apropiado. Típicamente, siempre que su dolor, presión arterial y sangrado sean normales, será dada de alta."
-    },
-    
-    # --- NEW: General Information Category ---
-    "Información General": {
-        "question": "¿Qué información necesita?",
-        "options": [
-            "Tengo preguntas para el registrador de nacimientos",
-            "Farmacia Banner Family",
-            "Preguntas sobre AHCCCS",
-            "Centro Médico Banner Thunderbird"
-        ]
-    },
-    "Tengo preguntas para el registrador de nacimientos": {"action": "Notify Nurse"},
-    "Farmacia Banner Family": {"note": "Número de teléfono: 602-865-2378"},
-    "Preguntas sobre AHCCCS": {"note": "Número de teléfono: 602-865-5938"},
-    "Centro Médico Banner Thunderbird": {"note": "5555 W. Thunderbird Road, Glendale, AZ 85306\nTeléfono: 602-865-5555"}
+    }
 }
+
