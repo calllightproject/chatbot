@@ -134,11 +134,15 @@
         const requestTime = new Date(timestamp);
 
         function updateTimestampAndColor() {
-            // DEBUGGING: Log every time this function runs.
-            console.log('Timer tick for item:', item.dataset.id);
-
             const now = new Date();
             const minutes = Math.floor((now - requestTime) / 60000);
+            
+            // DEBUGGING: Log all the values used in the calculation.
+            console.log(`--- Checking ${item.dataset.id} ---`);
+            console.log(`Current Time: ${now.toISOString()}`);
+            console.log(`Request Time: ${requestTime.toISOString()}`);
+            console.log(`Calculated Minutes: ${minutes}`);
+            
             const timestampSpan = item.querySelector('.timestamp');
             if (timestampSpan) {
                 if (minutes > 0) {
@@ -157,9 +161,8 @@
             }
         }
         
-        // DEBUGGING: Set interval to 10 seconds for faster testing.
         item.intervalId = setInterval(updateTimestampAndColor, 10000);
-        updateTimestampAndColor(); // Run once immediately.
+        updateTimestampAndColor();
     }
 
     function addRequestToDashboard(data) {
