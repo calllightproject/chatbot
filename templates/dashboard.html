@@ -68,7 +68,7 @@
         }
         .ack-button { background-color: #ffc107; color: black; }
         .omw-button { background-color: #28a745; }
-        .asap-button { background-color: #6f42c1; } /* New Purple Button */
+        .asap-button { background-color: #6f42c1; }
         .complete-btn { background-color: #6c757d; }
         .defer-btn { background-color: #17a2b8; }
         .request-item button:disabled {
@@ -132,7 +132,11 @@
             clearInterval(item.intervalId);
         }
         const requestTime = new Date(timestamp);
+
         function updateTimestampAndColor() {
+            // DEBUGGING: Log every time this function runs.
+            console.log('Timer tick for item:', item.dataset.id);
+
             const now = new Date();
             const minutes = Math.floor((now - requestTime) / 60000);
             const timestampSpan = item.querySelector('.timestamp');
@@ -152,8 +156,10 @@
                 item.classList.add('status-new');
             }
         }
-        item.intervalId = setInterval(updateTimestampAndColor, 60000);
-        updateTimestampAndColor();
+        
+        // DEBUGGING: Set interval to 10 seconds for faster testing.
+        item.intervalId = setInterval(updateTimestampAndColor, 10000);
+        updateTimestampAndColor(); // Run once immediately.
     }
 
     function addRequestToDashboard(data) {
