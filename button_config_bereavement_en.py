@@ -17,8 +17,7 @@ button_data = {
         "I have questions",
         "I want to know about going home",
         "Bathroom/Shower",
-        "Ice Chips/Water",
-        "General Information"
+        "Ice Chips/Water"
     ],
 
     # --- Direct Actions & Simple Sub-menus ---
@@ -102,20 +101,6 @@ button_data = {
     "Vaginal delivery": {"note": "If you delivered vaginally, the minimum stay is 24 hours after delivery. An OB-GYN has to give the ok for discharge and update the computer. Typically, as long as your bleeding, blood pressure, and pain are under control, you should be allowed to discharge. However, the OB-GYN makes the final decision."},
     "C-section delivery": {"note": "If you delivered by C-section, the minimum stay is 48 hours. The OB-GYN will give the discharge order if appropriate. Typically, as long as your pain, blood pressure, and bleeding are normal, you will be discharged."},
     "When will I get my discharge paperwork?": {"note": "Once the OB-GYN has put in their notes and discharge orders, your nurse can print out paperwork."},
-    "Do I have to take a wheelchair?": {"note": "No, but a staff member has to go with you. If the nursing staff is busy, a transport worker will be the one to escort you out."},
-
-    # --- General Information Category ---
-    "General Information": {
-        "question": "What information do you need?",
-        "options": [
-            "I have questions for the birth recorder",
-            "Banner Family Pharmacy",
-            "AHCCCS Questions",
-            "Banner Thunderbird Medical Center"
-        ]
-    },
-    "I have questions for the birth recorder": {"action": "Notify Nurse"},
-    "Banner Family Pharmacy": {"note": "Phone Number: 602-865-2378"},
-    "AHCCCS Questions": {"note": "Phone Number: 602-865-5938"},
-    "Banner Thunderbird Medical Center": {"note": "5555 W. Thunderbird Road, Glendale, AZ 85306\nPhone: 602-865-5555"}
+    "Do I have to take a wheelchair?": {"note": "No, but a staff member has to go with you. If the nursing staff is busy, a transport worker will be the one to escort you out."}
 }
+
