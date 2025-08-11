@@ -13,18 +13,20 @@ button_data = {
         "Tengo una emergencia",
         "Necesito suministros",
         "Necesito medicamentos",
+        "Mi bomba de IV está sonando", # NEW
         "Tengo preguntas",
         "Quiero saber sobre el alta",
-        "Baño / Ducha", # UPDATED
+        "Baño / Ducha",
         "Control de azúcar en la sangre para mí",
-        "Hielo / Agua"  # UPDATED
+        "Hielo / Agua",
+        "Información General" # NEW
     ],
 
     # --- Direct Actions & Simple Sub-menus ---
     "Tengo una emergencia": {"action": "Notify Nurse"},
+    "Mi bomba de IV está sonando": {"action": "Notify Nurse"}, # NEW
     "Control de azúcar en la sangre para mí": {"action": "Notify CNA"},
 
-    # --- NEW: Ice Chips/Water Submenu ---
     "Hielo / Agua": {
         "question": "Si tiene una persona de apoyo con usted, puede ir a nuestra sala de nutrición, que tiene agua, hielo picado, jugo y otros pequeños bocadillos. El personal puede mostrarle dónde se encuentra. ¿Qué le gustaría?",
         "options": [
@@ -39,7 +41,6 @@ button_data = {
     "Necesito agua, sin hielo": {"action": "Notify CNA"},
     "Necesito agua caliente": {"action": "Notify CNA"},
 
-    # --- Bathroom/Shower Submenu ---
     "Baño / Ducha": {
         "question": "Si ya ha ido al baño una vez con un miembro del personal y se siente estable, puede usar el baño por su cuenta. Por favor, avísenos si todavía necesita ayuda. ¿Qué necesita?",
         "options": [
@@ -67,7 +68,7 @@ button_data = {
     "Toallas blancas": {"action": "Notify CNA"},
     "Compresa de hielo": {
         "question": "¿Dónde necesita la compresa de hielo?",
-        "options": ["Compresa de hielo para el perineo", "Compresa die hielo para la incisión de la cesárea", "Compresa de hielo para los senos"]
+        "options": ["Compresa de hielo para el perineo", "Compresa de hielo para la incisión de la cesárea", "Compresa de hielo para los senos"]
     },
     "Compresa de hielo para el perineo": {"action": "Notify CNA"},
     "Compresa de hielo para la incisión de la cesárea": {"action": "Notify CNA"},
@@ -116,6 +117,20 @@ button_data = {
     },
     "Parto por cesárea": {
         "note": "Si tuvo un parto por cesárea, la estadía mínima es de 48 horas. El ginecólogo dará la orden de alta si es apropiado. Típicamente, siempre que su dolor, presión arterial y sangrado sean normales, será dada de alta."
-    }
+    },
+    
+    # --- NEW: General Information Category ---
+    "Información General": {
+        "question": "¿Qué información necesita?",
+        "options": [
+            "Tengo preguntas para el registrador de nacimientos",
+            "Farmacia Banner Family",
+            "Preguntas sobre AHCCCS",
+            "Centro Médico Banner Thunderbird"
+        ]
+    },
+    "Tengo preguntas para el registrador de nacimientos": {"action": "Notify Nurse"},
+    "Farmacia Banner Family": {"note": "Número de teléfono: 602-865-2378"},
+    "Preguntas sobre AHCCCS": {"note": "Número de teléfono: 602-865-5938"},
+    "Centro Médico Banner Thunderbird": {"note": "5555 W. Thunderbird Road, Glendale, AZ 85306\nTeléfono: 602-865-5555"}
 }
-
