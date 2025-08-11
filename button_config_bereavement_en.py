@@ -13,18 +13,20 @@ button_data = {
         "I'm having an emergency",
         "I need supplies",
         "I need medication",
+        "My IV pump is beeping", # NEW
         "I have questions",
         "I want to know about going home",
-        "Bathroom/Shower", # UPDATED
+        "Bathroom/Shower",
         "Blood sugar check for me",
-        "Ice Chips/Water"  # UPDATED
+        "Ice Chips/Water",
+        "General Information" # NEW
     ],
 
     # --- Direct Actions & Simple Sub-menus ---
     "I'm having an emergency": {"action": "Notify Nurse"},
-    "Blood sugar check": {"action": "Notify CNA"},
+    "My IV pump is beeping": {"action": "Notify Nurse"}, # NEW
+    "Blood sugar check for me": {"action": "Notify CNA"},
 
-    # --- NEW: Ice Chips/Water Submenu ---
     "Ice Chips/Water": {
         "question": "If you have a support person with you, they are welcome to go into our nourishment room, which has water, ice chips, juice and small snacks. Staff can show you where it is located. What would you like?",
         "options": [
@@ -39,7 +41,6 @@ button_data = {
     "I need water, no ice": {"action": "Notify CNA"},
     "I need hot water": {"action": "Notify CNA"},
 
-    # --- Bathroom/Shower Submenu ---
     "Bathroom/Shower": {
         "question": "If you have been up to the bathroom once with a staff member, and you feel steady on your feet, you are able to go to the bathroom on your own. Please let us know if you still need help. What do you need?",
         "options": [
@@ -103,6 +104,20 @@ button_data = {
     "Vaginal delivery": {"note": "If you delivered vaginally, the minimum stay is 24 hours after delivery. An OB-GYN has to give the ok for discharge and update the computer. Typically, as long as your bleeding, blood pressure, and pain are under control, you should be allowed to discharge. However, the OB-GYN makes the final decision."},
     "C-section delivery": {"note": "If you delivered by C-section, the minimum stay is 48 hours. The OB-GYN will give the discharge order if appropriate. Typically, as long as your pain, blood pressure, and bleeding are normal, you will be discharged."},
     "When will I get my discharge paperwork?": {"note": "Once the OB-GYN has put in their notes and discharge orders, your nurse can print out paperwork."},
-    "Do I have to take a wheelchair?": {"note": "No, but a staff member has to go with you. If the nursing staff is busy, a transport worker will be the one to escort you out."}
-}
+    "Do I have to take a wheelchair?": {"note": "No, but a staff member has to go with you. If the nursing staff is busy, a transport worker will be the one to escort you out."},
 
+    # --- NEW: General Information Category ---
+    "General Information": {
+        "question": "What information do you need?",
+        "options": [
+            "I have questions for the birth recorder",
+            "Banner Family Pharmacy",
+            "AHCCCS Questions",
+            "Banner Thunderbird Medical Center"
+        ]
+    },
+    "I have questions for the birth recorder": {"action": "Notify Nurse"},
+    "Banner Family Pharmacy": {"note": "Phone Number: 602-865-2378"},
+    "AHCCCS Questions": {"note": "Phone Number: 602-865-5938"},
+    "Banner Thunderbird Medical Center": {"note": "5555 W. Thunderbird Road, Glendale, AZ 85306\nPhone: 602-865-5555"}
+}
