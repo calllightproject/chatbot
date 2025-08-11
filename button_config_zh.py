@@ -11,8 +11,6 @@ button_data = {
     "demographic_question": "这是您的第一个宝宝吗？",
     "demographic_yes": "是",
     "demographic_no": "否",
-
-    # NEW: Text for the AI/Note follow-up
     "ai_follow_up_question": "您想和您的护士谈谈吗？",
     "ai_yes": "是的，和护士谈谈",
     "ai_no": "不，我没事",
@@ -22,25 +20,28 @@ button_data = {
         "我有紧急情况",
         "我需要用品",
         "我需要药物",
+        "我的静脉输液泵在响",
         "我有问题",
         "我想了解出院信息",
         "浴室/淋浴",
         "我需要母乳喂养方面的帮助",
         "血糖",
-        "冰块/水"
+        "冰块/水",
+        "一般信息"
     ],
 
     # --- Direct Actions & Simple Sub-menus ---
     "我有紧急情况": {"action": "Notify Nurse"},
+    "我的静脉输液泵在响": {"action": "Notify Nurse"},
     "我需要母乳喂养方面的帮助": {
         "action": "Notify Nurse",
         "note": "✅ 您的护士已接到通知。在此期间，您可以确保宝宝的尿布是干净的，并脱掉衣服进行肌肤接触，以此做好准备。"
     },
     "血糖": {
         "question": "是为妈妈还是为宝宝测血糖？",
-        "options": ["妈妈", "宝宝（血糖）"]
+        "options": ["妈妈（血糖）", "宝宝（血糖）"] # MODIFIED
     },
-    "妈妈": {"action": "Notify CNA"},
+    "妈妈（血糖）": {"action": "Notify CNA"}, # MODIFIED
     "宝宝（血糖）": {"action": "Notify Nurse"},
 
     "冰块/水": {
@@ -67,7 +68,6 @@ button_data = {
     },
     "我需要帮助去卫生间": {"action": "Notify CNA"},
     "我需要包裹我的静脉输液管以便洗澡": {"action": "Notify CNA"},
-    # THIS IS THE FIX: Added a "follow_up" flag to this specific note
     "我可以洗澡吗？": {
         "note": "通常可以，但如果您有静脉输液管或其他限制，请先咨询您的护士。",
         "follow_up": True
@@ -114,11 +114,11 @@ button_data = {
     "白色卫生巾": {"action": "Notify CNA"},
     "冰袋": {
         "question": "您需要在哪里使用冰袋？",
-        "options": ["用于会阴部", "用于剖腹产切口", "用于乳房"]
+        "options": ["用于会阴部的冰袋", "用于剖腹产切口的冰袋", "用于乳房的冰袋"] # MODIFIED
     },
-    "用于会阴部": {"action": "Notify CNA"},
-    "用于剖腹产切口": {"action": "Notify CNA"},
-    "用于乳房": {"action": "Notify CNA"},
+    "用于会阴部的冰袋": {"action": "Notify CNA"}, # MODIFIED
+    "用于剖腹产切口的冰袋": {"action": "Notify CNA"}, # MODIFIED
+    "用于乳房的冰袋": {"action": "Notify CNA"}, # MODIFIED
 
     # --- Medication Category ---
     "我需要药物": {
@@ -176,5 +176,20 @@ button_data = {
     "我必须坐轮椅吗？": {"note": "不是必须的，但必须有一名工作人员陪同您。如果护士很忙，将由运输人员护送您离开。"},
     "顺产出院": {"note": "如果您是顺产，最短住院时间为产后24小时。妇产科医生必须批准出院并更新电脑系统。通常，只要您的出血、血压和疼痛得到控制，您就可以出院。然而，最终决定由妇产科医生做出。"},
     "剖腹产出院": {"note": "如果您是剖腹产，最短住院时间为48小时。如果情况合适，妇产科医生会下达出院指令。通常，只要您的疼痛、血压和出血正常，您就会被允许出院。"},
-    "宝宝出院": {"note": "儿科医生需要在您住院期间每天为您的宝宝进行评估。宝宝的最短住院时间为24小时。您的宝宝需要能够很好地从乳房或奶瓶进食，体重下降在正常范围内，通过所有24小时的测试、听力测试，并且有正常的大小便。如果宝宝在37周前出生或GBS阳性且未得到足够抗生素治疗，可能需要住院48小时。请与护士和儿科医生讨论您宝宝的出院计划。"}
+    "宝宝出院": {"note": "儿科医生需要在您住院期间每天为您的宝宝进行评估。宝宝的最短住院时间为24小时。您的宝宝需要能够很好地从乳房或奶瓶进食，体重下降在正常范围内，通过所有24小时的测试、听力测试，并且有正常的大小便。如果宝宝在37周前出生或GBS阳性且未得到足够抗生素治疗，可能需要住院48小时。请与护士和儿科医生讨论您宝宝的出院计划。"},
+
+    # --- General Information Category ---
+    "一般信息": {
+        "question": "您需要什么信息？",
+        "options": [
+            "我有问题要问出生登记员",
+            "Banner家庭药房",
+            "关于AHCCCS的问题",
+            "Banner Thunderbird医疗中心"
+        ]
+    },
+    "我有问题要问出生登记员": {"action": "Notify Nurse"},
+    "Banner家庭药房": {"note": "电话号码：602-865-2378"},
+    "关于AHCCCS的问题": {"note": "电话号码：602-865-5938"},
+    "Banner Thunderbird医疗中心": {"note": "地址：5555 W. Thunderbird Road, Glendale, AZ 85306\n电话：602-865-5555"}
 }
