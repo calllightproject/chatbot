@@ -4,17 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Postpartum CareConnect</title>
-    <!-- THIS IS THE FIX: This now correctly links to your external stylesheet -->
+    <!-- This links to your external stylesheet for the correct appearance -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    
-    <!-- This internal style is just for the new, green status update bubble -->
-    <style>
-        .status-update-message {
-            background-color: #28a745; /* success-green */
-            color: #ffffff;
-            align-self: flex-start;
-        }
-    </style>
 </head>
 <body>
     <div class="container">
@@ -22,7 +13,8 @@
             <h1>Postpartum CareConnect</h1>
         </div>
 
-        <div id="chat-log" class="chat-log">
+        <div class="chat-log">
+            <!-- The bot's reply will be displayed here -->
             <div class="message-bubble bot-message">
                 <p>{{ reply | safe }}</p>
             </div>
@@ -30,9 +22,12 @@
 
         <div class="options-form">
             <form action="/chat" method="post">
+                <!-- Buttons for user options are created here -->
                 {% for option in options %}
                     <button type="submit" name="user_input" value="{{ option }}">{{ option }}</button>
                 {% endfor %}
+
+                <!-- The section for typing a custom note -->
                 <div class="note-section">
                     <input type="text" name="custom_note" placeholder="{{ button_data.custom_note_placeholder }}">
                     <button type="submit" name="action" value="send_note">{{ button_data.send_note_button }}</button>
@@ -43,30 +38,5 @@
              <a href="{{ url_for('reset_language') }}">Change Language</a>
         </div>
     </div>
-
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-    <script type="text/javascript">
-        var socket = io();
-        const roomNumber = '{{ session.get("room_number", "unknown") }}';
-
-        socket.on('connect', function() {
-            socket.emit('join', { room: roomNumber });
-            console.log(`Patient view for room ${roomNumber} has joined its socket room.`);
-        });
-
-        socket.on('status_update', function(data) {
-            const chatLog = document.getElementById('chat-log');
-            const message = data.message;
-
-            const messageBubble = document.createElement('div');
-            // This uses the new status-update-message class for the green bubble
-            // and the existing message-bubble class from your style.css for the shape.
-            messageBubble.className = 'message-bubble status-update-message';
-            messageBubble.innerHTML = `<p>${message}</p>`;
-
-            chatLog.appendChild(messageBubble);
-            chatLog.scrollTop = chatLog.scrollHeight;
-        });
-    </script>
 </body>
 </html>
