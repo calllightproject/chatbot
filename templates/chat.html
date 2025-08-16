@@ -4,82 +4,173 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Postpartum CareConnect</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- This version uses your original, custom CSS variables for the correct look and feel -->
     <style>
-        body { font-family: 'Inter', sans-serif; }
-        .chat-container { max-height: 80vh; }
+        :root {
+            --core-blue: #00205b;
+            --accent-blue: #007eb4;
+            --neutral-gray-text: #303235;
+            --light-gray-background: #f5f5f5;
+            --white: #ffffff;
+            --success-green: #28a745;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--light-gray-background);
+            color: var(--neutral-gray-text);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            width: 100%;
+            max-width: 500px;
+            background: var(--white);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            max-height: 90vh;
+        }
+        .header {
+            text-align: center;
+            padding: 20px;
+            border-bottom: 1px solid #e1e1e2;
+        }
+        .header h1 {
+            color: var(--core-blue);
+            font-size: 24px;
+            margin: 0;
+        }
+        .chat-log {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        .message-bubble {
+            padding: 12px 16px;
+            border-radius: 18px;
+            margin-bottom: 10px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+        .bot-message {
+            background-color: var(--accent-blue);
+            color: var(--white);
+            align-self: flex-start;
+        }
+        .status-update-message { /* Style for the new green status bubble */
+            background-color: var(--success-green);
+            color: var(--white);
+            align-self: flex-start;
+        }
+        .options-form {
+            padding: 20px;
+            border-top: 1px solid #e1e1e2;
+        }
+        .options-form button {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            margin-bottom: 10px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            background-color: #f0f0f0;
+            cursor: pointer;
+            text-align: left;
+            transition: background-color 0.2s;
+        }
+        .options-form button:hover {
+            background-color: #e0e0e0;
+        }
+        .note-section {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .note-section input {
+            flex-grow: 1;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        .note-section button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            background-color: var(--core-blue);
+            color: var(--white);
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .note-section button:hover {
+            background-color: #093582;
+        }
+        .footer {
+            text-align: center;
+            padding: 15px;
+        }
+        .footer a {
+            color: var(--accent-blue);
+            text-decoration: none;
+            font-size: 14px;
+        }
     </style>
 </head>
-<body class="bg-gray-100 flex items-center justify-center h-screen">
-    <div class="w-full max-w-lg bg-white p-6 rounded-xl shadow-lg flex flex-col chat-container">
-        <header class="text-center mb-4">
-            <h1 class="text-2xl font-bold text-gray-800">Postpartum CareConnect</h1>
-        </header>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Postpartum CareConnect</h1>
+        </div>
 
-        <!-- MODIFIED: Added an ID to the chat log for easy access -->
-        <div id="chat-log" class="flex-grow overflow-y-auto p-4 bg-gray-50 rounded-lg mb-4">
-            <!-- Reply from the bot -->
-            <div class="flex justify-start mb-4">
-                <div class="bg-blue-500 text-white p-3 rounded-lg max-w-xs">
-                    <p>{{ reply | safe }}</p>
-                </div>
+        <div id="chat-log" class="chat-log">
+            <div class="message-bubble bot-message">
+                <p>{{ reply | safe }}</p>
             </div>
         </div>
 
-        <!-- User options form -->
-        <form action="/chat" method="post" class="space-y-3">
-            {% for option in options %}
-                <button type="submit" name="user_input" value="{{ option }}" class="w-full text-left text-lg bg-gray-200 text-gray-800 py-3 px-4 rounded-lg hover:bg-gray-300 transition-colors">
-                    {{ option }}
-                </button>
-            {% endfor %}
-
-            <!-- Custom Note Section -->
-            <div class="flex items-center space-x-2 pt-2">
-                <input type="text" name="custom_note" placeholder="{{ button_data.custom_note_placeholder }}" class="flex-grow p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <button type="submit" name="action" value="send_note" class="bg-blue-600 text-white py-3 px-5 rounded-lg hover:bg-blue-700 transition-colors">
-                    {{ button_data.send_note_button }}
-                </button>
-            </div>
-        </form>
-        <div class="text-center mt-4">
-             <a href="{{ url_for('reset_language') }}" class="text-sm text-gray-500 hover:text-gray-700">Change Language</a>
+        <div class="options-form">
+            <form action="/chat" method="post">
+                {% for option in options %}
+                    <button type="submit" name="user_input" value="{{ option }}">{{ option }}</button>
+                {% endfor %}
+                <div class="note-section">
+                    <input type="text" name="custom_note" placeholder="{{ button_data.custom_note_placeholder }}">
+                    <button type="submit" name="action" value="send_note">{{ button_data.send_note_button }}</button>
+                </div>
+            </form>
+        </div>
+        <div class="footer">
+             <a href="{{ url_for('reset_language') }}">Change Language</a>
         </div>
     </div>
 
-    <!-- NEW: JavaScript for real-time status updates -->
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script type="text/javascript">
-        // Connect to the server
         var socket = io();
-
-        // Get the current room number from the session (passed by Flask)
         const roomNumber = '{{ session.get("room_number", "unknown") }}';
 
-        // When the connection is established, join the correct room
         socket.on('connect', function() {
             socket.emit('join', { room: roomNumber });
             console.log(`Patient view for room ${roomNumber} has joined its socket room.`);
         });
 
-        // Listen for the 'status_update' event from the server
         socket.on('status_update', function(data) {
             const chatLog = document.getElementById('chat-log');
             const message = data.message;
 
-            // Create a new chat bubble for the status update
-            const messageContainer = document.createElement('div');
-            messageContainer.className = 'flex justify-start mb-4';
-            
             const messageBubble = document.createElement('div');
-            messageBubble.className = 'bg-green-500 text-white p-3 rounded-lg max-w-xs';
+            // Use the new status-update-message class for correct styling
+            messageBubble.className = 'message-bubble status-update-message';
             messageBubble.innerHTML = `<p>${message}</p>`;
 
-            messageContainer.appendChild(messageBubble);
-            chatLog.appendChild(messageContainer);
-
-            // Automatically scroll to the new message
+            chatLog.appendChild(messageBubble);
             chatLog.scrollTop = chatLog.scrollHeight;
         });
     </script>
