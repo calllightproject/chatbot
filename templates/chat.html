@@ -4,39 +4,163 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Postpartum CareConnect</title>
-    <!-- This links to your external stylesheet for the correct appearance -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        :root {
+            --core-blue: #00205b;
+            --accent-blue: #007eb4;
+            --neutral-gray-text: #303235;
+            --light-gray-background: #f5f5f5;
+            --white: #ffffff;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            padding: 20px;
+            background-color: var(--light-gray-background);
+            color: var(--neutral-gray-text);
+        }
+        .chat-box {
+            max-width: 500px;
+            margin: 20px auto;
+            background: var(--white);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #e1e1e2;
+            margin-bottom: 20px;
+        }
+        .header h2 {
+            color: var(--core-blue);
+            margin: 0;
+            font-size: 22px; /* Slightly reduced font size for better mobile fit */
+        }
+        .language-link {
+            text-decoration: none;
+            color: var(--accent-blue);
+            font-size: 14px;
+            white-space: nowrap; /* Prevents the link text from wrapping */
+            margin-left: 10px; /* Ensures space between title and link */
+        }
+        .bot-reply {
+            background-color: #ebf0fa;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            line-height: 1.5;
+            text-align: center;
+            min-height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .options button {
+            display: block;
+            width: 100%;
+            box-sizing: border-box;
+            margin: 8px 0;
+            padding: 15px;
+            border: 1px solid var(--core-blue);
+            border-radius: 5px;
+            background-color: var(--core-blue);
+            color: var(--white);
+            cursor: pointer;
+            font-size: 16px;
+            text-align: left;
+            transition: background-color 0.3s;
+        }
+        .options button:hover, .options button:focus {
+            background-color: #093582;
+        }
+        .note-section {
+            border-top: 1px solid #e1e1e2;
+            padding-top: 20px;
+            margin-top: 20px;
+        }
+        .note-label {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 14px;
+            color: #4b5563;
+        }
+        .note-form {
+            display: flex;
+            gap: 10px;
+        }
+        .note-form textarea {
+            flex-grow: 1;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            font-size: 14px;
+        }
+        .note-form button {
+            flex-shrink: 0;
+            padding: 10px 15px;
+            border: 1px solid var(--core-blue);
+            border-radius: 5px;
+            background-color: var(--core-blue);
+            color: var(--white);
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+        .note-form button:hover {
+            background-color: #093582;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #e1e1e2;
+        }
+        .footer p {
+            font-size: 12px;
+            color: #6b7280;
+            margin: 0;
+            line-height: 1.5;
+        }
+    </style>
 </head>
 <body>
-    <div class="container">
+    <div class="chat-box">
         <div class="header">
-            <h1>Postpartum CareConnect</h1>
+            <h2>Postpartum CareConnect</h2>
+            <a href="{{ url_for('reset_language') }}" class="language-link">Change Language</a>
         </div>
 
-        <div class="chat-log">
-            <!-- The bot's reply will be displayed here -->
-            <div class="message-bubble bot-message">
-                <p>{{ reply | safe }}</p>
-            </div>
+        <div class="bot-reply">
+            <p>{{ reply }}</p>
         </div>
 
-        <div class="options-form">
-            <form action="/chat" method="post">
-                <!-- Buttons for user options are created here -->
+        <div class="options">
+            <form method="POST" action="{{ url_for('handle_chat') }}" style="display: contents;">
                 {% for option in options %}
                     <button type="submit" name="user_input" value="{{ option }}">{{ option }}</button>
                 {% endfor %}
+            </form>
+        </div>
 
-                <!-- The section for typing a custom note -->
-                <div class="note-section">
-                    <input type="text" name="custom_note" placeholder="{{ button_data.custom_note_placeholder }}">
-                    <button type="submit" name="action" value="send_note">{{ button_data.send_note_button }}</button>
+        <div class="note-section">
+            <form method="POST" action="{{ url_for('handle_chat') }}">
+                <input type="hidden" name="action" value="send_note">
+                <label for="custom_note" class="note-label">{{ button_data.get('custom_note_placeholder', 'Or send a custom note to your nurse:') }}</label>
+                <div class="note-form">
+                    <textarea id="custom_note" name="custom_note" rows="2" placeholder="Type your message here..."></textarea>
+                    <button type="submit">{{ button_data.get('send_note_button', 'Send Note') }}</button>
                 </div>
             </form>
         </div>
+        
+        <!-- RESTORED: Footer with citation -->
         <div class="footer">
-             <a href="{{ url_for('reset_language') }}">Change Language</a>
+            <p>Educational content sourced from the Banner Health New Beginnings guide.</p>
         </div>
     </div>
 </body>
 </html>
+
