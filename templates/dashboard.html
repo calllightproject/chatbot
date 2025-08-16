@@ -127,51 +127,39 @@
 <script type="text/javascript">
     var socket = io();
 
-    // --- NEW: Function to play a notification sound ---
-    // Note: Audio will only play after the user has interacted with the page once (e.g., clicked a button).
-    // This is a security feature in all modern browsers.
     let audioContext;
     function playNotificationSound() {
         if (!audioContext) {
-            // Create the AudioContext on the first call
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
         }
-        
-        // Resume the context if it was suspended (e.g., on page load)
         if (audioContext.state === 'suspended') {
             audioContext.resume();
         }
-
         const oscillator = audioContext.createOscillator();
         const gainNode = audioContext.createGain();
-
         oscillator.connect(gainNode);
         gainNode.connect(audioContext.destination);
-
         oscillator.type = 'sine';
-        oscillator.frequency.setValueAtTime(880, audioContext.currentTime); // A pleasant A5 note
-
+        oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
         gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-        gainNode.gain.linearRampToValueAtTime(0.5, audioContext.currentTime + 0.05); // Quick fade in
-        gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.5);   // Fade out
-
+        gainNode.gain.linearRampToValueAtTime(0.5, audioContext.currentTime + 0.05);
+        gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.5);
         oscillator.start(audioContext.currentTime);
         oscillator.stop(audioContext.currentTime + 0.5);
     }
 
-
-    function initializeRequestItem(item) {
-        const requestTime = new Date(item.dataset.timestamp);
-
+    function startOrResetTimer(item, timestamp) {
+        if (item.intervalId) {
+            clearInterval(item.intervalId);
+        }
+        const requestTime = new Date(timestamp);
         function updateStatus() {
             const now = new Date();
             const minutes = Math.floor((now - requestTime) / 60000);
             const timestampSpan = item.querySelector('.timestamp');
-
             if (timestampSpan) {
                 timestampSpan.textContent = minutes > 0 ? `${minutes}m ago` : 'Just now';
             }
-
             item.classList.remove('status-new', 'status-warn', 'status-urgent');
             if (minutes >= 10) {
                 item.classList.add('status-urgent');
@@ -181,10 +169,11 @@
                 item.classList.add('status-new');
             }
         }
-
-        const intervalId = setInterval(updateStatus, 60000);
+        item.intervalId = setInterval(updateStatus, 60000);
         updateStatus();
+    }
 
+    function initializeRequestItem(item) {
         item.addEventListener('click', function(event) {
             const button = event.target;
             if (button.tagName !== 'BUTTON') return;
@@ -213,10 +202,13 @@
                 socket.emit('defer_request', { id: requestId });
             } 
             else if (button.classList.contains('complete-btn')) {
-                clearInterval(intervalId);
+                if (parentItem.intervalId) {
+                    clearInterval(parentItem.intervalId);
+                }
                 socket.emit('complete_request', { request_id: requestId });
             }
         });
+        startOrResetTimer(item, item.dataset.timestamp);
     }
 
     function addRequestToDashboard(data) {
@@ -255,21 +247,43 @@
     // --- SocketIO Event Listeners ---
     socket.on('new_request', function(data) {
         addRequestToDashboard(data);
-        // MODIFIED: Play the sound when a new request arrives.
         playNotificationSound();
     });
     
+    // MODIFIED: This logic now correctly updates the item in place.
     socket.on('request_updated', function(data) {
         const itemToUpdate = document.getElementById(data.id);
         if (itemToUpdate) {
-            itemToUpdate.remove();
-            addRequestToDashboard(data);
+            // Update the role class for the border color
+            itemToUpdate.classList.remove('cna');
+            itemToUpdate.classList.add('nurse');
+
+            // Update the role text
+            const roleSpan = itemToUpdate.querySelector('.role-span');
+            if (roleSpan) {
+                roleSpan.textContent = 'For: NURSE';
+            }
+
+            // Remove the defer button
+            const deferButton = itemToUpdate.querySelector('.defer-btn');
+            if (deferButton) {
+                deferButton.remove();
+            }
+
+            // Update the item's timestamp in the HTML
+            itemToUpdate.dataset.timestamp = data.new_timestamp;
+
+            // Reset the timer and color using the new timestamp
+            startOrResetTimer(itemToUpdate, data.new_timestamp);
         }
     });
 
     socket.on('remove_request', function(data) {
         const requestElement = document.getElementById(data.id);
         if (requestElement) {
+            if (requestElement.intervalId) {
+                clearInterval(requestElement.intervalId);
+            }
             requestElement.style.opacity = '0';
             setTimeout(() => requestElement.remove(), 500);
         }
