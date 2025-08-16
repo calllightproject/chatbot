@@ -4,164 +4,84 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Postpartum CareConnect</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --core-blue: #00205b;
-            --accent-blue: #007eb4;
-            --neutral-gray-text: #303235;
-            --light-gray-background: #f5f5f5;
-            --white: #ffffff;
-        }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            padding: 20px;
-            background-color: var(--light-gray-background);
-            color: var(--neutral-gray-text);
-        }
-        .chat-box {
-            max-width: 500px;
-            margin: 20px auto;
-            background: var(--white);
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        }
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #e1e1e2;
-            margin-bottom: 20px;
-        }
-        .header h2 {
-            color: var(--core-blue);
-            margin: 0;
-            font-size: 22px; /* Slightly reduced font size for better mobile fit */
-        }
-        .language-link {
-            text-decoration: none;
-            color: var(--accent-blue);
-            font-size: 14px;
-            white-space: nowrap; /* Prevents the link text from wrapping */
-            margin-left: 10px; /* Ensures space between title and link */
-        }
-        .bot-reply {
-            background-color: #ebf0fa;
-            padding: 15px;
-            margin-bottom: 20px;
-            border-radius: 8px;
-            line-height: 1.5;
-            text-align: center;
-            min-height: 50px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .options button {
-            display: block;
-            width: 100%;
-            box-sizing: border-box;
-            margin: 8px 0;
-            padding: 15px;
-            border: 1px solid var(--core-blue);
-            border-radius: 5px;
-            background-color: var(--core-blue);
-            color: var(--white);
-            cursor: pointer;
-            font-size: 16px;
-            text-align: left;
-            transition: background-color 0.3s;
-        }
-        .options button:hover, .options button:focus {
-            background-color: #093582;
-        }
-        .note-section {
-            border-top: 1px solid #e1e1e2;
-            padding-top: 20px;
-            margin-top: 20px;
-        }
-        .note-label {
-            display: block;
-            margin-bottom: 10px;
-            font-size: 14px;
-            color: #4b5563;
-        }
-        .note-form {
-            display: flex;
-            gap: 10px;
-        }
-        .note-form textarea {
-            flex-grow: 1;
-            border-radius: 5px;
-            border: 1px solid #ccc;
-            padding: 10px;
-            font-size: 14px;
-        }
-        .note-form button {
-            flex-shrink: 0;
-            padding: 10px 15px;
-            border: 1px solid var(--core-blue);
-            border-radius: 5px;
-            background-color: var(--core-blue);
-            color: var(--white);
-            cursor: pointer;
-            font-size: 14px;
-            transition: background-color 0.3s;
-        }
-        .note-form button:hover {
-            background-color: #093582;
-        }
-        .footer {
-            text-align: center;
-            margin-top: 20px;
-            padding-top: 15px;
-            border-top: 1px solid #e1e1e2;
-        }
-        .footer p {
-            font-size: 12px;
-            color: #6b7280;
-            margin: 0;
-            line-height: 1.5;
-        }
+        body { font-family: 'Inter', sans-serif; }
+        .chat-container { max-height: 80vh; }
     </style>
 </head>
-<body>
-    <div class="chat-box">
-        <div class="header">
-            <h2>Postpartum CareConnect</h2>
-            <a href="{{ url_for('reset_language') }}" class="language-link">Change Language</a>
-        </div>
+<body class="bg-gray-100 flex items-center justify-center h-screen">
+    <div class="w-full max-w-lg bg-white p-6 rounded-xl shadow-lg flex flex-col chat-container">
+        <header class="text-center mb-4">
+            <h1 class="text-2xl font-bold text-gray-800">Postpartum CareConnect</h1>
+        </header>
 
-        <div class="bot-reply">
-            <p>{{ reply }}</p>
-        </div>
-
-        <div class="options">
-            <form method="POST" action="{{ url_for('handle_chat') }}" style="display: contents;">
-                {% for option in options %}
-                    <button type="submit" name="user_input" value="{{ option }}">{{ option }}</button>
-                {% endfor %}
-            </form>
-        </div>
-
-        <div class="note-section">
-            <form method="POST" action="{{ url_for('handle_chat') }}">
-                <input type="hidden" name="action" value="send_note">
-                <label for="custom_note" class="note-label">{{ button_data.get('custom_note_placeholder', 'Or send a custom note to your nurse:') }}</label>
-                <div class="note-form">
-                    <textarea id="custom_note" name="custom_note" rows="2" placeholder="Type your message here..."></textarea>
-                    <button type="submit">{{ button_data.get('send_note_button', 'Send Note') }}</button>
+        <!-- MODIFIED: Added an ID to the chat log for easy access -->
+        <div id="chat-log" class="flex-grow overflow-y-auto p-4 bg-gray-50 rounded-lg mb-4">
+            <!-- Reply from the bot -->
+            <div class="flex justify-start mb-4">
+                <div class="bg-blue-500 text-white p-3 rounded-lg max-w-xs">
+                    <p>{{ reply | safe }}</p>
                 </div>
-            </form>
+            </div>
         </div>
-        
-        <!-- RESTORED: Footer with citation -->
-        <div class="footer">
-            <p>Educational content sourced from the Banner Health New Beginnings guide.</p>
+
+        <!-- User options form -->
+        <form action="/chat" method="post" class="space-y-3">
+            {% for option in options %}
+                <button type="submit" name="user_input" value="{{ option }}" class="w-full text-left text-lg bg-gray-200 text-gray-800 py-3 px-4 rounded-lg hover:bg-gray-300 transition-colors">
+                    {{ option }}
+                </button>
+            {% endfor %}
+
+            <!-- Custom Note Section -->
+            <div class="flex items-center space-x-2 pt-2">
+                <input type="text" name="custom_note" placeholder="{{ button_data.custom_note_placeholder }}" class="flex-grow p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button type="submit" name="action" value="send_note" class="bg-blue-600 text-white py-3 px-5 rounded-lg hover:bg-blue-700 transition-colors">
+                    {{ button_data.send_note_button }}
+                </button>
+            </div>
+        </form>
+        <div class="text-center mt-4">
+             <a href="{{ url_for('reset_language') }}" class="text-sm text-gray-500 hover:text-gray-700">Change Language</a>
         </div>
     </div>
+
+    <!-- NEW: JavaScript for real-time status updates -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script type="text/javascript">
+        // Connect to the server
+        var socket = io();
+
+        // Get the current room number from the session (passed by Flask)
+        const roomNumber = '{{ session.get("room_number", "unknown") }}';
+
+        // When the connection is established, join the correct room
+        socket.on('connect', function() {
+            socket.emit('join', { room: roomNumber });
+            console.log(`Patient view for room ${roomNumber} has joined its socket room.`);
+        });
+
+        // Listen for the 'status_update' event from the server
+        socket.on('status_update', function(data) {
+            const chatLog = document.getElementById('chat-log');
+            const message = data.message;
+
+            // Create a new chat bubble for the status update
+            const messageContainer = document.createElement('div');
+            messageContainer.className = 'flex justify-start mb-4';
+            
+            const messageBubble = document.createElement('div');
+            messageBubble.className = 'bg-green-500 text-white p-3 rounded-lg max-w-xs';
+            messageBubble.innerHTML = `<p>${message}</p>`;
+
+            messageContainer.appendChild(messageBubble);
+            chatLog.appendChild(messageContainer);
+
+            // Automatically scroll to the new message
+            chatLog.scrollTop = chatLog.scrollHeight;
+        });
+    </script>
 </body>
 </html>
-
-
