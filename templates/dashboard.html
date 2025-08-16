@@ -127,30 +127,51 @@
 <script type="text/javascript">
     var socket = io();
 
-    function startOrResetTimer(item, timestamp) {
-        if (item.intervalId) {
-            clearInterval(item.intervalId);
+    // --- NEW: Function to play a notification sound ---
+    // Note: Audio will only play after the user has interacted with the page once (e.g., clicked a button).
+    // This is a security feature in all modern browsers.
+    let audioContext;
+    function playNotificationSound() {
+        if (!audioContext) {
+            // Create the AudioContext on the first call
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
         }
-        const requestTime = new Date(timestamp);
+        
+        // Resume the context if it was suspended (e.g., on page load)
+        if (audioContext.state === 'suspended') {
+            audioContext.resume();
+        }
 
-        function updateTimestampAndColor() {
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(880, audioContext.currentTime); // A pleasant A5 note
+
+        gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+        gainNode.gain.linearRampToValueAtTime(0.5, audioContext.currentTime + 0.05); // Quick fade in
+        gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.5);   // Fade out
+
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.5);
+    }
+
+
+    function initializeRequestItem(item) {
+        const requestTime = new Date(item.dataset.timestamp);
+
+        function updateStatus() {
             const now = new Date();
             const minutes = Math.floor((now - requestTime) / 60000);
-            
-            // DEBUGGING: Log all the values used in the calculation.
-            console.log(`--- Checking ${item.dataset.id} ---`);
-            console.log(`Current Time: ${now.toISOString()}`);
-            console.log(`Request Time: ${requestTime.toISOString()}`);
-            console.log(`Calculated Minutes: ${minutes}`);
-            
             const timestampSpan = item.querySelector('.timestamp');
+
             if (timestampSpan) {
-                if (minutes > 0) {
-                    timestampSpan.textContent = String(minutes) + 'm ago';
-                } else {
-                    timestampSpan.textContent = 'Just now';
-                }
+                timestampSpan.textContent = minutes > 0 ? `${minutes}m ago` : 'Just now';
             }
+
             item.classList.remove('status-new', 'status-warn', 'status-urgent');
             if (minutes >= 10) {
                 item.classList.add('status-urgent');
@@ -160,82 +181,11 @@
                 item.classList.add('status-new');
             }
         }
-        
-        item.intervalId = setInterval(updateTimestampAndColor, 10000);
-        updateTimestampAndColor();
-    }
 
-    function addRequestToDashboard(data) {
-        const list = document.getElementById('requests-list');
-        if (document.getElementById(data.id)) {
-            return;
-        }
-        const item = document.createElement('li');
-        item.id = data.id;
-        item.className = 'request-item ' + data.role;
-        item.dataset.id = data.id;
-        item.dataset.room = data.room;
-        item.dataset.request = data.request;
-        item.dataset.role = data.role;
-        item.dataset.timestamp = data.timestamp;
-        let deferButtonHtml = '';
-        if (data.role === 'cna') {
-            deferButtonHtml = '<button class="defer-btn">Defer to Nurse</button>';
-        }
-        item.innerHTML =
-            `<p>${data.request}</p>
-             <span>Room: ${data.room}</span>
-             <span class="role-span">For: ${data.role.toUpperCase()}</span>
-             <span class="timestamp">Just now</span>
-             <button class="ack-button">Acknowledge</button>
-             <button class="omw-button">On my way</button>
-             <button class="asap-button">Be there ASAP</button>
-             ${deferButtonHtml}
-             <button class="complete-btn">Complete</button>`;
-        list.prepend(item);
-        startOrResetTimer(item, data.timestamp);
-    }
+        const intervalId = setInterval(updateStatus, 60000);
+        updateStatus();
 
-    // --- SocketIO Event Listeners ---
-    socket.on('new_request', function(data) {
-        addRequestToDashboard(data);
-    });
-    
-    socket.on('request_updated', function(data) {
-        const itemToUpdate = document.getElementById(data.id);
-        if (itemToUpdate) {
-            itemToUpdate.className = 'request-item ' + data.new_role;
-            const roleSpan = itemToUpdate.querySelector('.role-span');
-            if (roleSpan) {
-                roleSpan.textContent = 'For: ' + data.new_role.toUpperCase();
-            }
-            const deferButton = itemToUpdate.querySelector('.defer-btn');
-            if (deferButton) {
-                deferButton.remove();
-            }
-            itemToUpdate.dataset.timestamp = data.new_timestamp;
-            startOrResetTimer(itemToUpdate, data.new_timestamp);
-        }
-    });
-
-    socket.on('remove_request', function(data) {
-        const requestElement = document.getElementById(data.id);
-        if (requestElement) {
-            if (requestElement.intervalId) {
-                clearInterval(requestElement.intervalId);
-            }
-            requestElement.style.opacity = '0';
-            setTimeout(() => {
-                requestElement.remove();
-            }, 500);
-        }
-    });
-
-    // --- Main Event Listener for all buttons ---
-    document.addEventListener('DOMContentLoaded', function() {
-        const requestsList = document.getElementById('requests-list');
-
-        requestsList.addEventListener('click', function(event) {
+        item.addEventListener('click', function(event) {
             const button = event.target;
             if (button.tagName !== 'BUTTON') return;
 
@@ -255,25 +205,78 @@
             }
             else if (button.classList.contains('asap-button')) {
                 parentItem.querySelector('.asap-button').disabled = true;
-                parentItem.querySelector('.ack-button').disabled = true;
-                parentItem.querySelector('.omw-button').disabled = true;
+                if(parentItem.querySelector('.ack-button')) parentItem.querySelector('.ack-button').disabled = true;
+                if(parentItem.querySelector('.omw-button')) parentItem.querySelector('.omw-button').disabled = true;
                 socket.emit('acknowledge_request', { room: room, message: "A team member is with another patient and will be with you as soon as possible." });
             }
             else if (button.classList.contains('defer-btn')) {
                 socket.emit('defer_request', { id: requestId });
             } 
             else if (button.classList.contains('complete-btn')) {
-                if (parentItem.intervalId) {
-                    clearInterval(parentItem.intervalId);
-                }
+                clearInterval(intervalId);
                 socket.emit('complete_request', { request_id: requestId });
             }
         });
+    }
 
-        const initialRequestItems = document.querySelectorAll('#requests-list .request-item');
-        initialRequestItems.forEach(function(item) {
-            startOrResetTimer(item, item.dataset.timestamp);
-        });
+    function addRequestToDashboard(data) {
+        const list = document.getElementById('requests-list');
+        if (document.getElementById(data.id)) return;
+
+        const item = document.createElement('li');
+        item.id = data.id;
+        item.className = 'request-item ' + data.role;
+        item.dataset.id = data.id;
+        item.dataset.room = data.room;
+        item.dataset.request = data.request;
+        item.dataset.role = data.role;
+        item.dataset.timestamp = data.timestamp;
+
+        let deferButtonHtml = '';
+        if (data.role === 'cna') {
+            deferButtonHtml = '<button class="defer-btn">Defer to Nurse</button>';
+        }
+
+        item.innerHTML =
+            `<p>${data.request}</p>
+             <span>Room: ${data.room}</span>
+             <span class="role-span">For: ${data.role.toUpperCase()}</span>
+             <span class="timestamp"></span>
+             <button class="ack-button">Acknowledge</button>
+             <button class="omw-button">On my way</button>
+             <button class="asap-button">Be there ASAP</button>
+             ${deferButtonHtml}
+             <button class="complete-btn">Complete</button>`;
+        
+        list.prepend(item);
+        initializeRequestItem(item);
+    }
+
+    // --- SocketIO Event Listeners ---
+    socket.on('new_request', function(data) {
+        addRequestToDashboard(data);
+        // MODIFIED: Play the sound when a new request arrives.
+        playNotificationSound();
+    });
+    
+    socket.on('request_updated', function(data) {
+        const itemToUpdate = document.getElementById(data.id);
+        if (itemToUpdate) {
+            itemToUpdate.remove();
+            addRequestToDashboard(data);
+        }
+    });
+
+    socket.on('remove_request', function(data) {
+        const requestElement = document.getElementById(data.id);
+        if (requestElement) {
+            requestElement.style.opacity = '0';
+            setTimeout(() => requestElement.remove(), 500);
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('#requests-list .request-item').forEach(initializeRequestItem);
     });
 </script>
 
