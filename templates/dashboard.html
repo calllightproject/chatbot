@@ -190,6 +190,8 @@
             } 
             else if (button.classList.contains('omw-button')) {
                 parentItem.querySelector('.omw-button').disabled = true;
+                // MODIFIED: Also disable the 'Acknowledge' button for a better workflow
+                if(parentItem.querySelector('.ack-button')) parentItem.querySelector('.ack-button').disabled = true;
                 socket.emit('acknowledge_request', { room: room, message: "✅ A team member is on their way." });
             }
             else if (button.classList.contains('asap-button')) {
