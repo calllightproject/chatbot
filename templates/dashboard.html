@@ -127,17 +127,12 @@
 <script type="text/javascript">
     var socket = io();
 
-    // --- NEW: Function to play a notification sound ---
-    // Note: Audio will only play after the user has interacted with the page once (e.g., clicked a button).
-    // This is a security feature in all modern browsers.
     let audioContext;
     function playNotificationSound() {
         if (!audioContext) {
-            // Create the AudioContext on the first call
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
         }
         
-        // Resume the context if it was suspended (e.g., on page load)
         if (audioContext.state === 'suspended') {
             audioContext.resume();
         }
@@ -149,11 +144,11 @@
         gainNode.connect(audioContext.destination);
 
         oscillator.type = 'sine';
-        oscillator.frequency.setValueAtTime(880, audioContext.currentTime); // A pleasant A5 note
+        oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
 
         gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-        gainNode.gain.linearRampToValueAtTime(0.5, audioContext.currentTime + 0.05); // Quick fade in
-        gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.5);   // Fade out
+        gainNode.gain.linearRampToValueAtTime(0.5, audioContext.currentTime + 0.05);
+        gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.5);
 
         oscillator.start(audioContext.currentTime);
         oscillator.stop(audioContext.currentTime + 0.5);
@@ -201,6 +196,10 @@
             } 
             else if (button.classList.contains('omw-button')) {
                 parentItem.querySelector('.omw-button').disabled = true;
+                // THIS IS THE ONLY CHANGE
+                if (parentItem.querySelector('.ack-button')) {
+                    parentItem.querySelector('.ack-button').disabled = true;
+                }
                 socket.emit('acknowledge_request', { room: room, message: "✅ A team member is on their way." });
             }
             else if (button.classList.contains('asap-button')) {
@@ -255,7 +254,6 @@
     // --- SocketIO Event Listeners ---
     socket.on('new_request', function(data) {
         addRequestToDashboard(data);
-        // MODIFIED: Play the sound when a new request arrives.
         playNotificationSound();
     });
     
