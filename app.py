@@ -20,9 +20,14 @@ app = Flask(__name__, template_folder='templates')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-strong-fallback-secret-key-for-local-development")
 socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*", manage_session=False, ping_timeout=20, ping_interval=10)
 
-# --- Master Data Lists ---
+# --- Master Data Lists (To be deprecated) ---
+# We keep this here for the one-time population of the new staff table.
+INITIAL_STAFF = {
+    'Jackie': 'nurse', 'Carol': 'nurse', 'John': 'nurse',
+    'Maria': 'nurse', 'David': 'nurse', 'Susan': 'nurse',
+    'Peter': 'cna', 'Linda': 'cna' 
+}
 ALL_ROOMS = [str(room) for room in range(231, 261)]
-ALL_NURSES = ['Jackie', 'Carol', 'John', 'Maria', 'David', 'Susan', 'Peter', 'Linda']
 
 
 # --- Database Configuration ---
@@ -36,7 +41,6 @@ engine = create_engine(DATABASE_URL, pool_recycle=280, pool_pre_ping=True)
 # --- Database Setup ---
 def setup_database():
     try:
-        # --- First Transaction: Create all tables ---
         with engine.connect() as connection:
             with connection.begin():
                 print("Running CREATE TABLE statements...")
@@ -59,9 +63,28 @@ def setup_database():
                         event_type VARCHAR(255) NOT NULL, details TEXT
                     );
                 """))
+                # NEW: Create the staff table
+                connection.execute(text("""
+                    CREATE TABLE IF NOT EXISTS staff (
+                        id SERIAL PRIMARY KEY,
+                        name VARCHAR(255) UNIQUE NOT NULL,
+                        role VARCHAR(50) NOT NULL -- 'nurse' or 'cna'
+                    );
+                """))
                 print("CREATE TABLE statements complete.")
 
-        # --- Second Transaction: Modify existing tables (safer) ---
+                # --- One-time population of the staff table ---
+                # Check if the staff table is empty before inserting
+                count = connection.execute(text("SELECT COUNT(id) FROM staff;")).scalar()
+                if count == 0:
+                    print("Staff table is empty. Populating with initial staff...")
+                    for name, role in INITIAL_STAFF.items():
+                        connection.execute(text("""
+                            INSERT INTO staff (name, role) VALUES (:name, :role)
+                            ON CONFLICT (name) DO NOTHING;
+                        """), {"name": name, "role": role})
+                    print("Initial staff population complete.")
+
         with engine.connect() as connection:
             with connection.begin():
                 try:
@@ -312,6 +335,15 @@ def analytics():
 @app.route('/assignments', methods=['GET', 'POST'])
 def assignments():
     today = date.today()
+    # MODIFIED: Fetch nurses from the new staff table
+    all_nurses = []
+    try:
+        with engine.connect() as connection:
+            result = connection.execute(text("SELECT name FROM staff WHERE role = 'nurse' ORDER BY name;"))
+            all_nurses = [row[0] for row in result]
+    except Exception as e:
+        print(f"ERROR fetching nurses: {e}")
+
     if request.method == 'POST':
         try:
             with engine.connect() as connection:
@@ -334,6 +366,7 @@ def assignments():
         except Exception as e:
             print(f"ERROR saving assignments: {e}")
         return redirect(url_for('dashboard'))
+    
     current_assignments = {}
     try:
         with engine.connect() as connection:
@@ -342,7 +375,8 @@ def assignments():
                 current_assignments[row.room_number] = row.nurse_name
     except Exception as e:
         print(f"ERROR fetching assignments: {e}")
-    return render_template('assignments.html', rooms=ALL_ROOMS, nurses=ALL_NURSES, assignments=current_assignments)
+    
+    return render_template('assignments.html', rooms=ALL_ROOMS, nurses=all_nurses, assignments=current_assignments)
 
 # --- SocketIO Event Handlers ---
 @socketio.on('join')
