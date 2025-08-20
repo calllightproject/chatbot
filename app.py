@@ -107,14 +107,28 @@ def route_note_intelligently(note_text):
     return 'cna'
 
 # --- Core Helper Functions ---
+# MODIFIED: This function now also emits a socket event for real-time updates.
 def log_to_audit_trail(event_type, details):
     try:
+        now_utc = datetime.now(timezone.utc)
         with engine.connect() as connection:
             with connection.begin():
                 connection.execute(text("""
                     INSERT INTO audit_log (timestamp, event_type, details)
                     VALUES (:timestamp, :event_type, :details);
-                """), { "timestamp": datetime.now(timezone.utc), "event_type": event_type, "details": details })
+                """), {
+                    "timestamp": now_utc,
+                    "event_type": event_type,
+                    "details": details
+                })
+        
+        # After saving, send the new log entry to all connected manager dashboards
+        socketio.emit('new_audit_log', {
+            'timestamp': now_utc.strftime('%Y-%m-%d %H:%M:%S') + ' UTC',
+            'event_type': event_type,
+            'details': details
+        })
+
     except Exception as e:
         print(f"ERROR logging to audit trail: {e}")
 
@@ -373,20 +387,14 @@ def assignments():
     
     return render_template('assignments.html', rooms=ALL_ROOMS, nurses=all_nurses, assignments=current_assignments)
 
-# NEW: Route for the manager dashboard
 @app.route('/manager-dashboard')
 def manager_dashboard():
-    # In a real app, you'd add password protection here
-    
     staff_list = []
     audit_log = []
     try:
         with engine.connect() as connection:
-            # Fetch all staff members
             staff_result = connection.execute(text("SELECT id, name, role FROM staff ORDER BY name;"))
             staff_list = staff_result.fetchall()
-
-            # Fetch recent audit log entries
             audit_result = connection.execute(text("SELECT timestamp, event_type, details FROM audit_log ORDER BY timestamp DESC LIMIT 50;"))
             audit_log = audit_result.fetchall()
     except Exception as e:
