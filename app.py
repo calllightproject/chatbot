@@ -83,9 +83,6 @@ def setup_database():
     except Exception as e:
         print(f"CRITICAL ERROR during database setup: {e}")
 
-# --- THIS IS THE FIX: Force the database setup to run on every startup ---
-setup_database()
-
 # --- Smart Routing Logic ---
 def route_note_intelligently(note_text):
     NURSE_KEYWORDS = [
@@ -99,8 +96,6 @@ def route_note_intelligently(note_text):
     return 'cna'
 
 # --- Core Helper Functions ---
-
-# NEW: Function to write to the audit log
 def log_to_audit_trail(event_type, details):
     try:
         with engine.connect() as connection:
@@ -128,7 +123,6 @@ def log_request_to_db(request_id, category, user_input, reply, room, is_first_ba
                     "request_id": request_id, "timestamp": datetime.now(timezone.utc), "room": room,
                     "category": category, "user_input": user_input, "reply": reply, "is_first_baby": is_first_baby
                 })
-        # Log this event to the audit trail
         log_to_audit_trail("Request Created", f"Room: {room}, Request: '{user_input}', Assigned to: {category.upper()}")
     except Exception as e:
         print(f"ERROR logging to database: {e}")
@@ -414,7 +408,9 @@ def handle_complete_request(data):
             print(f"ERROR updating completion timestamp: {e}")
 
 # --- App Startup ---
-# REMOVED: The with app.app_context() block is no longer needed here.
+# THIS IS THE FIX: This ensures the setup runs in the correct context for production.
+with app.app_context():
+    setup_database()
 
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
