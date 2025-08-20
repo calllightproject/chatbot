@@ -148,22 +148,20 @@
         oscillator.stop(audioContext.currentTime + 0.5);
     }
 
-    function startOrResetTimer(item) {
-        if (item.intervalId) {
-            clearInterval(item.intervalId);
-        }
+    // THIS IS THE FINAL, ROBUST IMPLEMENTATION
+    function initializeRequestItem(item) {
+        const requestId = item.dataset.id;
+        const room = item.dataset.room;
         
+        // --- Timer and Color Logic ---
+        const timestampSpan = item.querySelector('.timestamp');
         function updateStatus() {
-            // THIS IS THE FIX: Re-read the timestamp on every tick to prevent reset issues.
             const requestTime = new Date(item.dataset.timestamp);
             const now = new Date();
             const minutes = Math.floor((now - requestTime) / 60000);
-            const timestampSpan = item.querySelector('.timestamp');
-
             if (timestampSpan) {
                 timestampSpan.textContent = minutes > 0 ? `${minutes}m ago` : 'Just now';
             }
-
             item.classList.remove('status-new', 'status-warn', 'status-urgent');
             if (minutes >= 10) {
                 item.classList.add('status-urgent');
@@ -173,9 +171,48 @@
                 item.classList.add('status-new');
             }
         }
-        
-        item.intervalId = setInterval(updateStatus, 60000);
+        const intervalId = setInterval(updateStatus, 60000);
         updateStatus();
+
+        // --- Button Click Handlers ---
+        const ackButton = item.querySelector('.ack-button');
+        const omwButton = item.querySelector('.omw-button');
+        const asapButton = item.querySelector('.asap-button');
+        const deferButton = item.querySelector('.defer-btn');
+        const completeButton = item.querySelector('.complete-btn');
+
+        if (ackButton) {
+            ackButton.addEventListener('click', () => {
+                ackButton.disabled = true;
+                socket.emit('acknowledge_request', { room: room, message: "✅ Your request was received and will be addressed shortly." });
+            });
+        }
+        if (omwButton) {
+            omwButton.addEventListener('click', () => {
+                omwButton.disabled = true;
+                if (ackButton) ackButton.disabled = true;
+                socket.emit('acknowledge_request', { room: room, message: "✅ A team member is on their way." });
+            });
+        }
+        if (asapButton) {
+            asapButton.addEventListener('click', () => {
+                asapButton.disabled = true;
+                if (ackButton) ackButton.disabled = true;
+                if (omwButton) omwButton.disabled = true;
+                socket.emit('acknowledge_request', { room: room, message: "A team member is with another patient and will be with you as soon as possible." });
+            });
+        }
+        if (deferButton) {
+            deferButton.addEventListener('click', () => {
+                socket.emit('defer_request', { id: requestId });
+            });
+        }
+        if (completeButton) {
+            completeButton.addEventListener('click', () => {
+                clearInterval(intervalId);
+                socket.emit('complete_request', { request_id: requestId });
+            });
+        }
     }
 
     function addRequestToDashboard(data) {
@@ -208,52 +245,7 @@
              <button class="complete-btn">Complete</button>`;
         
         list.prepend(item);
-        initializeRequestItem(item);
-    }
-
-    function initializeRequestItem(item) {
-        startOrResetTimer(item);
-
-        const ackButton = item.querySelector('.ack-button');
-        const omwButton = item.querySelector('.omw-button');
-        const asapButton = item.querySelector('.asap-button');
-        const deferButton = item.querySelector('.defer-btn');
-        const completeButton = item.querySelector('.complete-btn');
-
-        if (ackButton) {
-            ackButton.addEventListener('click', () => {
-                ackButton.disabled = true;
-                socket.emit('acknowledge_request', { room: item.dataset.room, message: "✅ Your request was received and will be addressed shortly." });
-            });
-        }
-        if (omwButton) {
-            omwButton.addEventListener('click', () => {
-                omwButton.disabled = true;
-                if (ackButton) ackButton.disabled = true;
-                socket.emit('acknowledge_request', { room: item.dataset.room, message: "✅ A team member is on their way." });
-            });
-        }
-        if (asapButton) {
-            asapButton.addEventListener('click', () => {
-                asapButton.disabled = true;
-                if (ackButton) ackButton.disabled = true;
-                if (omwButton) omwButton.disabled = true;
-                socket.emit('acknowledge_request', { room: item.dataset.room, message: "A team member is with another patient and will be with you as soon as possible." });
-            });
-        }
-        if (deferButton) {
-            deferButton.addEventListener('click', () => {
-                socket.emit('defer_request', { id: item.dataset.id });
-            });
-        }
-        if (completeButton) {
-            completeButton.addEventListener('click', () => {
-                if (item.intervalId) {
-                    clearInterval(item.intervalId);
-                }
-                socket.emit('complete_request', { request_id: item.dataset.id });
-            });
-        }
+        initializeRequestItem(item); // Initialize the newly added item
     }
 
     // --- SocketIO Event Listeners ---
@@ -265,24 +257,15 @@
     socket.on('request_updated', function(data) {
         const itemToUpdate = document.getElementById(data.id);
         if (itemToUpdate) {
-            itemToUpdate.classList.remove('cna');
-            itemToUpdate.classList.add('nurse');
-            const roleSpan = itemToUpdate.querySelector('.role-span');
-            if (roleSpan) {
-                roleSpan.textContent = 'For: NURSE';
-            }
-            const deferButton = itemToUpdate.querySelector('.defer-btn');
-            if (deferButton) {
-                deferButton.remove();
-            }
-            itemToUpdate.dataset.timestamp = data.new_timestamp;
-            startOrResetTimer(itemToUpdate);
+            itemToUpdate.remove();
+            addRequestToDashboard(data);
         }
     });
 
     socket.on('remove_request', function(data) {
         const requestElement = document.getElementById(data.id);
         if (requestElement) {
+            // This is a failsafe to clear the timer if it's still running
             if (requestElement.intervalId) {
                 clearInterval(requestElement.intervalId);
             }
