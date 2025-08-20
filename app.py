@@ -83,6 +83,9 @@ def setup_database():
     except Exception as e:
         print(f"CRITICAL ERROR during database setup: {e}")
 
+# --- THIS IS THE FIX: Force the database setup to run on every startup ---
+setup_database()
+
 # --- Smart Routing Logic ---
 def route_note_intelligently(note_text):
     NURSE_KEYWORDS = [
@@ -408,9 +411,7 @@ def handle_complete_request(data):
             print(f"ERROR updating completion timestamp: {e}")
 
 # --- App Startup ---
-# THIS IS THE FIX: This ensures the setup runs in the correct context for production.
-with app.app_context():
-    setup_database()
+# REMOVED: The with app.app_context() block is no longer needed here.
 
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
