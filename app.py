@@ -62,7 +62,6 @@ def setup_database():
                     );
                 """))
                 
-                # NEW: Create the audit log table
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS audit_log (
                         id SERIAL PRIMARY KEY,
@@ -97,6 +96,23 @@ def route_note_intelligently(note_text):
     return 'cna'
 
 # --- Core Helper Functions ---
+
+# NEW: Function to write to the audit log
+def log_to_audit_trail(event_type, details):
+    try:
+        with engine.connect() as connection:
+            with connection.begin():
+                connection.execute(text("""
+                    INSERT INTO audit_log (timestamp, event_type, details)
+                    VALUES (:timestamp, :event_type, :details);
+                """), {
+                    "timestamp": datetime.now(timezone.utc),
+                    "event_type": event_type,
+                    "details": details
+                })
+    except Exception as e:
+        print(f"ERROR logging to audit trail: {e}")
+
 def log_request_to_db(request_id, category, user_input, reply, room, is_first_baby):
     print(f"DEBUG: Logging request. is_first_baby = {is_first_baby}")
     try:
@@ -109,6 +125,8 @@ def log_request_to_db(request_id, category, user_input, reply, room, is_first_ba
                     "request_id": request_id, "timestamp": datetime.now(timezone.utc), "room": room,
                     "category": category, "user_input": user_input, "reply": reply, "is_first_baby": is_first_baby
                 })
+        # Log this event to the audit trail
+        log_to_audit_trail("Request Created", f"Room: {room}, Request: '{user_input}', Assigned to: {category.upper()}")
     except Exception as e:
         print(f"ERROR logging to database: {e}")
 
@@ -370,7 +388,8 @@ def handle_defer_request(data):
         socketio.emit('request_updated', {
             'id': request_id, 'new_role': 'nurse', 'new_timestamp': new_timestamp_iso
         })
-        print(f"Request {request_id} deferred to nurse.")
+        # Log this event to the audit trail
+        log_to_audit_trail("Request Deferred", f"Request ID: {request_id} deferred to NURSE.")
     except Exception as e:
         print(f"ERROR deferring request {request_id}: {e}")
 
@@ -384,6 +403,8 @@ def handle_complete_request(data):
                 try:
                     connection.execute(text("UPDATE requests SET completion_timestamp = :now WHERE request_id = :request_id;"), {"now": datetime.now(timezone.utc), "request_id": request_id})
                     trans.commit()
+                    # Log this event to the audit trail
+                    log_to_audit_trail("Request Completed", f"Request ID: {request_id} marked as complete.")
                 except Exception as e:
                     trans.rollback()
                     raise
