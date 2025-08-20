@@ -83,6 +83,9 @@ def setup_database():
     except Exception as e:
         print(f"CRITICAL ERROR during database setup: {e}")
 
+# --- THIS IS THE FIX: Force the database setup to run on every startup ---
+setup_database()
+
 # --- Smart Routing Logic ---
 def route_note_intelligently(note_text):
     NURSE_KEYWORDS = [
@@ -388,7 +391,6 @@ def handle_defer_request(data):
         socketio.emit('request_updated', {
             'id': request_id, 'new_role': 'nurse', 'new_timestamp': new_timestamp_iso
         })
-        # Log this event to the audit trail
         log_to_audit_trail("Request Deferred", f"Request ID: {request_id} deferred to NURSE.")
     except Exception as e:
         print(f"ERROR deferring request {request_id}: {e}")
@@ -403,7 +405,6 @@ def handle_complete_request(data):
                 try:
                     connection.execute(text("UPDATE requests SET completion_timestamp = :now WHERE request_id = :request_id;"), {"now": datetime.now(timezone.utc), "request_id": request_id})
                     trans.commit()
-                    # Log this event to the audit trail
                     log_to_audit_trail("Request Completed", f"Request ID: {request_id} marked as complete.")
                 except Exception as e:
                     trans.rollback()
@@ -413,8 +414,7 @@ def handle_complete_request(data):
             print(f"ERROR updating completion timestamp: {e}")
 
 # --- App Startup ---
-with app.app_context():
-    setup_database()
+# REMOVED: The with app.app_context() block is no longer needed here.
 
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
