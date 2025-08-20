@@ -42,9 +42,9 @@ def setup_database():
                     CREATE TABLE IF NOT EXISTS requests (
                         id SERIAL PRIMARY KEY,
                         request_id VARCHAR(255) UNIQUE,
-                        timestamp TIMESTAMP WITH TIME ZONE, -- MODIFIED for timezone support
-                        completion_timestamp TIMESTAMP WITH TIME ZONE, -- MODIFIED for timezone support
-                        deferral_timestamp TIMESTAMP WITH TIME ZONE, -- MODIFIED for timezone support
+                        timestamp TIMESTAMP WITH TIME ZONE,
+                        completion_timestamp TIMESTAMP WITH TIME ZONE,
+                        deferral_timestamp TIMESTAMP WITH TIME ZONE,
                         room VARCHAR(255),
                         user_input TEXT,
                         category VARCHAR(255),
@@ -62,32 +62,39 @@ def setup_database():
                     );
                 """))
                 
-                # --- Migration scripts to update existing tables ---
+                # NEW: Create the audit log table
+                connection.execute(text("""
+                    CREATE TABLE IF NOT EXISTS audit_log (
+                        id SERIAL PRIMARY KEY,
+                        timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+                        event_type VARCHAR(255) NOT NULL,
+                        details TEXT
+                    );
+                """))
+
                 try:
-                    # This command will fail if the column already exists, which is fine.
                     connection.execute(text("""
                         ALTER TABLE requests ADD COLUMN deferral_timestamp TIMESTAMP WITH TIME ZONE;
                     """))
-                    print("SUCCESS: Added 'deferral_timestamp' column.")
+                    print("SUCCESS: Added 'deferral_timestamp' column to requests table.")
                 except ProgrammingError:
-                    print("INFO: 'deferral_timestamp' column likely already exists.")
+                    print("INFO: 'deferral_timestamp' column likely already exists. Continuing.")
                     pass
-                
-                try:
-                    # This command ensures all timestamp columns are timezone-aware.
-                    connection.execute(text("""
-                        ALTER TABLE requests 
-                        ALTER COLUMN timestamp TYPE TIMESTAMP WITH TIME ZONE,
-                        ALTER COLUMN completion_timestamp TYPE TIMESTAMP WITH TIME ZONE;
-                    """))
-                    print("SUCCESS: Ensured timestamp columns are timezone-aware.")
-                except ProgrammingError:
-                    print("INFO: Timestamp columns likely already timezone-aware.")
-                    pass
-
         print("Database setup complete. Tables are ready.")
     except Exception as e:
         print(f"CRITICAL ERROR during database setup: {e}")
+
+# --- Smart Routing Logic ---
+def route_note_intelligently(note_text):
+    NURSE_KEYWORDS = [
+        'pain', 'medication', 'bleeding', 'nausea', 'dizzy', 
+        'sick', 'iv', 'pump', 'staples', 'incision'
+    ]
+    note_lower = note_text.lower()
+    for keyword in NURSE_KEYWORDS:
+        if keyword in note_lower:
+            return 'nurse'
+    return 'cna'
 
 # --- Core Helper Functions ---
 def log_request_to_db(request_id, category, user_input, reply, room, is_first_baby):
