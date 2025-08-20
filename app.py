@@ -21,7 +21,6 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-strong-fallback-secret-key-for
 socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*", manage_session=False, ping_timeout=20, ping_interval=10)
 
 # --- Master Data Lists (To be deprecated) ---
-# We keep this here for the one-time population of the new staff table.
 INITIAL_STAFF = {
     'Jackie': 'nurse', 'Carol': 'nurse', 'John': 'nurse',
     'Maria': 'nurse', 'David': 'nurse', 'Susan': 'nurse',
@@ -63,18 +62,15 @@ def setup_database():
                         event_type VARCHAR(255) NOT NULL, details TEXT
                     );
                 """))
-                # NEW: Create the staff table
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS staff (
                         id SERIAL PRIMARY KEY,
                         name VARCHAR(255) UNIQUE NOT NULL,
-                        role VARCHAR(50) NOT NULL -- 'nurse' or 'cna'
+                        role VARCHAR(50) NOT NULL
                     );
                 """))
                 print("CREATE TABLE statements complete.")
 
-                # --- One-time population of the staff table ---
-                # Check if the staff table is empty before inserting
                 count = connection.execute(text("SELECT COUNT(id) FROM staff;")).scalar()
                 if count == 0:
                     print("Staff table is empty. Populating with initial staff...")
@@ -335,7 +331,6 @@ def analytics():
 @app.route('/assignments', methods=['GET', 'POST'])
 def assignments():
     today = date.today()
-    # MODIFIED: Fetch nurses from the new staff table
     all_nurses = []
     try:
         with engine.connect() as connection:
@@ -377,6 +372,28 @@ def assignments():
         print(f"ERROR fetching assignments: {e}")
     
     return render_template('assignments.html', rooms=ALL_ROOMS, nurses=all_nurses, assignments=current_assignments)
+
+# NEW: Route for the manager dashboard
+@app.route('/manager-dashboard')
+def manager_dashboard():
+    # In a real app, you'd add password protection here
+    
+    staff_list = []
+    audit_log = []
+    try:
+        with engine.connect() as connection:
+            # Fetch all staff members
+            staff_result = connection.execute(text("SELECT id, name, role FROM staff ORDER BY name;"))
+            staff_list = staff_result.fetchall()
+
+            # Fetch recent audit log entries
+            audit_result = connection.execute(text("SELECT timestamp, event_type, details FROM audit_log ORDER BY timestamp DESC LIMIT 50;"))
+            audit_log = audit_result.fetchall()
+    except Exception as e:
+        print(f"ERROR fetching manager dashboard data: {e}")
+
+    return render_template('manager_dashboard.html', staff=staff_list, audit_log=audit_log)
+
 
 # --- SocketIO Event Handlers ---
 @socketio.on('join')
