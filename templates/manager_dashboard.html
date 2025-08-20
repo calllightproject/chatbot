@@ -7,7 +7,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        /* MODIFIED: Added your custom color variables */
         :root {
             --core-blue: #00205b;
             --accent-blue: #007eb4;
@@ -20,13 +19,12 @@
             background-color: var(--light-gray-background); 
             color: var(--neutral-gray-text);
         }
-        /* Custom styles to apply your color scheme */
         .header-title { color: var(--core-blue); }
         .header-subtitle { color: var(--neutral-gray-text); }
         .card { background-color: var(--white); }
         .card-header { color: var(--neutral-gray-text); }
         .button-primary { background-color: var(--core-blue); color: var(--white); }
-        .button-primary:hover { background-color: #093582; } /* A darker shade of core-blue */
+        .button-primary:hover { background-color: #093582; }
         .link { color: var(--accent-blue); }
         .link:hover { color: var(--core-blue); }
     </style>
@@ -41,11 +39,9 @@
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             
-            <!-- Staff Management Section -->
             <div class="lg:col-span-1 card p-6 rounded-xl shadow-md">
                 <h2 class="text-xl font-semibold card-header mb-4">Manage Staff</h2>
                 
-                <!-- Add New Staff Form -->
                 <form class="mb-6">
                     <h3 class="text-lg font-medium text-gray-600 mb-2">Add New Staff Member</h3>
                     <div class="space-y-3">
@@ -66,7 +62,6 @@
                     </div>
                 </form>
 
-                <!-- Current Staff List -->
                 <div>
                     <h3 class="text-lg font-medium text-gray-600 mb-2">Current Staff</h3>
                     <ul class="space-y-2">
@@ -85,7 +80,6 @@
                 </div>
             </div>
 
-            <!-- Audit Log Section -->
             <div class="lg:col-span-2 card p-6 rounded-xl shadow-md">
                 <h2 class="text-xl font-semibold card-header mb-4">Recent Activity (Audit Log)</h2>
                 <div class="overflow-x-auto">
@@ -97,7 +91,7 @@
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
                             </tr>
                         </thead>
-                        <tbody class="bg-white divide-y divide-gray-200">
+                        <tbody id="audit-log-body" class="bg-white divide-y divide-gray-200">
                             {% for log in audit_log %}
                             <tr>
                                 <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }} UTC</td>
@@ -105,7 +99,7 @@
                                 <td class="px-4 py-4 text-sm text-gray-500">{{ log.details }}</td>
                             </tr>
                             {% else %}
-                            <tr>
+                            <tr id="no-logs-row">
                                 <td colspan="3" class="px-4 py-4 text-center text-gray-500">No audit log entries found.</td>
                             </tr>
                             {% endfor %}
@@ -120,6 +114,28 @@
              <a href="{{ url_for('dashboard') }}" class="link transition-colors">← Back to Main Dashboard</a>
         </footer>
     </div>
+
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script type="text/javascript">
+        var socket = io();
+
+        socket.on('new_audit_log', function(data) {
+            const tableBody = document.getElementById('audit-log-body');
+            
+            const noLogsRow = document.getElementById('no-logs-row');
+            if (noLogsRow) {
+                noLogsRow.remove();
+            }
+
+            const newRow = document.createElement('tr');
+            newRow.innerHTML = `
+                <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">${data.timestamp}</td>
+                <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${data.event_type}</td>
+                <td class="px-4 py-4 text-sm text-gray-500">${data.details}</td>
+            `;
+            tableBody.prepend(newRow);
+        });
+    </script>
 
 </body>
 </html>
