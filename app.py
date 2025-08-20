@@ -12,7 +12,7 @@ from email.message import EmailMessage
 
 from flask import Flask, render_template, request, session, redirect, url_for
 from flask_socketio import SocketIO, join_room
-from sqlalchemy import create_engine, text, inspect
+from sqlalchemy import create_engine, text
 from sqlalchemy.exc import ProgrammingError
 
 # --- App Configuration ---
@@ -36,49 +36,42 @@ engine = create_engine(DATABASE_URL, pool_recycle=280, pool_pre_ping=True)
 # --- Database Setup ---
 def setup_database():
     try:
+        # --- First Transaction: Create all tables ---
         with engine.connect() as connection:
             with connection.begin():
+                print("Running CREATE TABLE statements...")
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS requests (
-                        id SERIAL PRIMARY KEY,
-                        request_id VARCHAR(255) UNIQUE,
-                        timestamp TIMESTAMP WITH TIME ZONE,
-                        completion_timestamp TIMESTAMP WITH TIME ZONE,
-                        deferral_timestamp TIMESTAMP WITH TIME ZONE,
-                        room VARCHAR(255),
-                        user_input TEXT,
-                        category VARCHAR(255),
-                        reply TEXT,
-                        is_first_baby BOOLEAN
+                        id SERIAL PRIMARY KEY, request_id VARCHAR(255) UNIQUE, timestamp TIMESTAMP WITH TIME ZONE,
+                        completion_timestamp TIMESTAMP WITH TIME ZONE, deferral_timestamp TIMESTAMP WITH TIME ZONE,
+                        room VARCHAR(255), user_input TEXT, category VARCHAR(255), reply TEXT, is_first_baby BOOLEAN
                     );
                 """))
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS assignments (
-                        id SERIAL PRIMARY KEY,
-                        assignment_date DATE NOT NULL,
-                        room_number VARCHAR(255) NOT NULL,
-                        nurse_name VARCHAR(255) NOT NULL,
-                        UNIQUE(assignment_date, room_number)
+                        id SERIAL PRIMARY KEY, assignment_date DATE NOT NULL, room_number VARCHAR(255) NOT NULL,
+                        nurse_name VARCHAR(255) NOT NULL, UNIQUE(assignment_date, room_number)
                     );
                 """))
-                
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS audit_log (
-                        id SERIAL PRIMARY KEY,
-                        timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
-                        event_type VARCHAR(255) NOT NULL,
-                        details TEXT
+                        id SERIAL PRIMARY KEY, timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+                        event_type VARCHAR(255) NOT NULL, details TEXT
                     );
                 """))
+                print("CREATE TABLE statements complete.")
 
+        # --- Second Transaction: Modify existing tables (safer) ---
+        with engine.connect() as connection:
+            with connection.begin():
                 try:
-                    connection.execute(text("""
-                        ALTER TABLE requests ADD COLUMN deferral_timestamp TIMESTAMP WITH TIME ZONE;
-                    """))
-                    print("SUCCESS: Added 'deferral_timestamp' column to requests table.")
+                    print("Attempting to add 'deferral_timestamp' column...")
+                    connection.execute(text("ALTER TABLE requests ADD COLUMN deferral_timestamp TIMESTAMP WITH TIME ZONE;"))
+                    print("SUCCESS: Added 'deferral_timestamp' column.")
                 except ProgrammingError:
-                    print("INFO: 'deferral_timestamp' column likely already exists. Continuing.")
+                    print("INFO: 'deferral_timestamp' column likely already exists.")
                     pass
+        
         print("Database setup complete. Tables are ready.")
     except Exception as e:
         print(f"CRITICAL ERROR during database setup: {e}")
@@ -153,25 +146,12 @@ def process_request(role, subject, user_input, reply_message):
     return reply_message
 
 # --- App Routes ---
-
-# NEW: Temporary debug route to inspect the database
-@app.route("/debug-db")
-def debug_db():
-    try:
-        inspector = inspect(engine)
-        tables = inspector.get_table_names()
-        return f"<h1>Database Tables Found:</h1><p>{tables}</p>"
-    except Exception as e:
-        return f"<h1>Error inspecting database:</h1><p>{e}</p>"
-
 @app.route("/room/<room_id>")
 def set_room(room_id):
     session.clear()
     session["room_number"] = room_id
     session["pathway"] = "standard"
     return redirect(url_for("language_selector"))
-
-# ... (rest of your routes are unchanged) ...
 
 @app.route("/bereavement/<room_id>")
 def set_bereavement_room(room_id):
