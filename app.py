@@ -12,7 +12,7 @@ from email.message import EmailMessage
 
 from flask import Flask, render_template, request, session, redirect, url_for
 from flask_socketio import SocketIO, join_room
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.exc import ProgrammingError
 
 # --- App Configuration ---
@@ -83,15 +83,11 @@ def setup_database():
     except Exception as e:
         print(f"CRITICAL ERROR during database setup: {e}")
 
-# --- THIS IS THE FIX: Force the database setup to run on every startup ---
 setup_database()
 
 # --- Smart Routing Logic ---
 def route_note_intelligently(note_text):
-    NURSE_KEYWORDS = [
-        'pain', 'medication', 'bleeding', 'nausea', 'dizzy', 
-        'sick', 'iv', 'pump', 'staples', 'incision'
-    ]
+    NURSE_KEYWORDS = ['pain', 'medication', 'bleeding', 'nausea', 'dizzy', 'sick', 'iv', 'pump', 'staples', 'incision']
     note_lower = note_text.lower()
     for keyword in NURSE_KEYWORDS:
         if keyword in note_lower:
@@ -106,11 +102,7 @@ def log_to_audit_trail(event_type, details):
                 connection.execute(text("""
                     INSERT INTO audit_log (timestamp, event_type, details)
                     VALUES (:timestamp, :event_type, :details);
-                """), {
-                    "timestamp": datetime.now(timezone.utc),
-                    "event_type": event_type,
-                    "details": details
-                })
+                """), { "timestamp": datetime.now(timezone.utc), "event_type": event_type, "details": details })
     except Exception as e:
         print(f"ERROR logging to audit trail: {e}")
 
@@ -135,7 +127,6 @@ def send_email_alert(subject, body, room_number):
     sender_password = os.getenv("EMAIL_PASSWORD")
     recipient_email = os.getenv("RECIPIENT_EMAIL", "call.light.project@gmail.com")
     if not sender_email or not sender_password:
-        print("WARNING: Email credentials not set. Cannot send email.")
         return
     msg = EmailMessage()
     msg["Subject"] = f"Room {room_number} - {subject}"
@@ -162,12 +153,25 @@ def process_request(role, subject, user_input, reply_message):
     return reply_message
 
 # --- App Routes ---
+
+# NEW: Temporary debug route to inspect the database
+@app.route("/debug-db")
+def debug_db():
+    try:
+        inspector = inspect(engine)
+        tables = inspector.get_table_names()
+        return f"<h1>Database Tables Found:</h1><p>{tables}</p>"
+    except Exception as e:
+        return f"<h1>Error inspecting database:</h1><p>{e}</p>"
+
 @app.route("/room/<room_id>")
 def set_room(room_id):
     session.clear()
     session["room_number"] = room_id
     session["pathway"] = "standard"
     return redirect(url_for("language_selector"))
+
+# ... (rest of your routes are unchanged) ...
 
 @app.route("/bereavement/<room_id>")
 def set_bereavement_room(room_id):
@@ -411,7 +415,5 @@ def handle_complete_request(data):
             print(f"ERROR updating completion timestamp: {e}")
 
 # --- App Startup ---
-# REMOVED: The with app.app_context() block is no longer needed here.
-
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
