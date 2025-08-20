@@ -148,14 +148,12 @@
         oscillator.stop(audioContext.currentTime + 0.5);
     }
 
-    // THIS IS THE FIX: This function is now more robust against refresh issues.
     function startOrResetTimer(item) {
         if (item.intervalId) {
             clearInterval(item.intervalId);
         }
-
+        
         function updateStatus() {
-            // Re-read the timestamp from the data attribute on every tick.
             const requestTime = new Date(item.dataset.timestamp);
             const now = new Date();
             const minutes = Math.floor((now - requestTime) / 60000);
@@ -176,7 +174,7 @@
         }
         
         item.intervalId = setInterval(updateStatus, 60000);
-        updateStatus(); // Run once immediately
+        updateStatus();
     }
 
     function addRequestToDashboard(data) {
