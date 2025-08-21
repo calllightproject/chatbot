@@ -10,7 +10,7 @@ from datetime import datetime, date, timezone
 from collections import defaultdict
 from email.message import EmailMessage
 
-from flask import Flask, render_template, request, session, redirect, url_for
+from flask import Flask, render_template, request, session, redirect, url_for, flash
 from flask_socketio import SocketIO, join_room
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import ProgrammingError
@@ -384,9 +384,32 @@ def assignments():
     
     return render_template('assignments.html', rooms=ALL_ROOMS, nurses=all_nurses, assignments=current_assignments)
 
-# MODIFIED: This route now handles adding and removing staff.
+# NEW: Route for the manager login page
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        password = request.form.get('password')
+        # Check against the password stored in an environment variable
+        if password == os.getenv('MANAGER_PASSWORD'):
+            session['manager_logged_in'] = True
+            return redirect(url_for('manager_dashboard'))
+        else:
+            flash('Invalid password!', 'danger') # Optional: show an error message
+    return render_template('login.html')
+
+# NEW: Route for logging out
+@app.route('/logout')
+def logout():
+    session.pop('manager_logged_in', None)
+    return redirect(url_for('login'))
+
+# MODIFIED: This route is now protected.
 @app.route('/manager-dashboard', methods=['GET', 'POST'])
 def manager_dashboard():
+    # If not logged in, redirect to login page
+    if not session.get('manager_logged_in'):
+        return redirect(url_for('login'))
+
     if request.method == 'POST':
         action = request.form.get('action')
         try:
@@ -405,7 +428,6 @@ def manager_dashboard():
                     elif action == 'remove_staff':
                         staff_id = request.form.get('staff_id')
                         if staff_id:
-                            # First, get the name for the log before deleting
                             staff_member = connection.execute(text("SELECT name, role FROM staff WHERE id = :id;"), {"id": staff_id}).first()
                             if staff_member:
                                 connection.execute(text("DELETE FROM staff WHERE id = :id;"), {"id": staff_id})
@@ -413,10 +435,8 @@ def manager_dashboard():
         except Exception as e:
             print(f"ERROR updating staff: {e}")
         
-        # After a POST, always redirect to the GET version of the page
         return redirect(url_for('manager_dashboard'))
 
-    # For a GET request, fetch the data and render the page
     staff_list = []
     audit_log = []
     try:
