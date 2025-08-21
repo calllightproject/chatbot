@@ -1,143 +1,220 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ session.get('language', 'en') }}">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Clinical Operations Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        /* THIS IS THE FIX: Added your custom color variables */
-        :root {
-            --core-blue: #00205b;
-            --accent-blue: #007eb4;
-            --neutral-gray-text: #303235;
-            --light-gray-background: #f5f5f5;
-            --white: #ffffff;
-        }
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--light-gray-background);
-            color: var(--neutral-gray-text);
-        }
-        .chart-container {
-            position: relative;
-            height: 350px;
-            width: 100%;
-        }
-        /* Added styles to use your color scheme */
-        .header-title { color: var(--core-blue); }
-        .header-subtitle { color: var(--neutral-gray-text); }
-        .metric-value { color: var(--core-blue); }
-        .link { color: var(--accent-blue); }
-        .link:hover { color: var(--core-blue); }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Clinical Operations Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Pin Chart.js to a stable version -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --core-blue:#00205b;
+      --accent-blue:#007eb4;
+      --neutral-gray-text:#303235;
+      --light-gray-background:#f5f5f5;
+      --white:#ffffff;
+    }
+    body{font-family:'Inter',sans-serif;background-color:var(--light-gray-background);color:var(--neutral-gray-text)}
+    .chart-container{position:relative;height:350px;width:100%}
+    .header-title{color:var(--core-blue)}
+    .header-subtitle{color:var(--neutral-gray-text)}
+    .metric-value{color:var(--core-blue)}
+    .link{color:var(--accent-blue)}
+    .link:hover{color:var(--core-blue)}
+  </style>
 </head>
 <body class="p-4 sm:p-6 lg:p-8">
+  <div class="container mx-auto max-w-7xl">
+    <header class="mb-8 text-center">
+      <h1 class="text-3xl font-bold header-title">Clinical Operations Dashboard</h1>
+      <p class="text-md header-subtitle mt-1">Real-time insights from the postpartum unit call light system.</p>
+    </header>
 
-    <div class="container mx-auto max-w-7xl">
-        <header class="mb-8 text-center">
-            <h1 class="text-3xl font-bold header-title">Clinical Operations Dashboard</h1>
-            <p class="text-md header-subtitle mt-1">Real-time insights from the postpartum unit call light system.</p>
-        </header>
-
-        <div class="flex justify-center mb-6">
-            <div class="bg-white p-6 rounded-xl shadow-md text-center w-full md:w-1/3">
-                <h2 class="text-lg font-semibold text-gray-500">Average Response Time</h2>
-                <p class="text-4xl font-bold metric-value mt-2">{{ avg_response_time }}</p>
-            </div>
-        </div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div class="bg-white p-6 rounded-xl shadow-md">
-                <h2 class="text-xl font-semibold text-gray-700 mb-4">Top Request Categories</h2>
-                <div class="chart-container">
-                    <canvas id="topCategoriesChart"></canvas>
-                </div>
-            </div>
-
-            <div class="bg-white p-6 rounded-xl shadow-md">
-                <h2 class="text-xl font-semibold text-gray-700 mb-4">Top 5 Most Requested Items</h2>
-                <div class="chart-container">
-                    <canvas id="mostRequestedChart"></canvas>
-                </div>
-            </div>
-
-            <div class="bg-white p-6 rounded-xl shadow-md">
-                <h2 class="text-xl font-semibold text-gray-700 mb-4">Top Requests: Prime</h2>
-                <div class="chart-container">
-                    <canvas id="firstBabyChart"></canvas>
-                </div>
-            </div>
-            
-            <div class="bg-white p-6 rounded-xl shadow-md">
-                <h2 class="text-xl font-semibold text-gray-700 mb-4">Top Requests: Multip</h2>
-                <div class="chart-container">
-                    <canvas id="multiBabyChart"></canvas>
-                </div>
-            </div>
-
-            <div class="bg-white p-6 rounded-xl shadow-md lg:col-span-2">
-                <h2 class="text-xl font-semibold text-gray-700 mb-4">Peak Request Hours</h2>
-                <div class="chart-container">
-                    <canvas id="requestsByHourChart"></canvas>
-                </div>
-            </div>
-        </div>
-        
-        <footer class="text-center mt-12">
-             <a href="{{ url_for('dashboard') }}" class="link transition-colors">← Back to Real-Time Dashboard</a>
-        </footer>
+    <div class="flex justify-center mb-6">
+      <div class="bg-white p-6 rounded-xl shadow-md text-center w-full md:w-1/3">
+        <h2 class="text-lg font-semibold text-gray-500">Average Response Time</h2>
+        <p class="text-4xl font-bold metric-value mt-2">{{ avg_response_time }}</p>
+      </div>
     </div>
 
-    <script>
-        const topCategoriesLabels = {{ top_requests_labels | tojson }};
-        const topCategoriesValues = {{ top_requests_values | tojson }};
-        const mostRequestedLabels = {{ most_requested_labels | tojson }};
-        const mostRequestedValues = {{ most_requested_values | tojson }};
-        const requestsByHourLabels = {{ requests_by_hour_labels | tojson }};
-        const requestsByHourValues = {{ requests_by_hour_values | tojson }};
-        const firstBabyLabels = {{ first_baby_labels | tojson }};
-        const firstBabyValues = {{ first_baby_values | tojson }};
-        const multiBabyLabels = {{ multi_baby_labels | tojson }};
-        const multiBabyValues = {{ multi_baby_values | tojson }};
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="bg-white p-6 rounded-xl shadow-md">
+        <h2 class="text-xl font-semibold text-gray-700 mb-4">Top Request Categories</h2>
+        <div class="chart-container">
+          <canvas id="topCategoriesChart" aria-label="Top Request Categories"></canvas>
+        </div>
+      </div>
 
-        // --- Chart 1: Top Request Categories ---
-        const ctxTopCategories = document.getElementById('topCategoriesChart').getContext('2d');
-        new Chart(ctxTopCategories, {
-            type: 'bar', data: { labels: topCategoriesLabels, datasets: [{ label: 'Total Requests', data: topCategoriesValues, backgroundColor: 'rgba(0, 91, 148, 0.6)', borderColor: 'rgba(0, 91, 148, 1)', borderWidth: 1, borderRadius: 4 }] },
-            options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', scales: { x: { beginAtZero: true, title: { display: true, text: 'Number of Requests' }, ticks: { stepSize: 1 } } }, plugins: { legend: { display: false } } }
-        });
+      <div class="bg-white p-6 rounded-xl shadow-md">
+        <h2 class="text-xl font-semibold text-gray-700 mb-4">Top 5 Most Requested Items</h2>
+        <div class="chart-container">
+          <canvas id="mostRequestedChart" aria-label="Top 5 Most Requested Items"></canvas>
+        </div>
+      </div>
 
-        // --- Chart 2: Top 5 Most Requested Items (Overall) ---
-        const ctxMostRequested = document.getElementById('mostRequestedChart').getContext('2d');
-        new Chart(ctxMostRequested, {
-            type: 'doughnut', data: { labels: mostRequestedLabels, datasets: [{ label: 'Request Count', data: mostRequestedValues, backgroundColor: [ 'rgba(255, 99, 132, 0.7)', 'rgba(54, 162, 235, 0.7)', 'rgba(255, 206, 86, 0.7)', 'rgba(75, 192, 192, 0.7)', 'rgba(153, 102, 255, 0.7)', ], borderColor: '#fff', borderWidth: 2, }] },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } } }
-        });
+      <div class="bg-white p-6 rounded-xl shadow-md">
+        <h2 class="text-xl font-semibold text-gray-700 mb-4">Top Requests: First-time</h2>
+        <div class="chart-container">
+          <canvas id="firstBabyChart" aria-label="Top Requests for First-time Parents"></canvas>
+        </div>
+      </div>
 
-        // --- Chart 3: Top Requests for First-Time Parents ---
-        const ctxFirstBaby = document.getElementById('firstBabyChart').getContext('2d');
-        new Chart(ctxFirstBaby, {
-            type: 'bar', data: { labels: firstBabyLabels, datasets: [{ label: 'Request Count', data: firstBabyValues, backgroundColor: 'rgba(75, 192, 192, 0.6)', borderColor: 'rgba(75, 192, 192, 1)', borderWidth: 1, borderRadius: 4 }] },
-            options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } }, plugins: { legend: { display: false } } }
-        });
+      <div class="bg-white p-6 rounded-xl shadow-md">
+        <h2 class="text-xl font-semibold text-gray-700 mb-4">Top Requests: Multiparous</h2>
+        <div class="chart-container">
+          <canvas id="multiBabyChart" aria-label="Top Requests for Multiparous Parents"></canvas>
+        </div>
+      </div>
 
-        // --- Chart 4: Top Requests for Multiparous Parents ---
-        const ctxMultiBaby = document.getElementById('multiBabyChart').getContext('2d');
-        new Chart(ctxMultiBaby, {
-            type: 'bar', data: { labels: multiBabyLabels, datasets: [{ label: 'Request Count', data: multiBabyValues, backgroundColor: 'rgba(255, 159, 64, 0.6)', borderColor: 'rgba(255, 159, 64, 1)', borderWidth: 1, borderRadius: 4 }] },
-            options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } }, plugins: { legend: { display: false } } }
-        });
+      <div class="bg-white p-6 rounded-xl shadow-md lg:col-span-2">
+        <h2 class="text-xl font-semibold text-gray-700 mb-4">Peak Request Hours</h2>
+        <div class="chart-container">
+          <canvas id="requestsByHourChart" aria-label="Requests by Hour"></canvas>
+        </div>
+      </div>
+    </div>
 
-        // --- Chart 5: Requests by Hour ---
-        const ctxRequestsByHour = document.getElementById('requestsByHourChart').getContext('2d');
-        new Chart(ctxRequestsByHour, {
-            type: 'line', data: { labels: requestsByHourLabels, datasets: [{ label: 'Requests per Hour', data: requestsByHourValues, fill: true, backgroundColor: 'rgba(0, 126, 180, 0.1)', borderColor: 'rgba(0, 126, 180, 1)', tension: 0.3 }] },
-            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: 'Number of Requests' }, ticks: { stepSize: 1 } }, x: { title: { display: true, text: 'Hour of the Day' } } }, plugins: { legend: { display: false } } }
-        });
-    </script>
+    <footer class="text-center mt-12">
+      <a href="{{ url_for('dashboard') }}" class="link transition-colors">← Back to Real-Time Dashboard</a>
+    </footer>
+  </div>
 
+  <script>
+    // Pull data from the server (guards ensure arrays exist)
+    const topCategoriesLabels = {{ top_requests_labels | tojson }} || [];
+    const topCategoriesValues = {{ top_requests_values | tojson }} || [];
+    const mostRequestedLabels = {{ most_requested_labels | tojson }} || [];
+    const mostRequestedValues = {{ most_requested_values | tojson }} || [];
+    const requestsByHourLabels = {{ requests_by_hour_labels | tojson }} || [];
+    const requestsByHourValues = {{ requests_by_hour_values | tojson }} || [];
+    const firstBabyLabels = {{ first_baby_labels | tojson }} || [];
+    const firstBabyValues = {{ first_baby_values | tojson }} || [];
+    const multiBabyLabels = {{ multi_baby_labels | tojson }} || [];
+    const multiBabyValues = {{ multi_baby_values | tojson }} || [];
+
+    // Use your CSS variables for colors so charts match the theme
+    const css = getComputedStyle(document.documentElement);
+    const CORE = css.getPropertyValue('--core-blue').trim() || '#00205b';
+    const ACCENT = css.getPropertyValue('--accent-blue').trim() || '#007eb4';
+
+    const withAlpha = (hex, a) => {
+      // Accepts #RRGGBB or #RGB; returns rgba(r,g,b,a)
+      const h = hex.replace('#','');
+      const isShort = h.length === 3;
+      const r = parseInt(isShort ? h[0]+h[0] : h.substring(0,2), 16);
+      const g = parseInt(isShort ? h[1]+h[1] : h.substring(2,4), 16);
+      const b = parseInt(isShort ? h[2]+h[2] : h.substring(4,6), 16);
+      return `rgba(${r}, ${g}, ${b}, ${a})`;
+    };
+
+    // --- Chart 1: Top Request Categories ---
+    const ctxTopCategories = document.getElementById('topCategoriesChart').getContext('2d');
+    new Chart(ctxTopCategories, {
+      type: 'bar',
+      data: {
+        labels: topCategoriesLabels,
+        datasets: [{
+          label: 'Total Requests',
+          data: topCategoriesValues,
+          backgroundColor: withAlpha(CORE, 0.6),
+          borderColor: CORE,
+          borderWidth: 1,
+          borderRadius: 4
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        indexAxis: 'y',
+        scales: { x: { beginAtZero: true, title: { display: true, text: 'Number of Requests' }, ticks: { stepSize: 1 } } },
+        plugins: { legend: { display: false } }
+      }
+    });
+
+    // --- Chart 2: Top 5 Most Requested Items (Overall) ---
+    const ctxMostRequested = document.getElementById('mostRequestedChart').getContext('2d');
+    new Chart(ctxMostRequested, {
+      type: 'doughnut',
+      data: {
+        labels: mostRequestedLabels,
+        datasets: [{
+          label: 'Request Count',
+          data: mostRequestedValues,
+          backgroundColor: [
+            withAlpha('#ff6384', 0.7),
+            withAlpha('#36a2eb', 0.7),
+            withAlpha('#ffce56', 0.7),
+            withAlpha('#4bc0c0', 0.7),
+            withAlpha('#9966ff', 0.7),
+          ],
+          borderColor: '#ffffff',
+          borderWidth: 2
+        }]
+      },
+      options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { position: 'top' } } }
+    });
+
+    // --- Chart 3: Top Requests for First-Time Parents ---
+    const ctxFirstBaby = document.getElementById('firstBabyChart').getContext('2d');
+    new Chart(ctxFirstBaby, {
+      type: 'bar',
+      data: {
+        labels: firstBabyLabels,
+        datasets: [{
+          label: 'Request Count',
+          data: firstBabyValues,
+          backgroundColor: withAlpha('#4bc0c0', 0.6),
+          borderColor: '#4bc0c0',
+          borderWidth: 1,
+          borderRadius: 4
+        }]
+      },
+      options: { responsive: true, maintainAspectRatio: false, animation: false, indexAxis: 'y', scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } }, plugins: { legend: { display: false } } }
+    });
+
+    // --- Chart 4: Top Requests for Multiparous Parents ---
+    const ctxMultiBaby = document.getElementById('multiBabyChart').getContext('2d');
+    new Chart(ctxMultiBaby, {
+      type: 'bar',
+      data: {
+        labels: multiBabyLabels,
+        datasets: [{
+          label: 'Request Count',
+          data: multiBabyValues,
+          backgroundColor: withAlpha('#ff9f40', 0.6),
+          borderColor: '#ff9f40',
+          borderWidth: 1,
+          borderRadius: 4
+        }]
+      },
+      options: { responsive: true, maintainAspectRatio: false, animation: false, indexAxis: 'y', scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } }, plugins: { legend: { display: false } } }
+    });
+
+    // --- Chart 5: Requests by Hour ---
+    const ctxRequestsByHour = document.getElementById('requestsByHourChart').getContext('2d');
+    new Chart(ctxRequestsByHour, {
+      type: 'line',
+      data: {
+        labels: requestsByHourLabels,
+        datasets: [{
+          label: 'Requests per Hour',
+          data: requestsByHourValues,
+          fill: true,
+          backgroundColor: withAlpha(ACCENT, 0.12),
+          borderColor: ACCENT,
+          tension: 0.3
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        scales: {
+          y: { beginAtZero: true, title: { display: true, text: 'Number of Requests' }, ticks: { stepSize: 1 } },
+          x: { title: { display: true, text: 'Hour of the Day' } }
+        },
+        plugins: { legend: { display: false } }
+      }
+    });
+  </script>
 </body>
 </html>
