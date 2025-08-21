@@ -6,6 +6,7 @@ import os
 import json
 import smtplib
 import importlib
+import importlib.util
 from datetime import datetime, date, timezone
 from collections import defaultdict
 from email.message import EmailMessage
@@ -99,7 +100,7 @@ def setup_database():
                         """), {"name": name, "role": role})
                     print("Initial staff population complete.")
 
-        # If deferral_timestamp already exists, this will raise; ignore.
+        # If this column already exists, the ALTER raises a ProgrammingError; ignore it.
         with engine.connect() as connection:
             with connection.begin():
                 try:
@@ -203,15 +204,38 @@ def process_request(role, subject, user_input, reply_message):
     })
     return reply_message
 
-# --- Button config loader with fallbacks ---
+# --- Button config loader with fallbacks (robust) ---
+def _try_import(name: str):
+    """Try normal import; if that fails, try loading from a .py file next to this app.py."""
+    # normal import first
+    try:
+        return importlib.import_module(name)
+    except Exception as e1:
+        # try by file path
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        file_path = os.path.join(base_dir, f"{name}.py")
+        if os.path.exists(file_path):
+            try:
+                spec = importlib.util.spec_from_file_location(name, file_path)
+                mod = importlib.util.module_from_spec(spec)
+                assert spec.loader is not None
+                spec.loader.exec_module(mod)
+                print(f"[config] Loaded by path: {file_path}")
+                return mod
+            except Exception as e2:
+                print(f"[config] Path import failed for {file_path}: {e2}")
+        else:
+            print(f"[config] File does not exist: {file_path}")
+        print(f"[config] Normal import failed for {name}: {e1}")
+        return None
+
 def load_button_config(pathway: str, lang: str):
     """
-    Returns a button_data dict for the requested language/pathway.
     Fallback order:
       bereavement: button_config_bereavement_{lang} -> button_config_{lang} -> button_config_en
       standard:    button_config_{lang} -> button_config_en
-    Never breaks the page — returns a minimal default if all imports fail.
     """
+    print(f"[config] pathway={pathway!r} lang={lang!r}")
     module_names = []
     if pathway == "bereavement":
         module_names.append(f"button_config_bereavement_{lang}")
@@ -219,18 +243,16 @@ def load_button_config(pathway: str, lang: str):
     module_names.append("button_config_en")
 
     for name in module_names:
-        try:
-            mod = importlib.import_module(name)
-            data = getattr(mod, "button_data", None)
-            if isinstance(data, dict):
-                print(f"[config] Loaded: {name}")
-                return data
-            else:
-                print(f"[config] {name} has no 'button_data' dict.")
-        except Exception as e:
-            print(f"[config] Import failed for {name}: {e}")
+        mod = _try_import(name)
+        if mod is None:
+            continue
+        data = getattr(mod, "button_data", None)
+        if isinstance(data, dict):
+            print(f"[config] Using: {name}")
+            return data
+        else:
+            print(f"[config] {name} missing 'button_data' dict, continuing...")
 
-    # ultimate fallback so the UI still loads
     print("[config] Falling back to minimal default config.")
     return {
         "greeting": "Hello! (default config loaded)",
@@ -264,6 +286,7 @@ def set_bereavement_room(room_id):
 def language_selector():
     if request.method == "POST":
         session["language"] = request.form.get("language")
+        print(f"[lang] Selected: {session.get('language')} pathway={session.get('pathway')}")
         pathway = session.get("pathway", "standard")
         if pathway == "bereavement":
             session["is_first_baby"] = None
@@ -627,3 +650,30 @@ def handle_defer_request(data):
 @socketio.on('complete_request')
 def handle_complete_request(data):
     request_id = data.get('request_id')
+    if request_id:
+        try:
+            with engine.connect() as connection:
+                trans = connection.begin()
+                try:
+                    connection.execute(text("""
+                        UPDATE requests SET completion_timestamp = :now
+                        WHERE request_id = :request_id;
+                    """), {"now": datetime.now(timezone.utc), "request_id": request_id})
+                    trans.commit()
+                    log_to_audit_trail("Request Completed", f"Request ID: {request_id} marked as complete.")
+                except Exception:
+                    trans.rollback()
+                    raise
+            socketio.emit('remove_request', {'id': request_id})
+        except Exception as e:
+            print(f"ERROR updating completion timestamp: {e}")
+
+# --- App Startup ---
+if __name__ == "__main__":
+    socketio.run(
+        app,
+        host='0.0.0.0',
+        port=int(os.getenv('PORT', 5000)),
+        debug=False,
+        use_reloader=False
+    )
