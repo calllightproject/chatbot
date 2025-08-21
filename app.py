@@ -6,7 +6,6 @@ import os
 import json
 import smtplib
 import importlib
-import importlib.util
 from datetime import datetime, date, timezone
 from collections import defaultdict
 from email.message import EmailMessage
@@ -19,14 +18,7 @@ from sqlalchemy.exc import ProgrammingError
 # --- App Configuration ---
 app = Flask(__name__, template_folder='templates')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-strong-fallback-secret-key-for-local-development")
-socketio = SocketIO(
-    app,
-    async_mode='eventlet',
-    cors_allowed_origins="*",
-    manage_session=False,
-    ping_timeout=20,
-    ping_interval=10
-)
+socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*", manage_session=False, ping_timeout=20, ping_interval=10)
 
 # --- Master Data Lists ---
 INITIAL_STAFF = {
@@ -100,13 +92,11 @@ def setup_database():
                         """), {"name": name, "role": role})
                     print("Initial staff population complete.")
 
-        # If this column already exists, the ALTER raises a ProgrammingError; ignore it.
+        # Attempt to add deferral_timestamp if missing (harmless on PG/SQLite if exists)
         with engine.connect() as connection:
             with connection.begin():
                 try:
-                    connection.execute(text(
-                        "ALTER TABLE requests ADD COLUMN deferral_timestamp TIMESTAMP WITH TIME ZONE;"
-                    ))
+                    connection.execute(text("ALTER TABLE requests ADD COLUMN deferral_timestamp TIMESTAMP WITH TIME ZONE;"))
                 except ProgrammingError:
                     pass
 
@@ -118,8 +108,9 @@ setup_database()
 
 # --- Smart Routing Logic ---
 def route_note_intelligently(note_text):
+    # English keywords; Spanish notes will default to CNA unless matched
     NURSE_KEYWORDS = ['pain', 'medication', 'bleeding', 'nausea', 'dizzy', 'sick', 'iv', 'pump', 'staples', 'incision']
-    note_lower = note_text.lower()
+    note_lower = (note_text or "").lower()
     for keyword in NURSE_KEYWORDS:
         if keyword in note_lower:
             return 'nurse'
@@ -192,9 +183,7 @@ def process_request(role, subject, user_input, reply_message):
     room_number = session.get('room_number', 'N/A')
     is_first_baby = session.get('is_first_baby')
     socketio.start_background_task(send_email_alert, subject, user_input, room_number)
-    socketio.start_background_task(
-        log_request_to_db, request_id, role, user_input, reply_message, room_number, is_first_baby
-    )
+    socketio.start_background_task(log_request_to_db, request_id, role, user_input, reply_message, room_number, is_first_baby)
     socketio.emit('new_request', {
         'id': request_id,
         'room': room_number,
@@ -204,67 +193,53 @@ def process_request(role, subject, user_input, reply_message):
     })
     return reply_message
 
-# --- Button config loader with fallbacks (robust) ---
-def _try_import(name: str):
-    """Try normal import; if that fails, try loading from a .py file next to this app.py."""
-    # normal import first
-    try:
-        return importlib.import_module(name)
-    except Exception as e1:
-        # try by file path
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        file_path = os.path.join(base_dir, f"{name}.py")
-        if os.path.exists(file_path):
-            try:
-                spec = importlib.util.spec_from_file_location(name, file_path)
-                mod = importlib.util.module_from_spec(spec)
-                assert spec.loader is not None
-                spec.loader.exec_module(mod)
-                print(f"[config] Loaded by path: {file_path}")
-                return mod
-            except Exception as e2:
-                print(f"[config] Path import failed for {file_path}: {e2}")
-        else:
-            print(f"[config] File does not exist: {file_path}")
-        print(f"[config] Normal import failed for {name}: {e1}")
-        return None
-
+# --- Language/Config Loader ---
 def load_button_config(pathway: str, lang: str):
     """
-    Fallback order:
-      bereavement: button_config_bereavement_{lang} -> button_config_{lang} -> button_config_en
-      standard:    button_config_{lang} -> button_config_en
+    Tries to import the appropriate button config module.
+    Order:
+      1) button_config_bereavement_<lang>  (if pathway == 'bereavement')
+      2) button_config_<lang>
+      3) fallback to English variants in the same order
     """
-    print(f"[config] pathway={pathway!r} lang={lang!r}")
-    module_names = []
+    candidates = []
     if pathway == "bereavement":
-        module_names.append(f"button_config_bereavement_{lang}")
-    module_names.append(f"button_config_{lang}")
-    module_names.append("button_config_en")
+        candidates.append(f"button_config_bereavement_{lang}")
+        candidates.append("button_config_bereavement_en")
+    else:
+        candidates.append(f"button_config_{lang}")
+        candidates.append("button_config_en")
 
-    for name in module_names:
-        mod = _try_import(name)
-        if mod is None:
-            continue
-        data = getattr(mod, "button_data", None)
-        if isinstance(data, dict):
-            print(f"[config] Using: {name}")
-            return data
-        else:
-            print(f"[config] {name} missing 'button_data' dict, continuing...")
+    print(f"[config] pathway='{pathway}' lang='{lang}'")
+    for name in candidates:
+        try:
+            mod = importlib.import_module(name)
+            if hasattr(mod, "button_data"):
+                print(f"[config] Using: {name}")
+                return mod.button_data
+            else:
+                print(f"[config] Module {name} missing 'button_data'; skipping.")
+        except ImportError as ie:
+            print(f"[config] ImportError for {name}: {ie}")
+        except Exception as e:
+            print(f"[config] Error loading {name}: {e}")
 
-    print("[config] Falling back to minimal default config.")
+    # Last resort minimal English set so the app never 500s
+    print("[config] Fallback to minimal English defaults.")
     return {
-        "greeting": "Hello! (default config loaded)",
-        "main_buttons": ["⬅ Back"],
-        "back_text": "⬅ Back",
-        "demographic_question": "Is this your first baby?",
-        "demographic_yes": "Yes",
-        "demographic_no": "No",
-        "nurse_notification": "Nurse notified.",
-        "cna_notification": "CNA notified.",
+        "greeting": "Hello! How can I help you?",
         "custom_note_placeholder": "Type your note to the nurse here...",
         "send_note_button": "Send Note",
+        "back_text": "⬅ Back",
+        "cna_notification": "✅ CNA has been notified.",
+        "nurse_notification": "✅ Nurse has been notified.",
+        "main_buttons": [
+            "I'm having an emergency", "I need supplies", "I need medication",
+            "My IV pump is beeping", "I have questions", "I want to know about going home",
+            "Bathroom/Shower", "Ice Chips/Water"
+        ],
+        "I'm having an emergency": {"action": "Notify Nurse"},
+        "My IV pump is beeping": {"action": "Notify Nurse"}
     }
 
 # --- App Routes ---
@@ -285,9 +260,10 @@ def set_bereavement_room(room_id):
 @app.route("/", methods=["GET", "POST"])
 def language_selector():
     if request.method == "POST":
-        session["language"] = request.form.get("language")
-        print(f"[lang] Selected: {session.get('language')} pathway={session.get('pathway')}")
+        lang = request.form.get("language", "en")
+        session["language"] = lang
         pathway = session.get("pathway", "standard")
+        print(f"[lang] Selected: {lang} pathway={pathway}")
         if pathway == "bereavement":
             session["is_first_baby"] = None
             return redirect(url_for("handle_chat"))
@@ -298,14 +274,16 @@ def language_selector():
 @app.route("/demographics", methods=["GET", "POST"])
 def demographics():
     lang = session.get("language", "en")
-    pathway = session.get("pathway", "standard")
-
-    # Load the correct button_data with graceful fallback
-    button_data = load_button_config(pathway, lang)
+    try:
+        cfg = importlib.import_module(f"button_config_{lang}")
+        button_data = cfg.button_data
+    except Exception as e:
+        print(f"[demographics] falling back to EN due to: {e}")
+        from button_config_en import button_data  # guaranteed to exist in your repo
 
     if request.method == "POST":
         is_first_baby_response = request.form.get("is_first_baby")
-        session["is_first_baby"] = True if is_first_baby_response == 'yes' else False
+        session["is_first_baby"] = (is_first_baby_response == 'yes')
         return redirect(url_for("handle_chat"))
 
     question_text = button_data.get("demographic_question", "Is this your first baby?")
@@ -318,7 +296,6 @@ def handle_chat():
     pathway = session.get("pathway", "standard")
     lang = session.get("language", "en")
 
-    # Load the correct button_data with graceful fallback
     button_data = load_button_config(pathway, lang)
 
     if request.method == 'POST':
@@ -333,14 +310,16 @@ def handle_chat():
                     user_input=note_text,
                     reply_message=reply_message
                 )
-                session['options'] = button_data["main_buttons"]
+                session['options'] = button_data.get("main_buttons", [])
             else:
+                # Basic string is ok here; your ES file overrides this label copy elsewhere if needed
                 session['reply'] = "Please type a message in the box."
-                session['options'] = button_data["main_buttons"]
-
+                session['options'] = button_data.get("main_buttons", [])
         else:
-            user_input = request.form.get("user_input", "").strip()
-            if user_input == button_data.get("back_text", "⬅ Back"):
+            user_input = (request.form.get("user_input", "") or "").strip()
+            back_text = button_data.get("back_text", "⬅ Back")
+
+            if user_input == back_text:
                 session.pop('reply', None)
                 session.pop('options', None)
                 return redirect(url_for('handle_chat'))
@@ -350,32 +329,32 @@ def handle_chat():
                 session['reply'] = button_info.get("question") or button_info.get("note", "")
                 session['options'] = button_info.get("options", [])
 
-                back_text = button_data.get("back_text", "⬅ Back")
-                if session['options'] and back_text not in session['options']:
-                    session['options'].append(back_text)
-                elif not session['options']:
-                    session['options'] = button_data["main_buttons"]
+                if session['options']:
+                    if back_text not in session['options']:
+                        session['options'].append(back_text)
+                else:
+                    session['options'] = button_data.get("main_buttons", [])
 
                 if "action" in button_info:
                     action = button_info["action"]
                     role = "cna" if action == "Notify CNA" else "nurse"
                     subject = f"{role.upper()} Request"
-                    notification_message = button_info.get("note", button_data[f"{role}_notification"])
+                    notification_message = button_info.get("note", button_data.get(f"{role}_notification", "Your request has been sent."))
                     session['reply'] = process_request(
                         role=role,
                         subject=subject,
                         user_input=user_input,
                         reply_message=notification_message
                     )
-                    session['options'] = button_data["main_buttons"]
+                    session['options'] = button_data.get("main_buttons", [])
             else:
                 session['reply'] = "I'm sorry, I didn't understand that. Please use the buttons provided."
-                session['options'] = button_data["main_buttons"]
+                session['options'] = button_data.get("main_buttons", [])
 
         return redirect(url_for('handle_chat'))
 
-    reply = session.pop('reply', button_data["greeting"])
-    options = session.pop('options', button_data["main_buttons"])
+    reply = session.pop('reply', button_data.get("greeting", "Hello! How can I help you?"))
+    options = session.pop('options', button_data.get("main_buttons", []))
     return render_template("chat.html", reply=reply, options=options, button_data=button_data)
 
 @app.route("/reset-language")
@@ -395,18 +374,27 @@ def dashboard():
                 ORDER BY timestamp DESC;
             """))
             for row in result:
+                ts = row.timestamp
+                # Always pass a usable ISO-esque string to the template/JS
+                if ts is None:
+                    ts_iso = datetime.now(timezone.utc).isoformat()
+                elif hasattr(ts, "isoformat"):
+                    ts_iso = ts.isoformat()
+                else:
+                    ts_iso = str(ts)
+
                 active_requests.append({
                     'id': row.request_id,
                     'room': row.room,
-                    'request': row.user_input,
-                    'role': row.role,
-                    'timestamp': row.timestamp.isoformat()
+                    'request': row.user_input or "",
+                    'role': row.role or "",
+                    'timestamp': ts_iso
                 })
     except Exception as e:
         print(f"ERROR fetching active requests: {e}")
     return render_template("dashboard.html", active_requests=active_requests)
 
-# MODIFIED: This route now passes raw Python lists to the template
+# --- Analytics (passes raw Python lists; template uses |tojson) ---
 @app.route('/analytics')
 def analytics():
     avg_response_time = "N/A"
@@ -417,39 +405,35 @@ def analytics():
     multi_baby_labels, multi_baby_values = [], []
     try:
         with engine.connect() as connection:
+            # AVG response time (Postgres syntax; OK if you're on PG)
             avg_time_result = connection.execute(text("""
-                SELECT AVG(EXTRACT(EPOCH FROM (completion_timestamp - timestamp))) as avg_seconds
-                FROM requests
-                WHERE completion_timestamp IS NOT NULL;
+                SELECT AVG(EXTRACT(EPOCH FROM (completion_timestamp - timestamp))) AS avg_seconds
+                FROM requests WHERE completion_timestamp IS NOT NULL;
             """)).scalar_one_or_none()
             if avg_time_result is not None:
                 minutes, seconds = divmod(int(avg_time_result), 60)
                 avg_response_time = f"{minutes}m {seconds}s"
 
+            # Category counts
             top_requests_result = connection.execute(text("""
-                SELECT category, COUNT(id)
-                FROM requests
-                GROUP BY category
-                ORDER BY COUNT(id) DESC;
+                SELECT category, COUNT(id) FROM requests
+                GROUP BY category ORDER BY COUNT(id) DESC;
             """)).fetchall()
             top_requests_labels = [row[0] for row in top_requests_result]
             top_requests_values = [row[1] for row in top_requests_result]
 
+            # Top user_input (limit 5)
             most_requested_result = connection.execute(text("""
-                SELECT user_input, COUNT(id) as count
-                FROM requests
-                GROUP BY user_input
-                ORDER BY count DESC
-                LIMIT 5;
+                SELECT user_input, COUNT(id) as count FROM requests
+                GROUP BY user_input ORDER BY count DESC LIMIT 5;
             """)).fetchall()
             most_requested_labels = [row[0] for row in most_requested_result]
             most_requested_values = [row[1] for row in most_requested_result]
 
+            # Requests by hour (0-23)
             requests_by_hour_result = connection.execute(text("""
                 SELECT EXTRACT(HOUR FROM timestamp) as hour, COUNT(id)
-                FROM requests
-                GROUP BY hour
-                ORDER BY hour;
+                FROM requests GROUP BY hour ORDER BY hour;
             """)).fetchall()
             hourly_counts = defaultdict(int)
             for hour, count in requests_by_hour_result:
@@ -457,24 +441,20 @@ def analytics():
             requests_by_hour_labels = [f"{h}:00" for h in range(24)]
             requests_by_hour_values = [hourly_counts[h] for h in range(24)]
 
+            # First-time parents top 5
             first_baby_result = connection.execute(text("""
-                SELECT user_input, COUNT(id) as count
-                FROM requests
+                SELECT user_input, COUNT(id) as count FROM requests
                 WHERE is_first_baby IS TRUE
-                GROUP BY user_input
-                ORDER BY count DESC
-                LIMIT 5;
+                GROUP BY user_input ORDER BY count DESC LIMIT 5;
             """)).fetchall()
             first_baby_labels = [row[0] for row in first_baby_result]
             first_baby_values = [row[1] for row in first_baby_result]
 
+            # Multiparous parents top 5
             multi_baby_result = connection.execute(text("""
-                SELECT user_input, COUNT(id) as count
-                FROM requests
+                SELECT user_input, COUNT(id) as count FROM requests
                 WHERE is_first_baby IS FALSE
-                GROUP BY user_input
-                ORDER BY count DESC
-                LIMIT 5;
+                GROUP BY user_input ORDER BY count DESC LIMIT 5;
             """)).fetchall()
             multi_baby_labels = [row[0] for row in multi_baby_result]
             multi_baby_values = [row[1] for row in multi_baby_result]
@@ -534,9 +514,7 @@ def assignments():
     try:
         with engine.connect() as connection:
             result = connection.execute(text("""
-                SELECT room_number, nurse_name
-                FROM assignments
-                WHERE assignment_date = :date;
+                SELECT room_number, nurse_name FROM assignments WHERE assignment_date = :date;
             """), {"date": today})
             for row in result:
                 current_assignments[row.room_number] = row.nurse_name
@@ -602,10 +580,8 @@ def manager_dashboard():
             staff_result = connection.execute(text("SELECT id, name, role FROM staff ORDER BY name;"))
             staff_list = staff_result.fetchall()
             audit_result = connection.execute(text("""
-                SELECT timestamp, event_type, details
-                FROM audit_log
-                ORDER BY timestamp DESC
-                LIMIT 50;
+                SELECT timestamp, event_type, details FROM audit_log
+                ORDER BY timestamp DESC LIMIT 50;
             """))
             audit_log = audit_result.fetchall()
     except Exception as e:
@@ -661,7 +637,7 @@ def handle_complete_request(data):
                     """), {"now": datetime.now(timezone.utc), "request_id": request_id})
                     trans.commit()
                     log_to_audit_trail("Request Completed", f"Request ID: {request_id} marked as complete.")
-                except Exception:
+                except Exception as e:
                     trans.rollback()
                     raise
             socketio.emit('remove_request', {'id': request_id})
@@ -670,10 +646,4 @@ def handle_complete_request(data):
 
 # --- App Startup ---
 if __name__ == "__main__":
-    socketio.run(
-        app,
-        host='0.0.0.0',
-        port=int(os.getenv('PORT', 5000)),
-        debug=False,
-        use_reloader=False
-    )
+    socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
