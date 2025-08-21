@@ -24,7 +24,7 @@ socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*", manage
 INITIAL_STAFF = {
     'Jackie': 'nurse', 'Carol': 'nurse', 'John': 'nurse',
     'Maria': 'nurse', 'David': 'nurse', 'Susan': 'nurse',
-    'Peter': 'cna', 'Linda': 'cna'
+    'Peter': 'cna', 'Linda': 'cna' 
 }
 ALL_ROOMS = [str(room) for room in range(231, 261)]
 
@@ -44,33 +44,21 @@ def setup_database():
                 print("Running CREATE TABLE statements...")
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS requests (
-                        id SERIAL PRIMARY KEY,
-                        request_id VARCHAR(255) UNIQUE,
-                        timestamp TIMESTAMP WITH TIME ZONE,
-                        completion_timestamp TIMESTAMP WITH TIME ZONE,
-                        deferral_timestamp TIMESTAMP WITH TIME ZONE,
-                        room VARCHAR(255),
-                        user_input TEXT,
-                        category VARCHAR(255),
-                        reply TEXT,
-                        is_first_baby BOOLEAN
+                        id SERIAL PRIMARY KEY, request_id VARCHAR(255) UNIQUE, timestamp TIMESTAMP WITH TIME ZONE,
+                        completion_timestamp TIMESTAMP WITH TIME ZONE, deferral_timestamp TIMESTAMP WITH TIME ZONE,
+                        room VARCHAR(255), user_input TEXT, category VARCHAR(255), reply TEXT, is_first_baby BOOLEAN
                     );
                 """))
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS assignments (
-                        id SERIAL PRIMARY KEY,
-                        assignment_date DATE NOT NULL,
-                        room_number VARCHAR(255) NOT NULL,
-                        nurse_name VARCHAR(255) NOT NULL,
-                        UNIQUE(assignment_date, room_number)
+                        id SERIAL PRIMARY KEY, assignment_date DATE NOT NULL, room_number VARCHAR(255) NOT NULL,
+                        nurse_name VARCHAR(255) NOT NULL, UNIQUE(assignment_date, room_number)
                     );
                 """))
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS audit_log (
-                        id SERIAL PRIMARY KEY,
-                        timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
-                        event_type VARCHAR(255) NOT NULL,
-                        details TEXT
+                        id SERIAL PRIMARY KEY, timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+                        event_type VARCHAR(255) NOT NULL, details TEXT
                     );
                 """))
                 connection.execute(text("""
@@ -92,14 +80,13 @@ def setup_database():
                         """), {"name": name, "role": role})
                     print("Initial staff population complete.")
 
-        # Attempt to add deferral_timestamp if missing (harmless on PG/SQLite if exists)
         with engine.connect() as connection:
             with connection.begin():
                 try:
                     connection.execute(text("ALTER TABLE requests ADD COLUMN deferral_timestamp TIMESTAMP WITH TIME ZONE;"))
                 except ProgrammingError:
                     pass
-
+        
         print("Database setup complete. Tables are ready.")
     except Exception as e:
         print(f"CRITICAL ERROR during database setup: {e}")
@@ -108,9 +95,8 @@ setup_database()
 
 # --- Smart Routing Logic ---
 def route_note_intelligently(note_text):
-    # English keywords; Spanish notes will default to CNA unless matched
     NURSE_KEYWORDS = ['pain', 'medication', 'bleeding', 'nausea', 'dizzy', 'sick', 'iv', 'pump', 'staples', 'incision']
-    note_lower = (note_text or "").lower()
+    note_lower = note_text.lower()
     for keyword in NURSE_KEYWORDS:
         if keyword in note_lower:
             return 'nurse'
@@ -130,7 +116,7 @@ def log_to_audit_trail(event_type, details):
                     "event_type": event_type,
                     "details": details
                 })
-
+        
         socketio.emit('new_audit_log', {
             'timestamp': now_utc.strftime('%Y-%m-%d %H:%M:%S') + ' UTC',
             'event_type': event_type,
@@ -148,13 +134,8 @@ def log_request_to_db(request_id, category, user_input, reply, room, is_first_ba
                     INSERT INTO requests (request_id, timestamp, room, category, user_input, reply, is_first_baby)
                     VALUES (:request_id, :timestamp, :room, :category, :user_input, :reply, :is_first_baby);
                 """), {
-                    "request_id": request_id,
-                    "timestamp": datetime.now(timezone.utc),
-                    "room": room,
-                    "category": category,
-                    "user_input": user_input,
-                    "reply": reply,
-                    "is_first_baby": is_first_baby
+                    "request_id": request_id, "timestamp": datetime.now(timezone.utc), "room": room,
+                    "category": category, "user_input": user_input, "reply": reply, "is_first_baby": is_first_baby
                 })
         log_to_audit_trail("Request Created", f"Room: {room}, Request: '{user_input}', Assigned to: {category.upper()}")
     except Exception as e:
@@ -185,62 +166,10 @@ def process_request(role, subject, user_input, reply_message):
     socketio.start_background_task(send_email_alert, subject, user_input, room_number)
     socketio.start_background_task(log_request_to_db, request_id, role, user_input, reply_message, room_number, is_first_baby)
     socketio.emit('new_request', {
-        'id': request_id,
-        'room': room_number,
-        'request': user_input,
-        'role': role,
-        'timestamp': datetime.now(timezone.utc).isoformat()
+        'id': request_id, 'room': room_number, 'request': user_input,
+        'role': role, 'timestamp': datetime.now(timezone.utc).isoformat()
     })
     return reply_message
-
-# --- Language/Config Loader ---
-def load_button_config(pathway: str, lang: str):
-    """
-    Tries to import the appropriate button config module.
-    Order:
-      1) button_config_bereavement_<lang>  (if pathway == 'bereavement')
-      2) button_config_<lang>
-      3) fallback to English variants in the same order
-    """
-    candidates = []
-    if pathway == "bereavement":
-        candidates.append(f"button_config_bereavement_{lang}")
-        candidates.append("button_config_bereavement_en")
-    else:
-        candidates.append(f"button_config_{lang}")
-        candidates.append("button_config_en")
-
-    print(f"[config] pathway='{pathway}' lang='{lang}'")
-    for name in candidates:
-        try:
-            mod = importlib.import_module(name)
-            if hasattr(mod, "button_data"):
-                print(f"[config] Using: {name}")
-                return mod.button_data
-            else:
-                print(f"[config] Module {name} missing 'button_data'; skipping.")
-        except ImportError as ie:
-            print(f"[config] ImportError for {name}: {ie}")
-        except Exception as e:
-            print(f"[config] Error loading {name}: {e}")
-
-    # Last resort minimal English set so the app never 500s
-    print("[config] Fallback to minimal English defaults.")
-    return {
-        "greeting": "Hello! How can I help you?",
-        "custom_note_placeholder": "Type your note to the nurse here...",
-        "send_note_button": "Send Note",
-        "back_text": "⬅ Back",
-        "cna_notification": "✅ CNA has been notified.",
-        "nurse_notification": "✅ Nurse has been notified.",
-        "main_buttons": [
-            "I'm having an emergency", "I need supplies", "I need medication",
-            "My IV pump is beeping", "I have questions", "I want to know about going home",
-            "Bathroom/Shower", "Ice Chips/Water"
-        ],
-        "I'm having an emergency": {"action": "Notify Nurse"},
-        "My IV pump is beeping": {"action": "Notify Nurse"}
-    }
 
 # --- App Routes ---
 @app.route("/room/<room_id>")
@@ -260,10 +189,8 @@ def set_bereavement_room(room_id):
 @app.route("/", methods=["GET", "POST"])
 def language_selector():
     if request.method == "POST":
-        lang = request.form.get("language", "en")
-        session["language"] = lang
+        session["language"] = request.form.get("language")
         pathway = session.get("pathway", "standard")
-        print(f"[lang] Selected: {lang} pathway={pathway}")
         if pathway == "bereavement":
             session["is_first_baby"] = None
             return redirect(url_for("handle_chat"))
@@ -274,18 +201,16 @@ def language_selector():
 @app.route("/demographics", methods=["GET", "POST"])
 def demographics():
     lang = session.get("language", "en")
+    config_module_name = f"button_config_{lang}"
     try:
-        cfg = importlib.import_module(f"button_config_{lang}")
-        button_data = cfg.button_data
-    except Exception as e:
-        print(f"[demographics] falling back to EN due to: {e}")
-        from button_config_en import button_data  # guaranteed to exist in your repo
-
+        button_config = importlib.import_module(config_module_name)
+        button_data = button_config.button_data
+    except (ImportError, AttributeError):
+        return "Error: Language configuration file is missing or invalid."
     if request.method == "POST":
         is_first_baby_response = request.form.get("is_first_baby")
-        session["is_first_baby"] = (is_first_baby_response == 'yes')
+        session["is_first_baby"] = True if is_first_baby_response == 'yes' else False
         return redirect(url_for("handle_chat"))
-
     question_text = button_data.get("demographic_question", "Is this your first baby?")
     yes_text = button_data.get("demographic_yes", "Yes")
     no_text = button_data.get("demographic_no", "No")
@@ -295,8 +220,13 @@ def demographics():
 def handle_chat():
     pathway = session.get("pathway", "standard")
     lang = session.get("language", "en")
-
-    button_data = load_button_config(pathway, lang)
+    config_module_name = f"button_config_bereavement_{lang}" if pathway == "bereavement" else f"button_config_{lang}"
+    try:
+        button_config = importlib.import_module(config_module_name)
+        button_data = button_config.button_data
+    except (ImportError, AttributeError) as e:
+        print(f"ERROR: Could not load configuration module '{config_module_name}'. Error: {e}")
+        return f"Error: Configuration file '{config_module_name}.py' is missing or invalid. Please contact support."
 
     if request.method == 'POST':
         if request.form.get("action") == "send_note":
@@ -304,22 +234,16 @@ def handle_chat():
             if note_text:
                 role = route_note_intelligently(note_text)
                 reply_message = button_data.get(f"{role}_notification", "Your request has been sent.")
-                session['reply'] = process_request(
-                    role=role,
-                    subject="Custom Patient Note",
-                    user_input=note_text,
-                    reply_message=reply_message
-                )
-                session['options'] = button_data.get("main_buttons", [])
+                session['reply'] = process_request(role=role, subject="Custom Patient Note", user_input=note_text, reply_message=reply_message)
+                session['options'] = button_data["main_buttons"]
             else:
-                # Basic string is ok here; your ES file overrides this label copy elsewhere if needed
-                session['reply'] = "Please type a message in the box."
-                session['options'] = button_data.get("main_buttons", [])
+                # STEP 2 CHANGE: use localized fallback when the note is blank
+                session['reply'] = button_data.get("empty_custom_note", "Please type a message in the box.")
+                session['options'] = button_data["main_buttons"]
+        
         else:
-            user_input = (request.form.get("user_input", "") or "").strip()
-            back_text = button_data.get("back_text", "⬅ Back")
-
-            if user_input == back_text:
+            user_input = request.form.get("user_input", "").strip()
+            if user_input == button_data.get("back_text", "⬅ Back"):
                 session.pop('reply', None)
                 session.pop('options', None)
                 return redirect(url_for('handle_chat'))
@@ -328,33 +252,28 @@ def handle_chat():
                 button_info = button_data[user_input]
                 session['reply'] = button_info.get("question") or button_info.get("note", "")
                 session['options'] = button_info.get("options", [])
-
-                if session['options']:
-                    if back_text not in session['options']:
-                        session['options'].append(back_text)
-                else:
-                    session['options'] = button_data.get("main_buttons", [])
+                
+                back_text = button_data.get("back_text", "⬅ Back")
+                if session['options'] and back_text not in session['options']:
+                    session['options'].append(back_text)
+                elif not session['options']:
+                    session['options'] = button_data["main_buttons"]
 
                 if "action" in button_info:
                     action = button_info["action"]
                     role = "cna" if action == "Notify CNA" else "nurse"
                     subject = f"{role.upper()} Request"
-                    notification_message = button_info.get("note", button_data.get(f"{role}_notification", "Your request has been sent."))
-                    session['reply'] = process_request(
-                        role=role,
-                        subject=subject,
-                        user_input=user_input,
-                        reply_message=notification_message
-                    )
-                    session['options'] = button_data.get("main_buttons", [])
+                    notification_message = button_info.get("note", button_data[f"{role}_notification"])
+                    session['reply'] = process_request(role=role, subject=subject, user_input=user_input, reply_message=notification_message)
+                    session['options'] = button_data["main_buttons"]
             else:
                 session['reply'] = "I'm sorry, I didn't understand that. Please use the buttons provided."
-                session['options'] = button_data.get("main_buttons", [])
-
+                session['options'] = button_data["main_buttons"]
+        
         return redirect(url_for('handle_chat'))
 
-    reply = session.pop('reply', button_data.get("greeting", "Hello! How can I help you?"))
-    options = session.pop('options', button_data.get("main_buttons", []))
+    reply = session.pop('reply', button_data["greeting"])
+    options = session.pop('options', button_data["main_buttons"])
     return render_template("chat.html", reply=reply, options=options, button_data=button_data)
 
 @app.route("/reset-language")
@@ -367,34 +286,26 @@ def dashboard():
     active_requests = []
     try:
         with engine.connect() as connection:
-            result = connection.execute(text("""
-                SELECT request_id, room, user_input, category as role, timestamp
-                FROM requests
-                WHERE completion_timestamp IS NULL
-                ORDER BY timestamp DESC;
-            """))
+            result = connection.execute(text("SELECT request_id, room, user_input, category as role, timestamp FROM requests WHERE completion_timestamp IS NULL ORDER BY timestamp DESC;"))
             for row in result:
+                # Keep original behavior; template hardening handles display
                 ts = row.timestamp
-                # Always pass a usable ISO-esque string to the template/JS
-                if ts is None:
-                    ts_iso = datetime.now(timezone.utc).isoformat()
-                elif hasattr(ts, "isoformat"):
+                try:
                     ts_iso = ts.isoformat()
-                else:
-                    ts_iso = str(ts)
-
+                except Exception:
+                    ts_iso = str(ts) if ts is not None else datetime.now(timezone.utc).isoformat()
                 active_requests.append({
                     'id': row.request_id,
                     'room': row.room,
-                    'request': row.user_input or "",
-                    'role': row.role or "",
+                    'request': row.user_input,
+                    'role': row.role,
                     'timestamp': ts_iso
                 })
     except Exception as e:
         print(f"ERROR fetching active requests: {e}")
     return render_template("dashboard.html", active_requests=active_requests)
 
-# --- Analytics (passes raw Python lists; template uses |tojson) ---
+# MODIFIED earlier: analytics passes raw lists (template uses |tojson)
 @app.route('/analytics')
 def analytics():
     avg_response_time = "N/A"
@@ -405,74 +316,48 @@ def analytics():
     multi_baby_labels, multi_baby_values = [], []
     try:
         with engine.connect() as connection:
-            # AVG response time (Postgres syntax; OK if you're on PG)
-            avg_time_result = connection.execute(text("""
-                SELECT AVG(EXTRACT(EPOCH FROM (completion_timestamp - timestamp))) AS avg_seconds
-                FROM requests WHERE completion_timestamp IS NOT NULL;
-            """)).scalar_one_or_none()
+            avg_time_result = connection.execute(text("SELECT AVG(EXTRACT(EPOCH FROM (completion_timestamp - timestamp))) as avg_seconds FROM requests WHERE completion_timestamp IS NOT NULL;")).scalar_one_or_none()
             if avg_time_result is not None:
                 minutes, seconds = divmod(int(avg_time_result), 60)
                 avg_response_time = f"{minutes}m {seconds}s"
-
-            # Category counts
-            top_requests_result = connection.execute(text("""
-                SELECT category, COUNT(id) FROM requests
-                GROUP BY category ORDER BY COUNT(id) DESC;
-            """)).fetchall()
+            
+            top_requests_result = connection.execute(text("SELECT category, COUNT(id) FROM requests GROUP BY category ORDER BY COUNT(id) DESC;")).fetchall()
             top_requests_labels = [row[0] for row in top_requests_result]
             top_requests_values = [row[1] for row in top_requests_result]
 
-            # Top user_input (limit 5)
-            most_requested_result = connection.execute(text("""
-                SELECT user_input, COUNT(id) as count FROM requests
-                GROUP BY user_input ORDER BY count DESC LIMIT 5;
-            """)).fetchall()
+            most_requested_result = connection.execute(text("SELECT user_input, COUNT(id) as count FROM requests GROUP BY user_input ORDER BY count DESC LIMIT 5;")).fetchall()
             most_requested_labels = [row[0] for row in most_requested_result]
             most_requested_values = [row[1] for row in most_requested_result]
 
-            # Requests by hour (0-23)
-            requests_by_hour_result = connection.execute(text("""
-                SELECT EXTRACT(HOUR FROM timestamp) as hour, COUNT(id)
-                FROM requests GROUP BY hour ORDER BY hour;
-            """)).fetchall()
+            requests_by_hour_result = connection.execute(text("SELECT EXTRACT(HOUR FROM timestamp) as hour, COUNT(id) FROM requests GROUP BY hour ORDER BY hour;")).fetchall()
             hourly_counts = defaultdict(int)
             for hour, count in requests_by_hour_result:
                 hourly_counts[int(hour)] = count
             requests_by_hour_labels = [f"{h}:00" for h in range(24)]
             requests_by_hour_values = [hourly_counts[h] for h in range(24)]
 
-            # First-time parents top 5
-            first_baby_result = connection.execute(text("""
-                SELECT user_input, COUNT(id) as count FROM requests
-                WHERE is_first_baby IS TRUE
-                GROUP BY user_input ORDER BY count DESC LIMIT 5;
-            """)).fetchall()
+            first_baby_result = connection.execute(text("SELECT user_input, COUNT(id) as count FROM requests WHERE is_first_baby IS TRUE GROUP BY user_input ORDER BY count DESC LIMIT 5;")).fetchall()
             first_baby_labels = [row[0] for row in first_baby_result]
             first_baby_values = [row[1] for row in first_baby_result]
 
-            # Multiparous parents top 5
-            multi_baby_result = connection.execute(text("""
-                SELECT user_input, COUNT(id) as count FROM requests
-                WHERE is_first_baby IS FALSE
-                GROUP BY user_input ORDER BY count DESC LIMIT 5;
-            """)).fetchall()
+            multi_baby_result = connection.execute(text("SELECT user_input, COUNT(id) as count FROM requests WHERE is_first_baby IS FALSE GROUP BY user_input ORDER BY count DESC LIMIT 5;")).fetchall()
             multi_baby_labels = [row[0] for row in multi_baby_result]
             multi_baby_values = [row[1] for row in multi_baby_result]
     except Exception as e:
         print(f"ERROR fetching analytics data: {e}")
-
+    
     return render_template(
-        'analytics.html',
+        'analytics.html', 
         avg_response_time=avg_response_time,
-        top_requests_labels=top_requests_labels,
+        top_requests_labels=top_requests_labels, 
         top_requests_values=top_requests_values,
-        most_requested_labels=most_requested_labels,
+        most_requested_labels=most_requested_labels, 
         most_requested_values=most_requested_values,
-        requests_by_hour_labels=requests_by_hour_labels,
+        requests_by_hour_labels=requests_by_hour_labels, 
         requests_by_hour_values=requests_by_hour_values,
-        first_baby_labels=first_baby_labels,
+        first_baby_labels=first_baby_labels, 
         first_baby_values=first_baby_values,
-        multi_baby_labels=multi_baby_labels,
+        multi_baby_labels=multi_baby_labels, 
         multi_baby_values=multi_baby_values
     )
 
@@ -502,25 +387,23 @@ def assignments():
                             """), {"date": today, "room": room_number, "nurse": nurse_name})
                         else:
                             connection.execute(text("""
-                                DELETE FROM assignments
+                                DELETE FROM assignments 
                                 WHERE assignment_date = :date AND room_number = :room;
                             """), {"date": today, "room": room_number})
             print("Assignments saved successfully.")
         except Exception as e:
             print(f"ERROR saving assignments: {e}")
         return redirect(url_for('dashboard'))
-
+    
     current_assignments = {}
     try:
         with engine.connect() as connection:
-            result = connection.execute(text("""
-                SELECT room_number, nurse_name FROM assignments WHERE assignment_date = :date;
-            """), {"date": today})
+            result = connection.execute(text("SELECT room_number, nurse_name FROM assignments WHERE assignment_date = :date;"), {"date": today})
             for row in result:
                 current_assignments[row.room_number] = row.nurse_name
     except Exception as e:
         print(f"ERROR fetching assignments: {e}")
-
+    
     return render_template('assignments.html', rooms=ALL_ROOMS, nurses=all_nurses, assignments=current_assignments)
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -562,15 +445,13 @@ def manager_dashboard():
                     elif action == 'remove_staff':
                         staff_id = request.form.get('staff_id')
                         if staff_id:
-                            staff_member = connection.execute(text(
-                                "SELECT name, role FROM staff WHERE id = :id;"
-                            ), {"id": staff_id}).first()
+                            staff_member = connection.execute(text("SELECT name, role FROM staff WHERE id = :id;"), {"id": staff_id}).first()
                             if staff_member:
                                 connection.execute(text("DELETE FROM staff WHERE id = :id;"), {"id": staff_id})
                                 log_to_audit_trail("Staff Removed", f"Removed staff member: {staff_member.name} ({staff_member.role})")
         except Exception as e:
             print(f"ERROR updating staff: {e}")
-
+        
         return redirect(url_for('manager_dashboard'))
 
     staff_list = []
@@ -579,10 +460,7 @@ def manager_dashboard():
         with engine.connect() as connection:
             staff_result = connection.execute(text("SELECT id, name, role FROM staff ORDER BY name;"))
             staff_list = staff_result.fetchall()
-            audit_result = connection.execute(text("""
-                SELECT timestamp, event_type, details FROM audit_log
-                ORDER BY timestamp DESC LIMIT 50;
-            """))
+            audit_result = connection.execute(text("SELECT timestamp, event_type, details FROM audit_log ORDER BY timestamp DESC LIMIT 50;"))
             audit_log = audit_result.fetchall()
     except Exception as e:
         print(f"ERROR fetching manager dashboard data: {e}")
@@ -604,16 +482,14 @@ def handle_acknowledge(data):
 @socketio.on('defer_request')
 def handle_defer_request(data):
     request_id = data.get('id')
-    if not request_id:
-        return
+    if not request_id: return
     now_utc = datetime.now(timezone.utc)
     new_timestamp_iso = now_utc.isoformat()
     try:
         with engine.connect() as connection:
             with connection.begin():
                 connection.execute(text("""
-                    UPDATE requests
-                    SET category = 'nurse', timestamp = :now, deferral_timestamp = :now
+                    UPDATE requests SET category = 'nurse', timestamp = :now, deferral_timestamp = :now
                     WHERE request_id = :request_id;
                 """), {"now": now_utc, "request_id": request_id})
         socketio.emit('request_updated', {
@@ -631,10 +507,7 @@ def handle_complete_request(data):
             with engine.connect() as connection:
                 trans = connection.begin()
                 try:
-                    connection.execute(text("""
-                        UPDATE requests SET completion_timestamp = :now
-                        WHERE request_id = :request_id;
-                    """), {"now": datetime.now(timezone.utc), "request_id": request_id})
+                    connection.execute(text("UPDATE requests SET completion_timestamp = :now WHERE request_id = :request_id;"), {"now": datetime.now(timezone.utc), "request_id": request_id})
                     trans.commit()
                     log_to_audit_trail("Request Completed", f"Request ID: {request_id} marked as complete.")
                 except Exception as e:
