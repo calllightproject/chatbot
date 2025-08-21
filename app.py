@@ -81,7 +81,6 @@ def setup_database():
                         """), {"name": name, "role": role})
                     print("Initial staff population complete.")
 
-        # --- THIS IS THE FIX: A more robust migration script ---
         with engine.connect() as connection:
             with connection.begin():
                 print("Running database migration for timestamp columns...")
@@ -94,12 +93,10 @@ def setup_database():
                     """))
                     print("SUCCESS: All timestamp columns are now timezone-aware.")
                 except ProgrammingError as e:
-                    # It's safe to ignore errors that say the column is already the correct type.
                     if "already of type" in str(e).lower():
                         print("INFO: Timestamp columns were already timezone-aware.")
                         pass
                     else:
-                        # Re-raise any other unexpected error so we can see it in the logs.
                         raise
         
         print("Database setup complete.")
@@ -175,6 +172,19 @@ def process_request(role, subject, user_input, reply_message):
     return reply_message
 
 # --- App Routes ---
+# NEW: Temporary route to clear old/bad data for testing
+@app.route("/clear-active-requests")
+def clear_active_requests():
+    try:
+        with engine.connect() as connection:
+            with connection.begin():
+                connection.execute(text("DELETE FROM requests WHERE completion_timestamp IS NULL;"))
+        # Tell all dashboards to refresh to clear the UI
+        socketio.emit('force_refresh', {})
+        return "All active requests have been cleared.", 200
+    except Exception as e:
+        return f"Error clearing requests: {e}", 500
+
 @app.route("/room/<room_id>")
 def set_room(room_id):
     session.clear()
