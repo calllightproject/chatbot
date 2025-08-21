@@ -153,15 +153,10 @@
         const requestItems = document.querySelectorAll('#requests-list .request-item');
         const now = new Date();
 
-        console.log(`--- Timer Tick at ${now.toISOString()} ---`); // DEBUGGING
-
         requestItems.forEach(item => {
             const requestTime = new Date(item.dataset.timestamp);
             const minutes = Math.floor((now - requestTime) / 60000);
             
-            // DEBUGGING: Log the calculation for each item
-            console.log(`Checking ${item.dataset.id}: Now=${now.getTime()}, ReqTime=${requestTime.getTime()}, Diff(min)=${minutes}`);
-
             const timestampSpan = item.querySelector('.timestamp');
             if (timestampSpan) {
                 timestampSpan.textContent = minutes > 0 ? `${minutes}m ago` : 'Just now';
@@ -282,7 +277,9 @@
             }
         });
 
+        // Start the single master timer
         setInterval(updateAllTimersAndColors, 60000);
+        // Run it once on page load to set the initial state
         updateAllTimersAndColors();
     });
 </script>
