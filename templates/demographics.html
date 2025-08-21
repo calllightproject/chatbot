@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ session.get('language', 'en') }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -32,6 +32,26 @@
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
             text-align: center;
         }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #e1e1e2;
+            margin-bottom: 20px;
+        }
+        .header h2 {
+            color: var(--core-blue);
+            margin: 0;
+            font-size: 22px;
+        }
+        .language-link {
+            text-decoration: none;
+            color: var(--accent-blue);
+            font-size: 14px;
+            white-space: nowrap;
+            margin-left: 10px;
+        }
         .question-text {
             font-size: 20px;
             color: var(--neutral-gray-text);
@@ -59,12 +79,23 @@
 </head>
 <body>
     <div class="container">
+        <div class="header">
+            <h2>Postpartum CareConnect</h2>
+            <a href="{{ url_for('reset_language') }}" class="language-link">Change Language</a>
+        </div>
+
         <p class="question-text">{{ question_text }}</p>
-        
+
         <form method="POST" action="{{ url_for('demographics') }}" class="options-form">
-            <!-- ACCESSIBILITY ADDED: aria-label provides a clear description for screen readers -->
-            <button type="submit" name="is_first_baby" value="yes" aria-label="Answer Yes to the question: {{ question_text }}">{{ yes_text }}</button>
-            <button type="submit" name="is_first_baby" value="no" aria-label="Answer No to the question: {{ question_text }}">{{ no_text }}</button>
+            <!-- ACCESSIBILITY: aria-label describes each action for screen readers -->
+            <button type="submit" name="is_first_baby" value="yes"
+                    aria-label="Answer Yes to the question: {{ question_text }}">
+                {{ yes_text }}
+            </button>
+            <button type="submit" name="is_first_baby" value="no"
+                    aria-label="Answer No to the question: {{ question_text }}">
+                {{ no_text }}
+            </button>
         </form>
     </div>
 </body>
