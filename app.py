@@ -6,6 +6,7 @@ import os
 import json
 import smtplib
 import importlib
+import unicodedata
 from datetime import datetime, date, timezone
 from collections import defaultdict
 from email.message import EmailMessage
@@ -24,7 +25,7 @@ socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*", manage
 INITIAL_STAFF = {
     'Jackie': 'nurse', 'Carol': 'nurse', 'John': 'nurse',
     'Maria': 'nurse', 'David': 'nurse', 'Susan': 'nurse',
-    'Peter': 'cna', 'Linda': 'cna' 
+    'Peter': 'cna', 'Linda': 'cna'
 }
 ALL_ROOMS = [str(room) for room in range(231, 261)]
 
@@ -86,20 +87,60 @@ def setup_database():
                     connection.execute(text("ALTER TABLE requests ADD COLUMN deferral_timestamp TIMESTAMP WITH TIME ZONE;"))
                 except ProgrammingError:
                     pass
-        
+
         print("Database setup complete. Tables are ready.")
     except Exception as e:
         print(f"CRITICAL ERROR during database setup: {e}")
 
 setup_database()
 
-# --- Smart Routing Logic ---
+# --- Utilities for multilingual routing / labels ---
+def _strip_accents(s: str) -> str:
+    if not s:
+        return s
+    return ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
+
+def localize_role(role: str, lang: str) -> str:
+    labels = {
+        'en': {'nurse': 'Nurse', 'cna': 'CNA'},
+        'es': {'nurse': 'enfermera', 'cna': 'asistente de enfermería'},
+        'zh': {'nurse': '护士', 'cna': '护理助理'},
+    }
+    return labels.get(lang, labels['en']).get(role, role)
+
+# --- Smart Routing Logic (multilingual) ---
 def route_note_intelligently(note_text):
-    NURSE_KEYWORDS = ['pain', 'medication', 'bleeding', 'nausea', 'dizzy', 'sick', 'iv', 'pump', 'staples', 'incision']
-    note_lower = note_text.lower()
-    for keyword in NURSE_KEYWORDS:
-        if keyword in note_lower:
-            return 'nurse'
+    """
+    Route custom free-text notes. If any 'nurse' keyword is present in
+    English, Spanish, or Chinese, route to 'nurse'; otherwise 'cna'.
+    """
+    text = (note_text or "")
+    lower = text.lower()
+    no_accents = _strip_accents(lower)
+
+    # English keywords
+    nurse_kw_en = [
+        'pain','medication','bleeding','nausea','dizzy','dizziness','sick',
+        'iv','pump','staples','incision','wound','fever','vomit','vomiting'
+    ]
+
+    # Spanish keywords (accent-insensitive)
+    nurse_kw_es = [
+        'dolor','medica','medicacion','medicamento','sangr','nausea','vomit',
+        'mareo','mareada','mareado','enferma','enfermo','suero','bomba','iv',
+        'grapas','incision','herida','puntos','fiebre'
+    ]
+
+    # Chinese keywords
+    nurse_kw_zh = [
+        '疼','痛','用药','药','流血','出血','恶心','呕吐','头晕','不舒服',
+        '静脉','输液','泵','切口','伤口','缝合','发烧'
+    ]
+
+    if any(k in lower for k in nurse_kw_en) \
+       or any(k in no_accents for k in nurse_kw_es) \
+       or any(k in text for k in nurse_kw_zh):
+        return 'nurse'
     return 'cna'
 
 # --- Core Helper Functions ---
@@ -116,7 +157,7 @@ def log_to_audit_trail(event_type, details):
                     "event_type": event_type,
                     "details": details
                 })
-        
+
         socketio.emit('new_audit_log', {
             'timestamp': now_utc.strftime('%Y-%m-%d %H:%M:%S') + ' UTC',
             'event_type': event_type,
@@ -234,13 +275,25 @@ def handle_chat():
             if note_text:
                 role = route_note_intelligently(note_text)
                 reply_message = button_data.get(f"{role}_notification", "Your request has been sent.")
-                session['reply'] = process_request(role=role, subject="Custom Patient Note", user_input=note_text, reply_message=reply_message)
+                # Localize subject for custom notes
+                subject_map = {
+                    'en': "Custom Patient Note",
+                    'es': "Nota personalizada del paciente",
+                    'zh': "患者自定义留言",
+                }
+                subject = subject_map.get(lang, subject_map['en'])
+                session['reply'] = process_request(
+                    role=role,
+                    subject=subject,
+                    user_input=note_text,
+                    reply_message=reply_message
+                )
                 session['options'] = button_data["main_buttons"]
             else:
-                # STEP 2 CHANGE: use localized fallback when the note is blank
+                # Localized empty-note message
                 session['reply'] = button_data.get("empty_custom_note", "Please type a message in the box.")
                 session['options'] = button_data["main_buttons"]
-        
+
         else:
             user_input = request.form.get("user_input", "").strip()
             if user_input == button_data.get("back_text", "⬅ Back"):
@@ -252,7 +305,7 @@ def handle_chat():
                 button_info = button_data[user_input]
                 session['reply'] = button_info.get("question") or button_info.get("note", "")
                 session['options'] = button_info.get("options", [])
-                
+
                 back_text = button_data.get("back_text", "⬅ Back")
                 if session['options'] and back_text not in session['options']:
                     session['options'].append(back_text)
@@ -262,14 +315,20 @@ def handle_chat():
                 if "action" in button_info:
                     action = button_info["action"]
                     role = "cna" if action == "Notify CNA" else "nurse"
-                    subject = f"{role.upper()} Request"
+                    # Localize the role label in the email subject
+                    subject = f"{localize_role(role, lang)} Request"
                     notification_message = button_info.get("note", button_data[f"{role}_notification"])
-                    session['reply'] = process_request(role=role, subject=subject, user_input=user_input, reply_message=notification_message)
+                    session['reply'] = process_request(
+                        role=role,
+                        subject=subject,
+                        user_input=user_input,
+                        reply_message=notification_message
+                    )
                     session['options'] = button_data["main_buttons"]
             else:
                 session['reply'] = "I'm sorry, I didn't understand that. Please use the buttons provided."
                 session['options'] = button_data["main_buttons"]
-        
+
         return redirect(url_for('handle_chat'))
 
     reply = session.pop('reply', button_data["greeting"])
@@ -286,9 +345,13 @@ def dashboard():
     active_requests = []
     try:
         with engine.connect() as connection:
-            result = connection.execute(text("SELECT request_id, room, user_input, category as role, timestamp FROM requests WHERE completion_timestamp IS NULL ORDER BY timestamp DESC;"))
+            result = connection.execute(text("""
+                SELECT request_id, room, user_input, category as role, timestamp
+                FROM requests
+                WHERE completion_timestamp IS NULL
+                ORDER BY timestamp DESC;
+            """))
             for row in result:
-                # Keep original behavior; template hardening handles display
                 ts = row.timestamp
                 try:
                     ts_iso = ts.isoformat()
@@ -305,7 +368,7 @@ def dashboard():
         print(f"ERROR fetching active requests: {e}")
     return render_template("dashboard.html", active_requests=active_requests)
 
-# MODIFIED earlier: analytics passes raw lists (template uses |tojson)
+# --- Analytics ---
 @app.route('/analytics')
 def analytics():
     avg_response_time = "N/A"
@@ -316,48 +379,80 @@ def analytics():
     multi_baby_labels, multi_baby_values = [], []
     try:
         with engine.connect() as connection:
-            avg_time_result = connection.execute(text("SELECT AVG(EXTRACT(EPOCH FROM (completion_timestamp - timestamp))) as avg_seconds FROM requests WHERE completion_timestamp IS NOT NULL;")).scalar_one_or_none()
+            avg_time_result = connection.execute(text("""
+                SELECT AVG(EXTRACT(EPOCH FROM (completion_timestamp - timestamp))) as avg_seconds
+                FROM requests
+                WHERE completion_timestamp IS NOT NULL;
+            """)).scalar_one_or_none()
             if avg_time_result is not None:
                 minutes, seconds = divmod(int(avg_time_result), 60)
                 avg_response_time = f"{minutes}m {seconds}s"
-            
-            top_requests_result = connection.execute(text("SELECT category, COUNT(id) FROM requests GROUP BY category ORDER BY COUNT(id) DESC;")).fetchall()
+
+            top_requests_result = connection.execute(text("""
+                SELECT category, COUNT(id) FROM requests
+                GROUP BY category ORDER BY COUNT(id) DESC;
+            """)).fetchall()
             top_requests_labels = [row[0] for row in top_requests_result]
             top_requests_values = [row[1] for row in top_requests_result]
 
-            most_requested_result = connection.execute(text("SELECT user_input, COUNT(id) as count FROM requests GROUP BY user_input ORDER BY count DESC LIMIT 5;")).fetchall()
+            most_requested_result = connection.execute(text("""
+                SELECT user_input, COUNT(id) as count
+                FROM requests
+                GROUP BY user_input
+                ORDER BY count DESC
+                LIMIT 5;
+            """)).fetchall()
             most_requested_labels = [row[0] for row in most_requested_result]
             most_requested_values = [row[1] for row in most_requested_result]
 
-            requests_by_hour_result = connection.execute(text("SELECT EXTRACT(HOUR FROM timestamp) as hour, COUNT(id) FROM requests GROUP BY hour ORDER BY hour;")).fetchall()
+            requests_by_hour_result = connection.execute(text("""
+                SELECT EXTRACT(HOUR FROM timestamp) as hour, COUNT(id)
+                FROM requests
+                GROUP BY hour
+                ORDER BY hour;
+            """)).fetchall()
             hourly_counts = defaultdict(int)
             for hour, count in requests_by_hour_result:
                 hourly_counts[int(hour)] = count
             requests_by_hour_labels = [f"{h}:00" for h in range(24)]
             requests_by_hour_values = [hourly_counts[h] for h in range(24)]
 
-            first_baby_result = connection.execute(text("SELECT user_input, COUNT(id) as count FROM requests WHERE is_first_baby IS TRUE GROUP BY user_input ORDER BY count DESC LIMIT 5;")).fetchall()
+            first_baby_result = connection.execute(text("""
+                SELECT user_input, COUNT(id) as count
+                FROM requests
+                WHERE is_first_baby IS TRUE
+                GROUP BY user_input
+                ORDER BY count DESC
+                LIMIT 5;
+            """)).fetchall()
             first_baby_labels = [row[0] for row in first_baby_result]
             first_baby_values = [row[1] for row in first_baby_result]
 
-            multi_baby_result = connection.execute(text("SELECT user_input, COUNT(id) as count FROM requests WHERE is_first_baby IS FALSE GROUP BY user_input ORDER BY count DESC LIMIT 5;")).fetchall()
+            multi_baby_result = connection.execute(text("""
+                SELECT user_input, COUNT(id) as count
+                FROM requests
+                WHERE is_first_baby IS FALSE
+                GROUP BY user_input
+                ORDER BY count DESC
+                LIMIT 5;
+            """)).fetchall()
             multi_baby_labels = [row[0] for row in multi_baby_result]
             multi_baby_values = [row[1] for row in multi_baby_result]
     except Exception as e:
         print(f"ERROR fetching analytics data: {e}")
-    
+
     return render_template(
-        'analytics.html', 
+        'analytics.html',
         avg_response_time=avg_response_time,
-        top_requests_labels=top_requests_labels, 
+        top_requests_labels=top_requests_labels,
         top_requests_values=top_requests_values,
-        most_requested_labels=most_requested_labels, 
+        most_requested_labels=most_requested_labels,
         most_requested_values=most_requested_values,
-        requests_by_hour_labels=requests_by_hour_labels, 
+        requests_by_hour_labels=requests_by_hour_labels,
         requests_by_hour_values=requests_by_hour_values,
-        first_baby_labels=first_baby_labels, 
+        first_baby_labels=first_baby_labels,
         first_baby_values=first_baby_values,
-        multi_baby_labels=multi_baby_labels, 
+        multi_baby_labels=multi_baby_labels,
         multi_baby_values=multi_baby_values
     )
 
@@ -387,23 +482,26 @@ def assignments():
                             """), {"date": today, "room": room_number, "nurse": nurse_name})
                         else:
                             connection.execute(text("""
-                                DELETE FROM assignments 
+                                DELETE FROM assignments
                                 WHERE assignment_date = :date AND room_number = :room;
                             """), {"date": today, "room": room_number})
             print("Assignments saved successfully.")
         except Exception as e:
             print(f"ERROR saving assignments: {e}")
         return redirect(url_for('dashboard'))
-    
+
     current_assignments = {}
     try:
         with engine.connect() as connection:
-            result = connection.execute(text("SELECT room_number, nurse_name FROM assignments WHERE assignment_date = :date;"), {"date": today})
+            result = connection.execute(text("""
+                SELECT room_number, nurse_name FROM assignments
+                WHERE assignment_date = :date;
+            """), {"date": today})
             for row in result:
                 current_assignments[row.room_number] = row.nurse_name
     except Exception as e:
         print(f"ERROR fetching assignments: {e}")
-    
+
     return render_template('assignments.html', rooms=ALL_ROOMS, nurses=all_nurses, assignments=current_assignments)
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -451,7 +549,7 @@ def manager_dashboard():
                                 log_to_audit_trail("Staff Removed", f"Removed staff member: {staff_member.name} ({staff_member.role})")
         except Exception as e:
             print(f"ERROR updating staff: {e}")
-        
+
         return redirect(url_for('manager_dashboard'))
 
     staff_list = []
@@ -482,7 +580,8 @@ def handle_acknowledge(data):
 @socketio.on('defer_request')
 def handle_defer_request(data):
     request_id = data.get('id')
-    if not request_id: return
+    if not request_id:
+        return
     now_utc = datetime.now(timezone.utc)
     new_timestamp_iso = now_utc.isoformat()
     try:
@@ -507,7 +606,10 @@ def handle_complete_request(data):
             with engine.connect() as connection:
                 trans = connection.begin()
                 try:
-                    connection.execute(text("UPDATE requests SET completion_timestamp = :now WHERE request_id = :request_id;"), {"now": datetime.now(timezone.utc), "request_id": request_id})
+                    connection.execute(text("""
+                        UPDATE requests SET completion_timestamp = :now
+                        WHERE request_id = :request_id;
+                    """), {"now": datetime.now(timezone.utc), "request_id": request_id})
                     trans.commit()
                     log_to_audit_trail("Request Completed", f"Request ID: {request_id} marked as complete.")
                 except Exception as e:
