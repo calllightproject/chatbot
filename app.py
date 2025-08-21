@@ -217,6 +217,7 @@ def demographics():
     no_text = button_data.get("demographic_no", "No")
     return render_template("demographics.html", question_text=question_text, yes_text=yes_text, no_text=no_text)
 
+# MODIFIED: This function now uses the Post/Redirect/Get pattern to prevent refresh issues.
 @app.route("/chat", methods=["GET", "POST"])
 def handle_chat():
     pathway = session.get("pathway", "standard")
@@ -272,6 +273,7 @@ def handle_chat():
         
         return redirect(url_for('handle_chat'))
 
+    # For a GET request, display the page with data from the session or defaults
     reply = session.pop('reply', button_data["greeting"])
     options = session.pop('options', button_data["main_buttons"])
     return render_template("chat.html", reply=reply, options=options, button_data=button_data)
@@ -299,10 +301,11 @@ def dashboard():
         print(f"ERROR fetching active requests: {e}")
     return render_template("dashboard.html", active_requests=active_requests)
 
+# MODIFIED: Corrected the variable names being passed to the template.
 @app.route('/analytics')
 def analytics():
     avg_response_time = "N/A"
-    top_categories_labels, top_categories_values = [], []
+    top_requests_labels, top_requests_values = [], []
     most_requested_labels, most_requested_values = [], []
     requests_by_hour_labels, requests_by_hour_values = [], []
     first_baby_labels, first_baby_values = [], []
@@ -314,9 +317,9 @@ def analytics():
                 minutes, seconds = divmod(int(avg_time_result), 60)
                 avg_response_time = f"{minutes}m {seconds}s"
             
-            top_categories_result = connection.execute(text("SELECT category, COUNT(id) FROM requests GROUP BY category ORDER BY COUNT(id) DESC;")).fetchall()
-            top_categories_labels = [row[0] for row in top_categories_result]
-            top_categories_values = [row[1] for row in top_categories_result]
+            top_requests_result = connection.execute(text("SELECT category, COUNT(id) FROM requests GROUP BY category ORDER BY COUNT(id) DESC;")).fetchall()
+            top_requests_labels = [row[0] for row in top_requests_result]
+            top_requests_values = [row[1] for row in top_requests_result]
 
             most_requested_result = connection.execute(text("SELECT user_input, COUNT(id) as count FROM requests GROUP BY user_input ORDER BY count DESC LIMIT 5;")).fetchall()
             most_requested_labels = [row[0] for row in most_requested_result]
@@ -339,12 +342,11 @@ def analytics():
     except Exception as e:
         print(f"ERROR fetching analytics data: {e}")
     
-    # THIS IS THE FIX: The variable names now correctly match what the template expects.
     return render_template(
         'analytics.html', 
         avg_response_time=avg_response_time,
-        top_requests_labels=json.dumps(top_categories_labels), 
-        top_requests_values=json.dumps(top_categories_values),
+        top_requests_labels=json.dumps(top_requests_labels), 
+        top_requests_values=json.dumps(top_requests_values),
         most_requested_labels=json.dumps(most_requested_labels), 
         most_requested_values=json.dumps(most_requested_values),
         requests_by_hour_labels=json.dumps(requests_by_hour_labels), 
