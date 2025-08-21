@@ -12,7 +12,7 @@ from email.message import EmailMessage
 
 from flask import Flask, render_template, request, session, redirect, url_for
 from flask_socketio import SocketIO, join_room
-from sqlalchemy import create_engine, text, inspect
+from sqlalchemy import create_engine, text
 from sqlalchemy.exc import ProgrammingError
 
 # --- App Configuration ---
@@ -22,7 +22,11 @@ socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*", manage
 
 # --- Master Data Lists ---
 ALL_ROOMS = [str(room) for room in range(231, 261)]
-ALL_NURSES = ['Jackie', 'Carol', 'John', 'Maria', 'David', 'Susan', 'Peter', 'Linda']
+INITIAL_STAFF = {
+    'Jackie': 'nurse', 'Carol': 'nurse', 'John': 'nurse',
+    'Maria': 'nurse', 'David': 'nurse', 'Susan': 'nurse',
+    'Peter': 'cna', 'Linda': 'cna' 
+}
 
 
 # --- Database Configuration ---
@@ -36,7 +40,6 @@ engine = create_engine(DATABASE_URL, pool_recycle=280, pool_pre_ping=True)
 # --- Database Setup ---
 def setup_database():
     try:
-        # --- First Transaction: Create all tables ---
         with engine.connect() as connection:
             with connection.begin():
                 print("Running CREATE TABLE statements...")
@@ -68,30 +71,38 @@ def setup_database():
                 """))
                 print("CREATE TABLE statements complete.")
 
-        # --- Second Transaction: Modify existing tables (safer) ---
+                count = connection.execute(text("SELECT COUNT(id) FROM staff;")).scalar()
+                if count == 0:
+                    print("Staff table is empty. Populating with initial staff...")
+                    for name, role in INITIAL_STAFF.items():
+                        connection.execute(text("""
+                            INSERT INTO staff (name, role) VALUES (:name, :role)
+                            ON CONFLICT (name) DO NOTHING;
+                        """), {"name": name, "role": role})
+                    print("Initial staff population complete.")
+
+        # --- THIS IS THE FIX: A more robust migration script ---
         with engine.connect() as connection:
             with connection.begin():
-                try:
-                    print("Attempting to add 'deferral_timestamp' column...")
-                    connection.execute(text("ALTER TABLE requests ADD COLUMN deferral_timestamp TIMESTAMP WITH TIME ZONE;"))
-                    print("SUCCESS: Added 'deferral_timestamp' column.")
-                except ProgrammingError:
-                    print("INFO: 'deferral_timestamp' column likely already exists.")
-                    pass
-                
-                # THIS IS THE FIX: This ensures all timestamp columns are timezone-aware.
+                print("Running database migration for timestamp columns...")
                 try:
                     connection.execute(text("""
                         ALTER TABLE requests 
                         ALTER COLUMN timestamp TYPE TIMESTAMP WITH TIME ZONE,
-                        ALTER COLUMN completion_timestamp TYPE TIMESTAMP WITH TIME ZONE;
+                        ALTER COLUMN completion_timestamp TYPE TIMESTAMP WITH TIME ZONE,
+                        ALTER COLUMN deferral_timestamp TYPE TIMESTAMP WITH TIME ZONE;
                     """))
-                    print("SUCCESS: Ensured timestamp columns are timezone-aware.")
-                except ProgrammingError:
-                    print("INFO: Timestamp columns likely already timezone-aware.")
-                    pass
+                    print("SUCCESS: All timestamp columns are now timezone-aware.")
+                except ProgrammingError as e:
+                    # It's safe to ignore errors that say the column is already the correct type.
+                    if "already of type" in str(e).lower():
+                        print("INFO: Timestamp columns were already timezone-aware.")
+                        pass
+                    else:
+                        # Re-raise any other unexpected error so we can see it in the logs.
+                        raise
         
-        print("Database setup complete. Tables are ready.")
+        print("Database setup complete.")
     except Exception as e:
         print(f"CRITICAL ERROR during database setup: {e}")
 
@@ -119,7 +130,6 @@ def log_to_audit_trail(event_type, details):
         print(f"ERROR logging to audit trail: {e}")
 
 def log_request_to_db(request_id, category, user_input, reply, room, is_first_baby):
-    print(f"DEBUG: Logging request. is_first_baby = {is_first_baby}")
     try:
         with engine.connect() as connection:
             with connection.begin():
