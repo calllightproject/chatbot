@@ -10,7 +10,7 @@ from datetime import datetime, date, timezone
 from collections import defaultdict
 from email.message import EmailMessage
 
-from flask import Flask, render_template, request, session, redirect, url_for, flash
+from flask import Flask, render_template, request, session, redirect, url_for
 from flask_socketio import SocketIO, join_room
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import ProgrammingError
@@ -22,8 +22,8 @@ socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*", manage
 
 # --- Master Data Lists (To be deprecated) ---
 INITIAL_STAFF = {
-    'Jaimee V.': 'nurse', 'Kaylee G.': 'nurse', 'Sophia C.': 'nurse',
-    'Vickie C.': 'nurse', 'Jovlyn T.': 'nurse',
+    'Jackie': 'nurse', 'Carol': 'nurse', 'John': 'nurse',
+    'Maria': 'nurse', 'David': 'nurse', 'Susan': 'nurse',
     'Peter': 'cna', 'Linda': 'cna' 
 }
 ALL_ROOMS = [str(room) for room in range(231, 261)]
@@ -384,29 +384,8 @@ def assignments():
     
     return render_template('assignments.html', rooms=ALL_ROOMS, nurses=all_nurses, assignments=current_assignments)
 
-# NEW: Route for the manager login page
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        password = request.form.get('password')
-        # Check against the password stored in an environment variable
-        if password == os.getenv('MANAGER_PASSWORD'):
-            session['manager_logged_in'] = True
-            return redirect(url_for('manager_dashboard'))
-        else:
-            flash('Invalid password!', 'danger') # Optional: show an error message
-    return render_template('login.html')
-
-# NEW: Route for logging out
-@app.route('/logout')
-def logout():
-    session.pop('manager_logged_in', None)
-    return redirect(url_for('login'))
-
-# MODIFIED: This route is now protected.
 @app.route('/manager-dashboard', methods=['GET', 'POST'])
 def manager_dashboard():
-    # If not logged in, redirect to login page
     if not session.get('manager_logged_in'):
         return redirect(url_for('login'))
 
@@ -504,4 +483,3 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
-
