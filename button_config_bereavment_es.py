@@ -5,6 +5,7 @@ button_data = {
     # --- Core Notifications & Text ---
     "greeting": "Hola. Estamos aquí para apoyarle.",
     "custom_note_placeholder": "Escribe tu nota para la enfermera aquí...",
+    "empty_custom_note": "Por favor, escriba un mensaje en el cuadro.",
     "send_note_button": "Enviar Nota",
     "cna_notification": "✅ Se ha notificado al asistente de enfermería.",
     "nurse_notification": "✅ Se ha notificado a la enfermera.",
@@ -131,3 +132,4 @@ button_data = {
         "note": "Si tuvo un parto por cesárea, la estadía mínima es de 48 horas. El ginecólogo dará la orden de alta si es apropiado. Típicamente, siempre que su dolor, presión arterial y sangrado sean normales, será dada de alta."
     }
 }
+
