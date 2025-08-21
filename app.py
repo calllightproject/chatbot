@@ -26,9 +26,7 @@ INITIAL_STAFF = {
     'Maria': 'nurse', 'David': 'nurse', 'Susan': 'nurse',
     'Peter': 'cna', 'Linda': 'cna' 
 }
-CNA_FRONT_ROOMS = [str(r) for r in range(231, 245)] + ['260']
-CNA_BACK_ROOMS = [str(r) for r in range(245, 260)]
-ALL_ROOMS = sorted(CNA_FRONT_ROOMS + CNA_BACK_ROOMS)
+ALL_ROOMS = [str(room) for room in range(231, 261)]
 
 
 # --- Database Configuration ---
@@ -42,7 +40,6 @@ engine = create_engine(DATABASE_URL, pool_recycle=280, pool_pre_ping=True)
 # --- Database Setup ---
 def setup_database():
     try:
-        # --- First Transaction: Create all tables ---
         with engine.connect() as connection:
             with connection.begin():
                 print("Running CREATE TABLE statements...")
@@ -56,8 +53,7 @@ def setup_database():
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS assignments (
                         id SERIAL PRIMARY KEY, assignment_date DATE NOT NULL, room_number VARCHAR(255) NOT NULL,
-                        staff_name VARCHAR(255) NOT NULL, staff_role VARCHAR(50), 
-                        UNIQUE(assignment_date, room_number)
+                        nurse_name VARCHAR(255) NOT NULL, UNIQUE(assignment_date, room_number)
                     );
                 """))
                 connection.execute(text("""
@@ -85,30 +81,11 @@ def setup_database():
                         """), {"name": name, "role": role})
                     print("Initial staff population complete.")
 
-        # --- Separate, safer transactions for altering tables ---
         with engine.connect() as connection:
             with connection.begin():
                 try:
                     connection.execute(text("ALTER TABLE requests ADD COLUMN deferral_timestamp TIMESTAMP WITH TIME ZONE;"))
-                    print("SUCCESS: Added 'deferral_timestamp' column.")
                 except ProgrammingError:
-                    print("INFO: 'deferral_timestamp' column likely already exists.")
-                    pass
-        with engine.connect() as connection:
-            with connection.begin():
-                try:
-                    connection.execute(text("ALTER TABLE assignments RENAME COLUMN nurse_name TO staff_name;"))
-                    print("SUCCESS: Renamed 'nurse_name' to 'staff_name'.")
-                except ProgrammingError:
-                    print("INFO: 'nurse_name' column likely already renamed.")
-                    pass
-        with engine.connect() as connection:
-            with connection.begin():
-                try:
-                    connection.execute(text("ALTER TABLE assignments ADD COLUMN staff_role VARCHAR(50);"))
-                    print("SUCCESS: Added 'staff_role' column.")
-                except ProgrammingError:
-                    print("INFO: 'staff_role' column likely already exists.")
                     pass
         
         print("Database setup complete. Tables are ready.")
@@ -362,65 +339,63 @@ def analytics():
 @app.route('/assignments', methods=['GET', 'POST'])
 def assignments():
     today = date.today()
-    all_nurses, all_cnas = [], []
+    all_nurses = []
     try:
         with engine.connect() as connection:
-            nurses_result = connection.execute(text("SELECT name FROM staff WHERE role = 'nurse' ORDER BY name;"))
-            all_nurses = [row[0] for row in nurses_result]
-            cnas_result = connection.execute(text("SELECT name FROM staff WHERE role = 'cna' ORDER BY name;"))
-            all_cnas = [row[0] for row in cnas_result]
+            result = connection.execute(text("SELECT name FROM staff WHERE role = 'nurse' ORDER BY name;"))
+            all_nurses = [row[0] for row in result]
     except Exception as e:
-        print(f"ERROR fetching staff lists: {e}")
+        print(f"ERROR fetching nurses: {e}")
 
     if request.method == 'POST':
         try:
             with engine.connect() as connection:
                 with connection.begin():
-                    connection.execute(text("DELETE FROM assignments WHERE assignment_date = :date;"), {"date": today})
-                    for key, value in request.form.items():
-                        if key.startswith('nurse_rooms_'):
-                            nurse_name = key.replace('nurse_rooms_', '')
-                            assigned_rooms = request.form.getlist(key)
-                            for room_number in assigned_rooms:
-                                connection.execute(text("""
-                                    INSERT INTO assignments (assignment_date, room_number, staff_name, staff_role)
-                                    VALUES (:date, :room, :name, 'nurse');
-                                """), {"date": today, "room": room_number, "name": nurse_name})
-                    cna_front = request.form.get('cna_front')
-                    if cna_front and cna_front != 'unassigned':
-                        for room_number in CNA_FRONT_ROOMS:
+                    for room_number in ALL_ROOMS:
+                        nurse_name = request.form.get(f'nurse_for_room_{room_number}')
+                        if nurse_name and nurse_name != 'unassigned':
                             connection.execute(text("""
-                                INSERT INTO assignments (assignment_date, room_number, staff_name, staff_role)
-                                VALUES (:date, :room, :name, 'cna');
-                            """), {"date": today, "room": room_number, "name": cna_front})
-                    cna_back = request.form.get('cna_back')
-                    if cna_back and cna_back != 'unassigned':
-                        for room_number in CNA_BACK_ROOMS:
+                                INSERT INTO assignments (assignment_date, room_number, nurse_name)
+                                VALUES (:date, :room, :nurse)
+                                ON CONFLICT (assignment_date, room_number)
+                                DO UPDATE SET nurse_name = EXCLUDED.nurse_name;
+                            """), {"date": today, "room": room_number, "nurse": nurse_name})
+                        else:
                             connection.execute(text("""
-                                INSERT INTO assignments (assignment_date, room_number, staff_name, staff_role)
-                                VALUES (:date, :room, :name, 'cna');
-                            """), {"date": today, "room": room_number, "name": cna_back})
+                                DELETE FROM assignments 
+                                WHERE assignment_date = :date AND room_number = :room;
+                            """), {"date": today, "room": room_number})
             print("Assignments saved successfully.")
         except Exception as e:
             print(f"ERROR saving assignments: {e}")
-        return redirect(url_for('assignments'))
+        return redirect(url_for('dashboard'))
     
     current_assignments = {}
     try:
         with engine.connect() as connection:
-            assignments_result = connection.execute(text("SELECT room_number, staff_name, staff_role FROM assignments WHERE assignment_date = :date;"), {"date": today})
-            for row in assignments_result:
-                current_assignments[row.room_number] = {"name": row.staff_name, "role": row.staff_role}
+            result = connection.execute(text("SELECT room_number, nurse_name FROM assignments WHERE assignment_date = :date;"), {"date": today})
+            for row in result:
+                current_assignments[row.room_number] = row.nurse_name
     except Exception as e:
-        print(f"ERROR fetching assignment data: {e}")
+        print(f"ERROR fetching assignments: {e}")
     
-    return render_template('assignments.html', 
-                           all_nurses=all_nurses, 
-                           all_cnas=all_cnas,
-                           all_rooms=ALL_ROOMS,
-                           cna_front_rooms=CNA_FRONT_ROOMS,
-                           cna_back_rooms=CNA_BACK_ROOMS,
-                           current_assignments=current_assignments)
+    return render_template('assignments.html', rooms=ALL_ROOMS, nurses=all_nurses, assignments=current_assignments)
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        password = request.form.get('password')
+        if password == os.getenv('MANAGER_PASSWORD'):
+            session['manager_logged_in'] = True
+            return redirect(url_for('manager_dashboard'))
+        else:
+            flash('Invalid password!', 'danger')
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.pop('manager_logged_in', None)
+    return redirect(url_for('login'))
 
 @app.route('/manager-dashboard', methods=['GET', 'POST'])
 def manager_dashboard():
