@@ -4,112 +4,96 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Staff Assignments</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --core-blue: #00205b;
             --accent-blue: #007eb4;
-            --neutral-gray-text: #303235;
-            --light-gray-background: #f5f5f5;
-            --white: #ffffff;
         }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            padding: 20px;
-            background-color: var(--light-gray-background);
-            color: var(--neutral-gray-text);
-        }
-        .container {
-            max-width: 700px;
-            margin: 20px auto;
-            background: var(--white);
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        }
-        h1 {
-            color: var(--core-blue);
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .assignment-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-        }
-        .assignment-table th, .assignment-table td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid #e1e1e2;
-        }
-        .assignment-table th {
-            font-weight: bold;
-            color: var(--neutral-gray-text);
-        }
-        .assignment-table select {
-            width: 100%;
-            padding: 8px;
-            border-radius: 5px;
-            border: 1px solid #ccc;
-            font-size: 16px;
-        }
-        .save-button {
-            display: block;
-            width: 100%;
-            padding: 15px;
-            font-size: 18px;
-            border: none;
-            border-radius: 5px;
-            background-color: var(--core-blue);
-            color: var(--white);
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-        .save-button:hover {
-            background-color: #093582;
-        }
-        .footer {
-            text-align: center;
-            margin-top: 20px;
-        }
-        .footer a {
-            color: var(--accent-blue);
-            text-decoration: none;
-        }
+        body { font-family: 'Inter', sans-serif; background-color: #f4f7f9; }
+        .button-primary { background-color: var(--core-blue); }
+        .button-primary:hover { background-color: #093582; }
+        .link { color: var(--accent-blue); }
+        .link:hover { color: var(--core-blue); }
     </style>
 </head>
-<body>
-    <div class="container">
-        <h1>Staff Assignments</h1>
-        
+<body class="p-4 sm:p-6 lg:p-8">
+    <div class="container mx-auto max-w-4xl bg-white p-6 sm:p-8 rounded-xl shadow-md">
+        <header class="mb-6 text-center">
+            <h1 class="text-3xl font-bold text-gray-800">Staff Assignments</h1>
+            <p class="text-md text-gray-500 mt-1">Assign staff for the current shift.</p>
+        </header>
+
+        <!-- Edit Assignments Form -->
         <form method="POST" action="{{ url_for('assignments') }}">
-            <table class="assignment-table">
-                <thead>
-                    <tr>
-                        <th>Room Number</th>
-                        <th>Assigned Nurse</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for room in ALL_ROOMS %}
-                    <tr>
-                        <td>{{ room }}</td>
-                        <td>
-                            <select name="nurse_for_room_{{ room }}">
+            <div class="space-y-8">
+                <!-- Nurse Assignments -->
+                <div>
+                    <h2 class="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">Nurse Assignments</h2>
+                    <div class="space-y-4">
+                        {% for nurse in all_nurses %}
+                        <div>
+                            <label class="font-medium text-gray-900">{{ nurse }}</label>
+                            <div class="mt-2 grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-2">
+                                {% for room in all_rooms %}
+                                <div>
+                                    <input type="checkbox" name="nurse_rooms_{{ nurse }}" value="{{ room }}" id="room_{{ room }}_{{ nurse }}" 
+                                           class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                           {% if current_assignments.get(room) and current_assignments[room].name == nurse %}checked{% endif %}>
+                                    <label for="room_{{ room }}_{{ nurse }}" class="ml-2 text-sm text-gray-600">{{ room }}</label>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- CNA Assignments -->
+                <div>
+                    <h2 class="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">CNA Assignments</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Front CNA -->
+                        <div>
+                            <label for="cna_front" class="block text-sm font-medium text-gray-700">Front CNA (Rooms {{ cna_front_rooms|join(', ') }})</label>
+                            <select name="cna_front" id="cna_front" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
                                 <option value="unassigned">Unassigned</option>
-                                {% for nurse in ALL_NURSES %}
-                                    <option value="{{ nurse }}">{{ nurse }}</option>
+                                {% for cna in all_cnas %}
+                                    <option value="{{ cna }}" 
+                                            {% if current_assignments.get(cna_front_rooms[0]) and current_assignments[cna_front_rooms[0]].name == cna %}selected{% endif %}>
+                                        {{ cna }}
+                                    </option>
                                 {% endfor %}
                             </select>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-            <button type="submit" class="save-button">Save Assignments</button>
+                        </div>
+                        <!-- Back CNA -->
+                        <div>
+                            <label for="cna_back" class="block text-sm font-medium text-gray-700">Back CNA (Rooms {{ cna_back_rooms|join(', ') }})</label>
+                            <select name="cna_back" id="cna_back" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                                <option value="unassigned">Unassigned</option>
+                                {% for cna in all_cnas %}
+                                    <option value="{{ cna }}"
+                                            {% if current_assignments.get(cna_back_rooms[0]) and current_assignments[cna_back_rooms[0]].name == cna %}selected{% endif %}>
+                                        {{ cna }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-8">
+                <button type="submit" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white button-primary transition-colors">
+                    Save All Assignments
+                </button>
+            </div>
         </form>
         
-        <div class="footer">
-            <a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+        <div class="text-center mt-8 space-x-6">
+            <a href="{{ url_for('dashboard') }}" class="link">← Back to Dashboard</a>
+            <a href="{{ url_for('analytics') }}" class="link">View Analytics →</a>
         </div>
     </div>
 </body>
