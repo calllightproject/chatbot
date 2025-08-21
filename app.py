@@ -302,7 +302,7 @@ def dashboard():
 @app.route('/analytics')
 def analytics():
     avg_response_time = "N/A"
-    top_requests_labels, top_requests_values = [], []
+    top_categories_labels, top_categories_values = [], []
     most_requested_labels, most_requested_values = [], []
     requests_by_hour_labels, requests_by_hour_values = [], []
     first_baby_labels, first_baby_values = [], []
