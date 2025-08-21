@@ -42,12 +42,13 @@
             <div class="lg:col-span-1 card p-6 rounded-xl shadow-md">
                 <h2 class="text-xl font-semibold card-header mb-4">Manage Staff</h2>
                 
-                <form class="mb-6">
+                <form action="{{ url_for('manager_dashboard') }}" method="POST" class="mb-6">
+                    <input type="hidden" name="action" value="add_staff">
                     <h3 class="text-lg font-medium text-gray-600 mb-2">Add New Staff Member</h3>
                     <div class="space-y-3">
                         <div>
                             <label for="name" class="block text-sm font-medium text-gray-700">Name</label>
-                            <input type="text" name="name" id="name" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                            <input type="text" name="name" id="name" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
                         </div>
                         <div>
                             <label for="role" class="block text-sm font-medium text-gray-700">Role</label>
@@ -71,7 +72,11 @@
                                 <p class="font-medium text-gray-900">{{ member.name }}</p>
                                 <p class="text-sm text-gray-500">{{ member.role.upper() }}</p>
                             </div>
-                            <button class="text-red-500 hover:text-red-700 text-sm font-medium">Remove</button>
+                            <form action="{{ url_for('manager_dashboard') }}" method="POST" style="display: inline;">
+                                <input type="hidden" name="action" value="remove_staff">
+                                <input type="hidden" name="staff_id" value="{{ member.id }}">
+                                <button type="submit" class="text-red-500 hover:text-red-700 text-sm font-medium">Remove</button>
+                            </form>
                         </li>
                         {% else %}
                         <li class="text-gray-500">No staff members found.</li>
