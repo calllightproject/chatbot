@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ session.get('language', 'en') }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -70,7 +70,7 @@
                         <li class="flex items-center justify-between bg-gray-50 p-3 rounded-md">
                             <div>
                                 <p class="font-medium text-gray-900">{{ member.name }}</p>
-                                <p class="text-sm text-gray-500">{{ member.role.upper() }}</p>
+                                <p class="text-sm text-gray-500">{{ member.role|upper }}</p>
                             </div>
                             <form action="{{ url_for('manager_dashboard') }}" method="POST" style="display: inline;">
                                 <input type="hidden" name="action" value="remove_staff">
@@ -122,23 +122,34 @@
 
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script type="text/javascript">
-        var socket = io();
+        const socket = io();
 
         socket.on('new_audit_log', function(data) {
             const tableBody = document.getElementById('audit-log-body');
-            
-            const noLogsRow = document.getElementById('no-logs-row');
-            if (noLogsRow) {
-                noLogsRow.remove();
-            }
 
-            const newRow = document.createElement('tr');
-            newRow.innerHTML = `
-                <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500">${data.timestamp}</td>
-                <td class="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${data.event_type}</td>
-                <td class="px-4 py-4 text-sm text-gray-500">${data.details}</td>
-            `;
-            tableBody.prepend(newRow);
+            const noLogsRow = document.getElementById('no-logs-row');
+            if (noLogsRow) noLogsRow.remove();
+
+            // Build a row safely to avoid XSS (no innerHTML with untrusted input)
+            const tr = document.createElement('tr');
+
+            const tdTime = document.createElement('td');
+            tdTime.className = 'px-4 py-4 whitespace-nowrap text-sm text-gray-500';
+            tdTime.textContent = data.timestamp;
+
+            const tdEvent = document.createElement('td');
+            tdEvent.className = 'px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900';
+            tdEvent.textContent = data.event_type;
+
+            const tdDetails = document.createElement('td');
+            tdDetails.className = 'px-4 py-4 text-sm text-gray-500';
+            tdDetails.textContent = data.details;
+
+            tr.appendChild(tdTime);
+            tr.appendChild(tdEvent);
+            tr.appendChild(tdDetails);
+
+            tableBody.prepend(tr);
         });
     </script>
 
