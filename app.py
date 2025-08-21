@@ -299,11 +299,10 @@ def dashboard():
         print(f"ERROR fetching active requests: {e}")
     return render_template("dashboard.html", active_requests=active_requests)
 
-# MODIFIED: Corrected the variable names being passed to the template.
 @app.route('/analytics')
 def analytics():
     avg_response_time = "N/A"
-    top_categories_labels, top_categories_values = [], []
+    top_requests_labels, top_requests_values = [], []
     most_requested_labels, most_requested_values = [], []
     requests_by_hour_labels, requests_by_hour_values = [], []
     first_baby_labels, first_baby_values = [], []
