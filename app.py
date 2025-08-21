@@ -22,8 +22,8 @@ socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*", manage
 
 # --- Master Data Lists (To be deprecated) ---
 INITIAL_STAFF = {
-    'Jackie': 'nurse', 'Carol': 'nurse', 'John': 'nurse',
-    'Maria': 'nurse', 'David': 'nurse', 'Susan': 'nurse',
+    'Jaimee V.': 'nurse', 'Kaylee G.': 'nurse', 'Sophia C.': 'nurse',
+    'Vickie C.': 'nurse', 'Jovlyn T.': 'nurse',
     'Peter': 'cna', 'Linda': 'cna' 
 }
 ALL_ROOMS = [str(room) for room in range(231, 261)]
@@ -504,3 +504,4 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
