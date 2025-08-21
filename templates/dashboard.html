@@ -148,16 +148,21 @@
         oscillator.stop(audioContext.currentTime + 0.5);
     }
 
-    // --- NEW: A single, master function to update all timers ---
+    // --- A single, master function to update all timers ---
     function updateAllTimersAndColors() {
         const requestItems = document.querySelectorAll('#requests-list .request-item');
         const now = new Date();
 
+        console.log(`--- Timer Tick at ${now.toISOString()} ---`); // DEBUGGING
+
         requestItems.forEach(item => {
             const requestTime = new Date(item.dataset.timestamp);
             const minutes = Math.floor((now - requestTime) / 60000);
-            const timestampSpan = item.querySelector('.timestamp');
+            
+            // DEBUGGING: Log the calculation for each item
+            console.log(`Checking ${item.dataset.id}: Now=${now.getTime()}, ReqTime=${requestTime.getTime()}, Diff(min)=${minutes}`);
 
+            const timestampSpan = item.querySelector('.timestamp');
             if (timestampSpan) {
                 timestampSpan.textContent = minutes > 0 ? `${minutes}m ago` : 'Just now';
             }
@@ -203,7 +208,6 @@
              <button class="complete-btn">Complete</button>`;
         
         list.prepend(item);
-        // We only need to run the master timer function once to update the new item
         updateAllTimersAndColors();
     }
 
@@ -226,7 +230,6 @@
             if (deferButton) {
                 deferButton.remove();
             }
-            // Update the timestamp so the master timer will use it
             itemToUpdate.dataset.timestamp = data.new_timestamp;
             updateAllTimersAndColors();
         }
@@ -244,7 +247,6 @@
     document.addEventListener('DOMContentLoaded', function() {
         const requestsList = document.getElementById('requests-list');
 
-        // A single, robust listener for all button clicks
         requestsList.addEventListener('click', function(event) {
             const button = event.target;
             if (button.tagName !== 'BUTTON') return;
@@ -280,9 +282,7 @@
             }
         });
 
-        // Start the single master timer
         setInterval(updateAllTimersAndColors, 60000);
-        // Run it once on page load to set the initial state
         updateAllTimersAndColors();
     });
 </script>
