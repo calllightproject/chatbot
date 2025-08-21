@@ -217,7 +217,6 @@ def demographics():
     no_text = button_data.get("demographic_no", "No")
     return render_template("demographics.html", question_text=question_text, yes_text=yes_text, no_text=no_text)
 
-# MODIFIED: This function now uses the Post/Redirect/Get pattern to prevent refresh issues.
 @app.route("/chat", methods=["GET", "POST"])
 def handle_chat():
     pathway = session.get("pathway", "standard")
@@ -273,7 +272,6 @@ def handle_chat():
         
         return redirect(url_for('handle_chat'))
 
-    # For a GET request, display the page with data from the session or defaults
     reply = session.pop('reply', button_data["greeting"])
     options = session.pop('options', button_data["main_buttons"])
     return render_template("chat.html", reply=reply, options=options, button_data=button_data)
@@ -301,7 +299,6 @@ def dashboard():
         print(f"ERROR fetching active requests: {e}")
     return render_template("dashboard.html", active_requests=active_requests)
 
-# MODIFIED: Corrected the variable names being passed to the template.
 @app.route('/analytics')
 def analytics():
     avg_response_time = "N/A"
@@ -342,6 +339,7 @@ def analytics():
     except Exception as e:
         print(f"ERROR fetching analytics data: {e}")
     
+    # THIS IS THE FIX: The variable names now correctly match what the template expects.
     return render_template(
         'analytics.html', 
         avg_response_time=avg_response_time,
