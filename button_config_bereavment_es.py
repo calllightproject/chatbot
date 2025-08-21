@@ -1,4 +1,6 @@
+# -*- coding: utf-8 -*-
 # button_config_bereavement_es.py
+
 button_data = {
     # --- Core Notifications & Text ---
     "greeting": "Hola. Estamos aquí para apoyarle.",
@@ -8,12 +10,17 @@ button_data = {
     "nurse_notification": "✅ Se ha notificado a la enfermera.",
     "back_text": "⬅ Regresar",
 
+    # Optional AI follow-up strings (safe to include even if unused)
+    "ai_follow_up_question": "¿Le gustaría hablar con su enfermera?",
+    "ai_yes": "Sí, hablar con la enfermera",
+    "ai_no": "No, estoy bien",
+
     # --- Main Menu Options ---
     "main_buttons": [
         "Tengo una emergencia",
         "Necesito suministros",
         "Necesito medicamentos",
-        "Mi bomba de IV está sonando", # NEW
+        "Mi bomba de IV está sonando",
         "Tengo preguntas",
         "Quiero saber sobre el alta",
         "Baño / Ducha",
@@ -23,11 +30,11 @@ button_data = {
 
     # --- Direct Actions & Simple Sub-menus ---
     "Tengo una emergencia": {"action": "Notify Nurse"},
-    "Mi bomba de IV está sonando": {"action": "Notify Nurse"}, # NEW
+    "Mi bomba de IV está sonando": {"action": "Notify Nurse"},
     "Control de azúcar en la sangre para mí": {"action": "Notify CNA"},
 
     "Hielo / Agua": {
-        "question": "Si tiene una persona de apoyo con usted, puede ir a nuestra sala de nutrición, que tiene agua, hielo picado, jugo y otros pequeños bocadillos. El personal puede mostrarle dónde se encuentra. ¿Qué le gustaría?",
+        "question": "Si tiene una persona de apoyo con usted, puede ir a nuestra sala de nutrición, que tiene agua, hielo picado, jugo y pequeños bocadillos. El personal puede mostrarle dónde se encuentra. ¿Qué le gustaría?",
         "options": [
             "Necesito agua con hielo",
             "Necesito hielo picado",
@@ -50,7 +57,9 @@ button_data = {
     },
     "Necesito ayuda para ir al baño": {"action": "Notify CNA"},
     "Necesito cubrir mi vía IV para ducharme": {"action": "Notify CNA"},
-    "¿Puedo tomar una ducha?": {"note": "Normalmente sí, pero consulte con su enfermera si tiene una vía intravenosa u otras restricciones."},
+    "¿Puedo tomar una ducha?": {
+        "note": "Normalmente sí, pero consulte con su enfermera si tiene una vía intravenosa u otras restricciones."
+    },
 
     # --- Supplies Category ---
     "Necesito suministros": {
@@ -89,21 +98,25 @@ button_data = {
         "note": "Si su pregunta no está en la lista, su enfermera vendrá tan pronto como sea posible.",
         "options": [
             "¿Puedo ponerme mi propia ropa?",
-            "¿Cómo de seguido debo cambiar mi toalla sanitaria?",
+            "¿Cómo de seguido debo cambiar mi toalla sanitaria?"
         ]
     },
     "¿Puedo ponerme mi propia ropa?": {
         "note": "Sí, siempre y cuando se sienta cómoda y su enfermera le haya dado el visto bueno."
     },
     "¿Cómo de seguido debo cambiar mi toalla sanitaria?": {
-        "note": "Cambie su toalla cada 2-4 horas o cuando esté saturada. Informe a su enfermera si está empapando una toalla grande en menos de 1 hora o si tiene coágulos más grandes que una pelota de golf."
+        "note": "Cambie su toalla cada 2–4 horas o cuando esté saturada. Informe a su enfermera si está empapando una toalla grande en menos de 1 hora o si tiene coágulos más grandes que una pelota de golf."
     },
 
     # --- Going Home Category ---
     "Quiero saber sobre el alta": {
         "question": "¿Qué le gustaría saber?",
-        "options": ["Parto vaginal", "Parto por cesárea", "¿Cuándo recibiré mis papeles de alta?",
-                    "¿Tengo que usar una silla de ruedas?"]
+        "options": [
+            "Parto vaginal",
+            "Parto por cesárea",
+            "¿Cuándo recibiré mis papeles de alta?",
+            "¿Tengo que usar una silla de ruedas?"
+        ]
     },
     "¿Cuándo recibiré mis papeles de alta?": {
         "note": "Una vez que el ginecólogo haya ingresado sus notas y órdenes de alta, su enfermera podrá imprimir la documentación."
@@ -118,4 +131,3 @@ button_data = {
         "note": "Si tuvo un parto por cesárea, la estadía mínima es de 48 horas. El ginecólogo dará la orden de alta si es apropiado. Típicamente, siempre que su dolor, presión arterial y sangrado sean normales, será dada de alta."
     }
 }
-
