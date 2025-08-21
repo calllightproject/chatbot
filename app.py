@@ -18,7 +18,6 @@ from sqlalchemy.exc import ProgrammingError
 # --- App Configuration ---
 app = Flask(__name__, template_folder='templates')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-strong-fallback-secret-key-for-local-development")
-# THIS IS THE FIX: Added ping/timeout settings for a stable connection on Render
 socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*", manage_session=False, ping_timeout=20, ping_interval=10)
 
 # --- Master Data Lists ---
@@ -37,6 +36,7 @@ engine = create_engine(DATABASE_URL, pool_recycle=280, pool_pre_ping=True)
 # --- Database Setup ---
 def setup_database():
     try:
+        # --- First Transaction: Create all tables ---
         with engine.connect() as connection:
             with connection.begin():
                 print("Running CREATE TABLE statements...")
@@ -68,6 +68,7 @@ def setup_database():
                 """))
                 print("CREATE TABLE statements complete.")
 
+        # --- Second Transaction: Modify existing tables (safer) ---
         with engine.connect() as connection:
             with connection.begin():
                 try:
@@ -76,6 +77,18 @@ def setup_database():
                     print("SUCCESS: Added 'deferral_timestamp' column.")
                 except ProgrammingError:
                     print("INFO: 'deferral_timestamp' column likely already exists.")
+                    pass
+                
+                # THIS IS THE FIX: This ensures all timestamp columns are timezone-aware.
+                try:
+                    connection.execute(text("""
+                        ALTER TABLE requests 
+                        ALTER COLUMN timestamp TYPE TIMESTAMP WITH TIME ZONE,
+                        ALTER COLUMN completion_timestamp TYPE TIMESTAMP WITH TIME ZONE;
+                    """))
+                    print("SUCCESS: Ensured timestamp columns are timezone-aware.")
+                except ProgrammingError:
+                    print("INFO: Timestamp columns likely already timezone-aware.")
                     pass
         
         print("Database setup complete. Tables are ready.")
