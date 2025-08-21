@@ -20,13 +20,13 @@ app = Flask(__name__, template_folder='templates')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-strong-fallback-secret-key-for-local-development")
 socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*", manage_session=False, ping_timeout=20, ping_interval=10)
 
-# --- Master Data Lists ---
-ALL_ROOMS = [str(room) for room in range(231, 261)]
+# --- Master Data Lists (To be deprecated) ---
 INITIAL_STAFF = {
     'Jackie': 'nurse', 'Carol': 'nurse', 'John': 'nurse',
     'Maria': 'nurse', 'David': 'nurse', 'Susan': 'nurse',
     'Peter': 'cna', 'Linda': 'cna' 
 }
+ALL_ROOMS = [str(room) for room in range(231, 261)]
 
 
 # --- Database Configuration ---
@@ -83,23 +83,15 @@ def setup_database():
 
         with engine.connect() as connection:
             with connection.begin():
-                print("Running database migration for timestamp columns...")
                 try:
-                    connection.execute(text("""
-                        ALTER TABLE requests 
-                        ALTER COLUMN timestamp TYPE TIMESTAMP WITH TIME ZONE,
-                        ALTER COLUMN completion_timestamp TYPE TIMESTAMP WITH TIME ZONE,
-                        ALTER COLUMN deferral_timestamp TYPE TIMESTAMP WITH TIME ZONE;
-                    """))
-                    print("SUCCESS: All timestamp columns are now timezone-aware.")
-                except ProgrammingError as e:
-                    if "already of type" in str(e).lower():
-                        print("INFO: Timestamp columns were already timezone-aware.")
-                        pass
-                    else:
-                        raise
+                    print("Attempting to add 'deferral_timestamp' column...")
+                    connection.execute(text("ALTER TABLE requests ADD COLUMN deferral_timestamp TIMESTAMP WITH TIME ZONE;"))
+                    print("SUCCESS: Added 'deferral_timestamp' column.")
+                except ProgrammingError:
+                    print("INFO: 'deferral_timestamp' column likely already exists.")
+                    pass
         
-        print("Database setup complete.")
+        print("Database setup complete. Tables are ready.")
     except Exception as e:
         print(f"CRITICAL ERROR during database setup: {e}")
 
@@ -117,12 +109,24 @@ def route_note_intelligently(note_text):
 # --- Core Helper Functions ---
 def log_to_audit_trail(event_type, details):
     try:
+        now_utc = datetime.now(timezone.utc)
         with engine.connect() as connection:
             with connection.begin():
                 connection.execute(text("""
                     INSERT INTO audit_log (timestamp, event_type, details)
                     VALUES (:timestamp, :event_type, :details);
-                """), { "timestamp": datetime.now(timezone.utc), "event_type": event_type, "details": details })
+                """), {
+                    "timestamp": now_utc,
+                    "event_type": event_type,
+                    "details": details
+                })
+        
+        socketio.emit('new_audit_log', {
+            'timestamp': now_utc.strftime('%Y-%m-%d %H:%M:%S') + ' UTC',
+            'event_type': event_type,
+            'details': details
+        })
+
     except Exception as e:
         print(f"ERROR logging to audit trail: {e}")
 
@@ -172,19 +176,6 @@ def process_request(role, subject, user_input, reply_message):
     return reply_message
 
 # --- App Routes ---
-# NEW: Temporary route to clear old/bad data for testing
-@app.route("/clear-active-requests")
-def clear_active_requests():
-    try:
-        with engine.connect() as connection:
-            with connection.begin():
-                connection.execute(text("DELETE FROM requests WHERE completion_timestamp IS NULL;"))
-        # Tell all dashboards to refresh to clear the UI
-        socketio.emit('force_refresh', {})
-        return "All active requests have been cleared.", 200
-    except Exception as e:
-        return f"Error clearing requests: {e}", 500
-
 @app.route("/room/<room_id>")
 def set_room(room_id):
     session.clear()
@@ -271,7 +262,7 @@ def handle_chat():
                 action = button_info["action"]
                 role = "cna" if action == "Notify CNA" else "nurse"
                 subject = f"{role.upper()} Request"
-                notification_message = button_data.get("note", button_data[f"{role}_notification"])
+                notification_message = button_info.get("note", button_data[f"{role}_notification"])
                 reply = process_request(role=role, subject=subject, user_input=user_input, reply_message=notification_message)
                 options = button_data["main_buttons"]
         else:
@@ -393,8 +384,39 @@ def assignments():
     
     return render_template('assignments.html', rooms=ALL_ROOMS, nurses=all_nurses, assignments=current_assignments)
 
-@app.route('/manager-dashboard')
+# MODIFIED: This route now handles adding and removing staff.
+@app.route('/manager-dashboard', methods=['GET', 'POST'])
 def manager_dashboard():
+    if request.method == 'POST':
+        action = request.form.get('action')
+        try:
+            with engine.connect() as connection:
+                with connection.begin():
+                    if action == 'add_staff':
+                        name = request.form.get('name')
+                        role = request.form.get('role')
+                        if name and role:
+                            connection.execute(text("""
+                                INSERT INTO staff (name, role) VALUES (:name, :role)
+                                ON CONFLICT (name) DO NOTHING;
+                            """), {"name": name, "role": role})
+                            log_to_audit_trail("Staff Added", f"Added staff member: {name} ({role})")
+
+                    elif action == 'remove_staff':
+                        staff_id = request.form.get('staff_id')
+                        if staff_id:
+                            # First, get the name for the log before deleting
+                            staff_member = connection.execute(text("SELECT name, role FROM staff WHERE id = :id;"), {"id": staff_id}).first()
+                            if staff_member:
+                                connection.execute(text("DELETE FROM staff WHERE id = :id;"), {"id": staff_id})
+                                log_to_audit_trail("Staff Removed", f"Removed staff member: {staff_member.name} ({staff_member.role})")
+        except Exception as e:
+            print(f"ERROR updating staff: {e}")
+        
+        # After a POST, always redirect to the GET version of the page
+        return redirect(url_for('manager_dashboard'))
+
+    # For a GET request, fetch the data and render the page
     staff_list = []
     audit_log = []
     try:
