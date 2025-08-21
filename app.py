@@ -12,21 +12,18 @@ from email.message import EmailMessage
 
 from flask import Flask, render_template, request, session, redirect, url_for
 from flask_socketio import SocketIO, join_room
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.exc import ProgrammingError
 
 # --- App Configuration ---
 app = Flask(__name__, template_folder='templates')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-strong-fallback-secret-key-for-local-development")
+# THIS IS THE FIX: Added ping/timeout settings for a stable connection on Render
 socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*", manage_session=False, ping_timeout=20, ping_interval=10)
 
-# --- Master Data Lists (To be deprecated) ---
-INITIAL_STAFF = {
-    'Jackie': 'nurse', 'Carol': 'nurse', 'John': 'nurse',
-    'Maria': 'nurse', 'David': 'nurse', 'Susan': 'nurse',
-    'Peter': 'cna', 'Linda': 'cna' 
-}
+# --- Master Data Lists ---
 ALL_ROOMS = [str(room) for room in range(231, 261)]
+ALL_NURSES = ['Jackie', 'Carol', 'John', 'Maria', 'David', 'Susan', 'Peter', 'Linda']
 
 
 # --- Database Configuration ---
@@ -71,16 +68,6 @@ def setup_database():
                 """))
                 print("CREATE TABLE statements complete.")
 
-                count = connection.execute(text("SELECT COUNT(id) FROM staff;")).scalar()
-                if count == 0:
-                    print("Staff table is empty. Populating with initial staff...")
-                    for name, role in INITIAL_STAFF.items():
-                        connection.execute(text("""
-                            INSERT INTO staff (name, role) VALUES (:name, :role)
-                            ON CONFLICT (name) DO NOTHING;
-                        """), {"name": name, "role": role})
-                    print("Initial staff population complete.")
-
         with engine.connect() as connection:
             with connection.begin():
                 try:
@@ -107,28 +94,14 @@ def route_note_intelligently(note_text):
     return 'cna'
 
 # --- Core Helper Functions ---
-# MODIFIED: This function now also emits a socket event for real-time updates.
 def log_to_audit_trail(event_type, details):
     try:
-        now_utc = datetime.now(timezone.utc)
         with engine.connect() as connection:
             with connection.begin():
                 connection.execute(text("""
                     INSERT INTO audit_log (timestamp, event_type, details)
                     VALUES (:timestamp, :event_type, :details);
-                """), {
-                    "timestamp": now_utc,
-                    "event_type": event_type,
-                    "details": details
-                })
-        
-        # After saving, send the new log entry to all connected manager dashboards
-        socketio.emit('new_audit_log', {
-            'timestamp': now_utc.strftime('%Y-%m-%d %H:%M:%S') + ' UTC',
-            'event_type': event_type,
-            'details': details
-        })
-
+                """), { "timestamp": datetime.now(timezone.utc), "event_type": event_type, "details": details })
     except Exception as e:
         print(f"ERROR logging to audit trail: {e}")
 
@@ -265,7 +238,7 @@ def handle_chat():
                 action = button_info["action"]
                 role = "cna" if action == "Notify CNA" else "nurse"
                 subject = f"{role.upper()} Request"
-                notification_message = button_info.get("note", button_data[f"{role}_notification"])
+                notification_message = button_data.get("note", button_data[f"{role}_notification"])
                 reply = process_request(role=role, subject=subject, user_input=user_input, reply_message=notification_message)
                 options = button_data["main_buttons"]
         else:
