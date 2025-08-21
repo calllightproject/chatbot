@@ -108,6 +108,40 @@ def localize_role(role: str, lang: str) -> str:
     }
     return labels.get(lang, labels['en']).get(role, role)
 
+def action_to_role(action_value: str, lang: str = "en") -> str:
+    """
+    Map a (possibly localized) action label to an internal role: 'nurse' or 'cna'.
+    Safe default is 'nurse'.
+    """
+    if not action_value:
+        return "nurse"
+
+    raw = action_value.strip().lower()
+    raw_no_accents = _strip_accents(raw)
+
+    # Accept direct role names
+    if raw in {"nurse", "cna"}:
+        return raw
+
+    # English markers
+    nurse_en = {"notify nurse", "to nurse", "nurse"}
+    cna_en   = {"notify cna", "to cna", "cna"}
+
+    # Spanish (accent-insensitive)
+    nurse_es = {"notificar enfermera", "notificar a la enfermera", "enfermera"}
+    cna_es   = {"notificar asistente de enfermeria", "asistente de enfermeria", "auxiliar de enfermeria"}
+
+    # Chinese (use raw)
+    nurse_zh = {"通知护士", "护士"}
+    cna_zh   = {"通知护理助理", "护理助理"}
+
+    if raw in nurse_en or raw_no_accents in nurse_es or any(k in action_value for k in nurse_zh):
+        return "nurse"
+    if raw in cna_en or raw_no_accents in cna_es or any(k in action_value for k in cna_zh):
+        return "cna"
+
+    return "nurse"
+
 # --- Smart Routing Logic (multilingual) ---
 def route_note_intelligently(note_text):
     """
@@ -314,10 +348,16 @@ def handle_chat():
 
                 if "action" in button_info:
                     action = button_info["action"]
-                    role = "cna" if action == "Notify CNA" else "nurse"
+                    # Map localized action labels -> internal role
+                    role = action_to_role(action, lang)
+
                     # Localize the role label in the email subject
                     subject = f"{localize_role(role, lang)} Request"
-                    notification_message = button_info.get("note", button_data[f"{role}_notification"])
+
+                    notification_message = button_info.get("note", button_data.get(f"{role}_notification", ""))
+                    if not notification_message:
+                        notification_message = "Your request has been sent."
+
                     session['reply'] = process_request(
                         role=role,
                         subject=subject,
@@ -326,7 +366,8 @@ def handle_chat():
                     )
                     session['options'] = button_data["main_buttons"]
             else:
-                session['reply'] = "I'm sorry, I didn't understand that. Please use the buttons provided."
+                # Step 5: localized "didn't understand" message
+                session['reply'] = button_data.get("unknown_input", "I'm sorry, I didn't understand that. Please use the buttons provided.")
                 session['options'] = button_data["main_buttons"]
 
         return redirect(url_for('handle_chat'))
