@@ -1,106 +1,230 @@
 <!DOCTYPE html>
 <html lang="{{ session.get('language', 'en') }}">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Real-Time Request Dashboard</title>
-  <style>
-    :root {
-      --core-blue: #00205b;
-      --accent-blue: #007eb4;
-      --neutral-gray-text: #303235;
-      --light-gray-background: #f5f5f5;
-      --white: #ffffff;
-      --nurse-red: #d43f27;
-    }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      padding: 20px;
-      background-color: var(--light-gray-background);
-      color: var(--neutral-gray-text);
-    }
-    .dashboard-container {
-      max-width: 900px;
-      margin: 20px auto;
-      background: white;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-    }
-    h1 { color: var(--core-blue); text-align: center; }
-
-    #requests-list { list-style-type: none; padding: 0; }
-    .empty-state {
-      text-align: center;
-      color: #6b7280;
-      padding: 24px 8px;
-      font-size: 0.95rem;
-    }
-
-    .request-item {
-      display: flex;
-      align-items: center;
-      border: 1px solid #ddd;
-      padding: 15px;
-      margin-bottom: 10px;
-      border-radius: 5px;
-      background-color: #fff;
-      gap: 15px;
-      transition: background-color 0.5s ease, opacity 0.5s ease;
-    }
-    .request-item.cna { border-left: 5px solid var(--accent-blue); }
-    .request-item.nurse { border-left: 5px solid var(--nurse-red); }
-
-    .request-item p {
-      margin: 0;
-      font-size: 1.1em;
-      flex-grow: 1;
-      word-break: break-word;
-    }
-    .request-item span {
-      font-size: 0.9em;
-      color: #555;
-      white-space: nowrap;
-    }
-    .request-item button {
-      padding: 8px 12px;
-      border: none;
-      color: white;
-      border-radius: 5px;
-      cursor: pointer;
-      font-size: 14px;
-      transition: opacity 0.3s;
-    }
-    .ack-button { background-color: #ffc107; color: #111; }
-    .omw-button { background-color: #28a745; }
-    .asap-button { background-color: #6f42c1; }
-    .complete-btn { background-color: #6c757d; }
-    .defer-btn { background-color: #17a2b8; }
-
-    .request-item button:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    .footer { text-align: center; margin-top: 30px; }
-    .footer a { color: var(--accent-blue); text-decoration: none; }
-
-    .status-new    { background-color: #d4edda; }
-    .status-warn   { background-color: #fff3cd; }
-    .status-urgent { background-color: #f8d7da; }
-
-    @media (prefers-reduced-motion: reduce) {
-      .request-item { transition: none; }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Request Dashboard</title>
+    <style>
+        :root {
+            --core-blue: #00205b;
+            --accent-blue: #007eb4;
+            --neutral-gray-text: #303235;
+            --light-gray-background: #f5f5f5;
+            --white: #ffffff;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            padding: 20px;
+            background-color: var(--light-gray-background);
+            color: var(--neutral-gray-text);
+        }
+        .dashboard-container {
+            max-width: 900px;
+            margin: 20px auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: var(--core-blue); text-align: center; }
+        #requests-list { list-style-type: none; padding: 0; }
+        .request-item {
+            display: flex;
+            align-items: center;
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            background-color: #fff;
+            gap: 15px;
+            transition: background-color 0.5s ease, opacity 0.5s ease;
+        }
+        .request-item.cna { border-left: 5px solid var(--accent-blue); }
+        .request-item.nurse { border-left: 5px solid #d43f27; }
+        .request-item p { margin: 0; font-size: 1.1em; flex-grow: 1; }
+        .request-item span { font-size: 0.9em; color: #555; white-space: nowrap; }
+        .request-item button {
+            padding: 8px 12px; border: none; color: white; border-radius: 5px;
+            cursor: pointer; font-size: 14px; transition: opacity 0.3s;
+        }
+        .ack-button { background-color: #ffc107; color: black; }
+        .omw-button { background-color: #28a745; }
+        .asap-button { background-color: #6f42c1; }
+        .complete-btn { background-color: #6c757d; }
+        .defer-btn { background-color: #17a2b8; }
+        .request-item button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .footer { text-align: center; margin-top: 30px; }
+        .footer a { color: var(--accent-blue); text-decoration: none; }
+        .status-new { background-color: #d4edda; }
+        .status-warn { background-color: #fff3cd; }
+        .status-urgent { background-color: #f8d7da; }
+    </style>
 </head>
 <body>
 
 <div class="dashboard-container">
-  <h1>Real-Time Request Dashboard</h1>
+    <h1>Real-Time Request Dashboard</h1>
 
-  <ul id="requests-list">
-    {% if active_requests and active_requests|length > 0 %}
-      {% for request in active_requests %}
-        <li class="request-item {{ request.role }}"
-            id="{{ request.id }}"
-            data-id="{{ request.id }}"
-            data-room="{{ request.room }}"
-            data-request="{{ request.requ
+    <ul id="requests-list">
+        {% for request in active_requests %}
+            <li class="request-item {{ request.role }}"
+                id="{{ request.id }}"
+                data-id="{{ request.id }}"
+                data-room="{{ request.room }}"
+                data-request="{{ request.request }}"
+                data-role="{{ request.role }}"
+                data-timestamp="{{ request.timestamp }}">
+                <p>{{ request.request }}</p>
+                <span>Room: {{ request.room }}</span>
+                <span class="role-span">For: {{ request.role|default('')|upper }}</span>
+                <span class="timestamp"></span>
+                <button class="ack-button">Acknowledge</button>
+                <button class="omw-button">On my way</button>
+                <button class="asap-button">Be there ASAP</button>
+                {% if request.role == 'cna' %}
+                    <button class="defer-btn">Defer to Nurse</button>
+                {% endif %}
+                <button class="complete-btn">Complete</button>
+            </li>
+        {% endfor %}
+    </ul>
+
+    <div class="footer">
+        <a href="{{ url_for('analytics') }}">View Analytics Dashboard</a>
+    </div>
+</div>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script type="text/javascript">
+    const socket = io();
+
+    let audioContext;
+    function playNotificationSound() {
+        if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioContext.state === 'suspended') audioContext.resume();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        oscillator.connect(gainNode); gainNode.connect(audioContext.destination);
+        oscillator.type = 'sine'; oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
+        gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+        gainNode.gain.linearRampToValueAtTime(0.5, audioContext.currentTime + 0.05);
+        gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.5);
+        oscillator.start(audioContext.currentTime); oscillator.stop(audioContext.currentTime + 0.5);
+    }
+
+    function updateAllTimersAndColors() {
+        const items = document.querySelectorAll('#requests-list .request-item');
+        const now = new Date();
+        items.forEach(item => {
+            const requestTime = new Date(item.dataset.timestamp || Date.now());
+            const minutes = Math.max(0, Math.floor((now - requestTime) / 60000));
+            const ts = item.querySelector('.timestamp');
+            if (ts) ts.textContent = minutes > 0 ? `${minutes}m ago` : 'Just now';
+
+            item.classList.remove('status-new', 'status-warn', 'status-urgent');
+            if (minutes >= 10) item.classList.add('status-urgent');
+            else if (minutes >= 5) item.classList.add('status-warn');
+            else item.classList.add('status-new');
+        });
+    }
+
+    function addRequestToDashboard(data) {
+        const list = document.getElementById('requests-list');
+        if (document.getElementById(data.id)) return;
+
+        // Build DOM safely (no innerHTML with untrusted text)
+        const li = document.createElement('li');
+        li.id = data.id;
+        li.className = 'request-item ' + (data.role || '');
+        li.dataset.id = data.id;
+        li.dataset.room = data.room || '';
+        li.dataset.request = data.request || '';
+        li.dataset.role = data.role || '';
+        li.dataset.timestamp = data.timestamp || new Date().toISOString();
+
+        const p = document.createElement('p'); p.textContent = li.dataset.request;
+        const roomSpan = document.createElement('span'); roomSpan.textContent = 'Room: ' + li.dataset.room;
+        const roleSpan = document.createElement('span'); roleSpan.className = 'role-span'; roleSpan.textContent = 'For: ' + (li.dataset.role || '').toUpperCase();
+        const timeSpan = document.createElement('span'); timeSpan.className = 'timestamp';
+
+        const ackBtn = document.createElement('button'); ackBtn.className = 'ack-button'; ackBtn.textContent = 'Acknowledge';
+        const omwBtn = document.createElement('button'); omwBtn.className = 'omw-button'; omwBtn.textContent = 'On my way';
+        const asapBtn = document.createElement('button'); asapBtn.className = 'asap-button'; asapBtn.textContent = 'Be there ASAP';
+
+        li.append(p, roomSpan, roleSpan, timeSpan, ackBtn, omwBtn, asapBtn);
+
+        if ((li.dataset.role || '') === 'cna') {
+            const deferBtn = document.createElement('button'); deferBtn.className = 'defer-btn'; deferBtn.textContent = 'Defer to Nurse';
+            li.appendChild(deferBtn);
+        }
+
+        const completeBtn = document.createElement('button'); completeBtn.className = 'complete-btn'; completeBtn.textContent = 'Complete';
+        li.appendChild(completeBtn);
+
+        list.prepend(li);
+        updateAllTimersAndColors();
+    }
+
+    socket.on('new_request', function(data) {
+        addRequestToDashboard(data);
+        playNotificationSound();
+    });
+
+    socket.on('request_updated', function(data) {
+        const item = document.getElementById(data.id);
+        if (item) {
+            item.classList.remove('cna'); item.classList.add('nurse');
+            item.dataset.role = 'nurse';
+            const roleSpan = item.querySelector('.role-span');
+            if (roleSpan) roleSpan.textContent = 'For: NURSE';
+            const deferButton = item.querySelector('.defer-btn');
+            if (deferButton) deferButton.remove();
+            item.dataset.timestamp = data.new_timestamp || new Date().toISOString();
+            updateAllTimersAndColors();
+        }
+    });
+
+    socket.on('remove_request', function(data) {
+        const el = document.getElementById(data.id);
+        if (el) { el.style.opacity = '0'; setTimeout(() => el.remove(), 500); }
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const list = document.getElementById('requests-list');
+
+        // Delegate button events
+        list.addEventListener('click', function(event) {
+            const btn = event.target;
+            if (btn.tagName !== 'BUTTON') return;
+
+            const item = btn.closest('.request-item'); if (!item) return;
+            const requestId = item.dataset.id;
+            const room = item.dataset.room;
+
+            if (btn.classList.contains('ack-button')) {
+                btn.disabled = true;
+                socket.emit('acknowledge_request', { room, message: "✅ Your request was received and will be addressed shortly." });
+            } else if (btn.classList.contains('omw-button')) {
+                btn.disabled = true;
+                const ack = item.querySelector('.ack-button'); if (ack) ack.disabled = true;
+                socket.emit('acknowledge_request', { room, message: "✅ A team member is on their way." });
+            } else if (btn.classList.contains('asap-button')) {
+                btn.disabled = true;
+                const ack = item.querySelector('.ack-button'); if (ack) ack.disabled = true;
+                const omw = item.querySelector('.omw-button'); if (omw) omw.disabled = true;
+                socket.emit('acknowledge_request', { room, message: "A team member is with another patient and will be with you as soon as possible." });
+            } else if (btn.classList.contains('defer-btn')) {
+                socket.emit('defer_request', { id: requestId });
+            } else if (btn.classList.contains('complete-btn')) {
+                socket.emit('complete_request', { request_id: requestId });
+            }
+        });
+
+        // Kick off timers
+        setInterval(updateAllTimersAndColors, 60000);
+        updateAllTimersAndColors();
+    });
+</script>
+
+</body>
+</html>
