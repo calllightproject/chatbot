@@ -4,6 +4,7 @@ button_data = {
     # --- Core Notifications & Text ---
     "greeting": "您好！我们在这里支持您。",
     "custom_note_placeholder": "在此处输入给护士的留言...",
+    "empty_custom_note": "请在输入框中输入留言。",
     "send_note_button": "发送留言",
     "cna_notification": "✅ 已通知CNA（护理助理）。",
     "nurse_notification": "✅ 已通知护士。",
@@ -104,4 +105,5 @@ button_data = {
     "我什么时候能拿到出院文件？": {"note": "一旦妇产科医生录入他们的医嘱和出院指令，您的护士就可以打印文件了。"},
     "我必须坐轮椅吗？": {"note": "不是必须的，但必须有一名工作人员陪同您。如果护士很忙，将由运输人员护送您离开。"}
 }
+
 
