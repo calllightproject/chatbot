@@ -5,6 +5,7 @@ button_data = {
     # --- Core Notifications & Text ---
     "greeting": "¡Hola! ¿Cómo puedo ayudarle?",
     "custom_note_placeholder": "Escribe tu nota para la enfermera aquí...",
+    "empty_custom_note": "Por favor, escriba un mensaje en el cuadro.",
     "send_note_button": "Enviar Nota",
     "back_text": "⬅ Regresar",
     "cna_notification": "✅ Se ha notificado al asistente de enfermería.",
@@ -226,3 +227,4 @@ button_data = {
         "note": "No, pero un miembro del personal tiene que acompañarla. Si el personal de enfermería está ocupado, un transportista la acompañará a la salida."
     }
 }
+
