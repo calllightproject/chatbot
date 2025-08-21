@@ -1,3 +1,4 @@
+
 # These two lines MUST be the very first lines in the file.
 import eventlet
 eventlet.monkey_patch()
@@ -10,7 +11,7 @@ from datetime import datetime, date, timezone
 from collections import defaultdict
 from email.message import EmailMessage
 
-from flask import Flask, render_template, request, session, redirect, url_for, flash
+from flask import Flask, render_template, request, session, redirect, url_for
 from flask_socketio import SocketIO, join_room
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import ProgrammingError
@@ -20,7 +21,7 @@ app = Flask(__name__, template_folder='templates')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-strong-fallback-secret-key-for-local-development")
 socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*", manage_session=False, ping_timeout=20, ping_interval=10)
 
-# --- Master Data Lists ---
+# --- Master Data Lists (To be deprecated) ---
 INITIAL_STAFF = {
     'Jackie': 'nurse', 'Carol': 'nurse', 'John': 'nurse',
     'Maria': 'nurse', 'David': 'nurse', 'Susan': 'nurse',
@@ -84,8 +85,11 @@ def setup_database():
         with engine.connect() as connection:
             with connection.begin():
                 try:
+                    print("Attempting to add 'deferral_timestamp' column...")
                     connection.execute(text("ALTER TABLE requests ADD COLUMN deferral_timestamp TIMESTAMP WITH TIME ZONE;"))
+                    print("SUCCESS: Added 'deferral_timestamp' column.")
                 except ProgrammingError:
+                    print("INFO: 'deferral_timestamp' column likely already exists.")
                     pass
         
         print("Database setup complete. Tables are ready.")
@@ -217,7 +221,6 @@ def demographics():
     no_text = button_data.get("demographic_no", "No")
     return render_template("demographics.html", question_text=question_text, yes_text=yes_text, no_text=no_text)
 
-# MODIFIED: This function now uses the Post/Redirect/Get pattern to prevent refresh issues.
 @app.route("/chat", methods=["GET", "POST"])
 def handle_chat():
     pathway = session.get("pathway", "standard")
@@ -236,45 +239,40 @@ def handle_chat():
             if note_text:
                 role = route_note_intelligently(note_text)
                 reply_message = button_data.get(f"{role}_notification", "Your request has been sent.")
-                session['reply'] = process_request(role=role, subject="Custom Patient Note", user_input=note_text, reply_message=reply_message)
-                session['options'] = button_data["main_buttons"]
+                reply = process_request(role=role, subject="Custom Patient Note", user_input=note_text, reply_message=reply_message)
             else:
-                session['reply'] = "Please type a message in the box."
-                session['options'] = button_data["main_buttons"]
+                reply = "Please type a message in the box."
+            return render_template("chat.html", reply=reply, options=button_data["main_buttons"], button_data=button_data)
         
+        user_input = request.form.get("user_input", "").strip()
+        if user_input == button_data.get("back_text", "⬅ Back"):
+            return redirect(url_for('handle_chat'))
+
+        if user_input in button_data:
+            button_info = button_data[user_input]
+            reply = button_info.get("question") or button_info.get("note", "")
+            options = button_info.get("options", [])
+            
+            back_text = button_data.get("back_text", "⬅ Back")
+            if options and back_text not in options:
+                options.append(back_text)
+            elif not options:
+                options = button_data["main_buttons"]
+
+            if "action" in button_info:
+                action = button_info["action"]
+                role = "cna" if action == "Notify CNA" else "nurse"
+                subject = f"{role.upper()} Request"
+                notification_message = button_info.get("note", button_data[f"{role}_notification"])
+                reply = process_request(role=role, subject=subject, user_input=user_input, reply_message=notification_message)
+                options = button_data["main_buttons"]
         else:
-            user_input = request.form.get("user_input", "").strip()
-            if user_input == button_data.get("back_text", "⬅ Back"):
-                return redirect(url_for('handle_chat'))
-
-            if user_input in button_data:
-                button_info = button_data[user_input]
-                session['reply'] = button_info.get("question") or button_info.get("note", "")
-                session['options'] = button_info.get("options", [])
-                
-                back_text = button_data.get("back_text", "⬅ Back")
-                if session['options'] and back_text not in session['options']:
-                    session['options'].append(back_text)
-                elif not session['options']:
-                    session['options'] = button_data["main_buttons"]
-
-                if "action" in button_info:
-                    action = button_info["action"]
-                    role = "cna" if action == "Notify CNA" else "nurse"
-                    subject = f"{role.upper()} Request"
-                    notification_message = button_info.get("note", button_data[f"{role}_notification"])
-                    session['reply'] = process_request(role=role, subject=subject, user_input=user_input, reply_message=notification_message)
-                    session['options'] = button_data["main_buttons"]
-            else:
-                session['reply'] = "I'm sorry, I didn't understand that. Please use the buttons provided."
-                session['options'] = button_data["main_buttons"]
+            reply = "I'm sorry, I didn't understand that. Please use the buttons provided."
+            options = button_data["main_buttons"]
         
-        return redirect(url_for('handle_chat'))
+        return render_template("chat.html", reply=reply, options=options, button_data=button_data)
 
-    # For a GET request, display the page with data from the session or defaults
-    reply = session.pop('reply', button_data["greeting"])
-    options = session.pop('options', button_data["main_buttons"])
-    return render_template("chat.html", reply=reply, options=options, button_data=button_data)
+    return render_template("chat.html", reply=button_data["greeting"], options=button_data["main_buttons"], button_data=button_data)
 
 @app.route("/reset-language")
 def reset_language():
@@ -299,7 +297,6 @@ def dashboard():
         print(f"ERROR fetching active requests: {e}")
     return render_template("dashboard.html", active_requests=active_requests)
 
-# MODIFIED: Corrected the variable names being passed to the template.
 @app.route('/analytics')
 def analytics():
     avg_response_time = "N/A"
@@ -314,45 +311,33 @@ def analytics():
             if avg_time_result is not None:
                 minutes, seconds = divmod(int(avg_time_result), 60)
                 avg_response_time = f"{minutes}m {seconds}s"
-            
             top_categories_result = connection.execute(text("SELECT category, COUNT(id) FROM requests GROUP BY category ORDER BY COUNT(id) DESC;")).fetchall()
             top_categories_labels = [row[0] for row in top_categories_result]
             top_categories_values = [row[1] for row in top_categories_result]
-
             most_requested_result = connection.execute(text("SELECT user_input, COUNT(id) as count FROM requests GROUP BY user_input ORDER BY count DESC LIMIT 5;")).fetchall()
             most_requested_labels = [row[0] for row in most_requested_result]
             most_requested_values = [row[1] for row in most_requested_result]
-
             requests_by_hour_result = connection.execute(text("SELECT EXTRACT(HOUR FROM timestamp) as hour, COUNT(id) FROM requests GROUP BY hour ORDER BY hour;")).fetchall()
             hourly_counts = defaultdict(int)
             for hour, count in requests_by_hour_result:
                 hourly_counts[int(hour)] = count
             requests_by_hour_labels = [f"{h}:00" for h in range(24)]
             requests_by_hour_values = [hourly_counts[h] for h in range(24)]
-
             first_baby_result = connection.execute(text("SELECT user_input, COUNT(id) as count FROM requests WHERE is_first_baby IS TRUE GROUP BY user_input ORDER BY count DESC LIMIT 5;")).fetchall()
             first_baby_labels = [row[0] for row in first_baby_result]
             first_baby_values = [row[1] for row in first_baby_result]
-
             multi_baby_result = connection.execute(text("SELECT user_input, COUNT(id) as count FROM requests WHERE is_first_baby IS FALSE GROUP BY user_input ORDER BY count DESC LIMIT 5;")).fetchall()
             multi_baby_labels = [row[0] for row in multi_baby_result]
             multi_baby_values = [row[1] for row in multi_baby_result]
     except Exception as e:
         print(f"ERROR fetching analytics data: {e}")
-    
     return render_template(
-        'analytics.html', 
-        avg_response_time=avg_response_time,
-        top_requests_labels=json.dumps(top_categories_labels), 
-        top_requests_values=json.dumps(top_categories_values),
-        most_requested_labels=json.dumps(most_requested_labels), 
-        most_requested_values=json.dumps(most_requested_values),
-        requests_by_hour_labels=json.dumps(requests_by_hour_labels), 
-        requests_by_hour_values=json.dumps(requests_by_hour_values),
-        first_baby_labels=json.dumps(first_baby_labels), 
-        first_baby_values=json.dumps(first_baby_values),
-        multi_baby_labels=json.dumps(multi_baby_labels), 
-        multi_baby_values=json.dumps(multi_baby_values)
+        'analytics.html', avg_response_time=avg_response_time,
+        top_requests_labels=json.dumps(top_categories_labels), top_requests_values=json.dumps(top_categories_values),
+        most_requested_labels=json.dumps(most_requested_labels), most_requested_values=json.dumps(most_requested_values),
+        requests_by_hour_labels=json.dumps(requests_by_hour_labels), requests_by_hour_values=json.dumps(requests_by_hour_values),
+        first_baby_labels=json.dumps(first_baby_labels), first_baby_values=json.dumps(first_baby_values),
+        multi_baby_labels=json.dumps(multi_baby_labels), multi_baby_values=json.dumps(multi_baby_values)
     )
     
 @app.route('/assignments', methods=['GET', 'POST'])
@@ -399,22 +384,6 @@ def assignments():
         print(f"ERROR fetching assignments: {e}")
     
     return render_template('assignments.html', rooms=ALL_ROOMS, nurses=all_nurses, assignments=current_assignments)
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        password = request.form.get('password')
-        if password == os.getenv('MANAGER_PASSWORD'):
-            session['manager_logged_in'] = True
-            return redirect(url_for('manager_dashboard'))
-        else:
-            flash('Invalid password!', 'danger')
-    return render_template('login.html')
-
-@app.route('/logout')
-def logout():
-    session.pop('manager_logged_in', None)
-    return redirect(url_for('login'))
 
 @app.route('/manager-dashboard', methods=['GET', 'POST'])
 def manager_dashboard():
