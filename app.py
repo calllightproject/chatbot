@@ -299,10 +299,11 @@ def dashboard():
         print(f"ERROR fetching active requests: {e}")
     return render_template("dashboard.html", active_requests=active_requests)
 
+# MODIFIED: This route now passes raw Python lists to the template
 @app.route('/analytics')
 def analytics():
     avg_response_time = "N/A"
-    top_categories_labels, top_categories_values = [], []
+    top_requests_labels, top_requests_values = [], []
     most_requested_labels, most_requested_values = [], []
     requests_by_hour_labels, requests_by_hour_values = [], []
     first_baby_labels, first_baby_values = [], []
@@ -314,10 +315,9 @@ def analytics():
                 minutes, seconds = divmod(int(avg_time_result), 60)
                 avg_response_time = f"{minutes}m {seconds}s"
             
-            # THIS IS THE FIX: The variable names now correctly match what the template expects.
-            top_categories_result = connection.execute(text("SELECT category, COUNT(id) FROM requests GROUP BY category ORDER BY COUNT(id) DESC;")).fetchall()
-            top_categories_labels = [row[0] for row in top_categories_result]
-            top_categories_values = [row[1] for row in top_categories_result]
+            top_requests_result = connection.execute(text("SELECT category, COUNT(id) FROM requests GROUP BY category ORDER BY COUNT(id) DESC;")).fetchall()
+            top_requests_labels = [row[0] for row in top_requests_result]
+            top_requests_values = [row[1] for row in top_requests_result]
 
             most_requested_result = connection.execute(text("SELECT user_input, COUNT(id) as count FROM requests GROUP BY user_input ORDER BY count DESC LIMIT 5;")).fetchall()
             most_requested_labels = [row[0] for row in most_requested_result]
@@ -343,16 +343,16 @@ def analytics():
     return render_template(
         'analytics.html', 
         avg_response_time=avg_response_time,
-        top_requests_labels=json.dumps(top_categories_labels), 
-        top_requests_values=json.dumps(top_categories_values),
-        most_requested_labels=json.dumps(most_requested_labels), 
-        most_requested_values=json.dumps(most_requested_values),
-        requests_by_hour_labels=json.dumps(requests_by_hour_labels), 
-        requests_by_hour_values=json.dumps(requests_by_hour_values),
-        first_baby_labels=json.dumps(first_baby_labels), 
-        first_baby_values=json.dumps(first_baby_values),
-        multi_baby_labels=json.dumps(multi_baby_labels), 
-        multi_baby_values=json.dumps(multi_baby_values)
+        top_requests_labels=top_requests_labels, 
+        top_requests_values=top_requests_values,
+        most_requested_labels=most_requested_labels, 
+        most_requested_values=most_requested_values,
+        requests_by_hour_labels=requests_by_hour_labels, 
+        requests_by_hour_values=requests_by_hour_values,
+        first_baby_labels=first_baby_labels, 
+        first_baby_values=first_baby_values,
+        multi_baby_labels=multi_baby_labels, 
+        multi_baby_values=multi_baby_values
     )
     
 @app.route('/assignments', methods=['GET', 'POST'])
