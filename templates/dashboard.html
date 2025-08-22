@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{ session.get('language', 'en') }}">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -26,8 +26,14 @@
             border-radius: 8px;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }
-        h1 { color: var(--core-blue); text-align: center; }
-        #requests-list { list-style-type: none; padding: 0; }
+        h1 {
+            color: var(--core-blue);
+            text-align: center;
+        }
+        #requests-list {
+            list-style-type: none;
+            padding: 0;
+        }
         .request-item {
             display: flex;
             align-items: center;
@@ -41,20 +47,42 @@
         }
         .request-item.cna { border-left: 5px solid var(--accent-blue); }
         .request-item.nurse { border-left: 5px solid #d43f27; }
-        .request-item p { margin: 0; font-size: 1.1em; flex-grow: 1; }
-        .request-item span { font-size: 0.9em; color: #555; white-space: nowrap; }
+        .request-item p {
+            margin: 0;
+            font-size: 1.1em;
+            flex-grow: 1;
+        }
+        .request-item span {
+            font-size: 0.9em;
+            color: #555;
+            white-space: nowrap;
+        }
         .request-item button {
-            padding: 8px 12px; border: none; color: white; border-radius: 5px;
-            cursor: pointer; font-size: 14px; transition: opacity 0.3s;
+            padding: 8px 12px;
+            border: none;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: opacity 0.3s;
         }
         .ack-button { background-color: #ffc107; color: black; }
         .omw-button { background-color: #28a745; }
         .asap-button { background-color: #6f42c1; }
         .complete-btn { background-color: #6c757d; }
         .defer-btn { background-color: #17a2b8; }
-        .request-item button:disabled { opacity: 0.5; cursor: not-allowed; }
-        .footer { text-align: center; margin-top: 30px; }
-        .footer a { color: var(--accent-blue); text-decoration: none; }
+        .request-item button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+        }
+        .footer a {
+            color: var(--accent-blue);
+            text-decoration: none;
+        }
         .status-new { background-color: #d4edda; }
         .status-warn { background-color: #fff3cd; }
         .status-urgent { background-color: #f8d7da; }
@@ -64,19 +92,21 @@
 
 <div class="dashboard-container">
     <h1>Real-Time Request Dashboard</h1>
-
+    
     <ul id="requests-list">
         {% for request in active_requests %}
-            <li class="request-item {{ request.role }}"
+            <li class="request-item {{ request.role }}" 
                 id="{{ request.id }}"
                 data-id="{{ request.id }}"
                 data-room="{{ request.room }}"
                 data-request="{{ request.request }}"
                 data-role="{{ request.role }}"
                 data-timestamp="{{ request.timestamp }}">
-                <p>{{ request.request }}</p>
+                
+                <!-- Explicitly escape user-provided request text -->
+                <p>{{ request.request | e }}</p>
                 <span>Room: {{ request.room }}</span>
-                <span class="role-span">For: {{ request.role|default('')|upper }}</span>
+                <span class="role-span">For: {{ request.role | upper }}</span>
                 <span class="timestamp"></span>
                 <button class="ack-button">Acknowledge</button>
                 <button class="omw-button">On my way</button>
@@ -96,132 +126,178 @@
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script type="text/javascript">
-    const socket = io();
+    var socket = io();
 
     let audioContext;
     function playNotificationSound() {
-        if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        if (audioContext.state === 'suspended') audioContext.resume();
+        if (!audioContext) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioContext.state === 'suspended') {
+            audioContext.resume();
+        }
         const oscillator = audioContext.createOscillator();
         const gainNode = audioContext.createGain();
-        oscillator.connect(gainNode); gainNode.connect(audioContext.destination);
-        oscillator.type = 'sine'; oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
         gainNode.gain.setValueAtTime(0, audioContext.currentTime);
         gainNode.gain.linearRampToValueAtTime(0.5, audioContext.currentTime + 0.05);
         gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.5);
-        oscillator.start(audioContext.currentTime); oscillator.stop(audioContext.currentTime + 0.5);
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.5);
     }
 
+    // Single, master function to update timers + color states
     function updateAllTimersAndColors() {
-        const items = document.querySelectorAll('#requests-list .request-item');
+        const requestItems = document.querySelectorAll('#requests-list .request-item');
         const now = new Date();
-        items.forEach(item => {
-            const requestTime = new Date(item.dataset.timestamp || Date.now());
-            const minutes = Math.max(0, Math.floor((now - requestTime) / 60000));
-            const ts = item.querySelector('.timestamp');
-            if (ts) ts.textContent = minutes > 0 ? `${minutes}m ago` : 'Just now';
+
+        requestItems.forEach(item => {
+            const requestTime = new Date(item.dataset.timestamp);
+            const minutes = Math.floor((now - requestTime) / 60000);
+            
+            const timestampSpan = item.querySelector('.timestamp');
+            if (timestampSpan) {
+                timestampSpan.textContent = minutes > 0 ? `${minutes}m ago` : 'Just now';
+            }
 
             item.classList.remove('status-new', 'status-warn', 'status-urgent');
-            if (minutes >= 10) item.classList.add('status-urgent');
-            else if (minutes >= 5) item.classList.add('status-warn');
-            else item.classList.add('status-new');
+            if (minutes >= 10) {
+                item.classList.add('status-urgent');
+            } else if (minutes >= 5) {
+                item.classList.add('status-warn');
+            } else {
+                item.classList.add('status-new');
+            }
         });
+    }
+
+    // Safe element builder (avoids innerHTML)
+    function el(tag, className, text) {
+        const e = document.createElement(tag);
+        if (className) e.className = className;
+        if (text !== undefined) e.textContent = text; // textContent prevents HTML injection
+        return e;
     }
 
     function addRequestToDashboard(data) {
         const list = document.getElementById('requests-list');
         if (document.getElementById(data.id)) return;
 
-        // Build DOM safely (no innerHTML with untrusted text)
-        const li = document.createElement('li');
-        li.id = data.id;
-        li.className = 'request-item ' + (data.role || '');
-        li.dataset.id = data.id;
-        li.dataset.room = data.room || '';
-        li.dataset.request = data.request || '';
-        li.dataset.role = data.role || '';
-        li.dataset.timestamp = data.timestamp || new Date().toISOString();
+        const item = el('li', `request-item ${data.role}`);
+        item.id = data.id;
+        item.dataset.id = data.id;
+        item.dataset.room = data.room;
+        item.dataset.request = data.request;
+        item.dataset.role = data.role;
+        item.dataset.timestamp = data.timestamp;
 
-        const p = document.createElement('p'); p.textContent = li.dataset.request;
-        const roomSpan = document.createElement('span'); roomSpan.textContent = 'Room: ' + li.dataset.room;
-        const roleSpan = document.createElement('span'); roleSpan.className = 'role-span'; roleSpan.textContent = 'For: ' + (li.dataset.role || '').toUpperCase();
-        const timeSpan = document.createElement('span'); timeSpan.className = 'timestamp';
+        const p = el('p', null, data.request);                     // safe text
+        const room = el('span', null, `Room: ${data.room}`);       // safe text
+        const roleSpan = el('span', 'role-span', `For: ${data.role.toUpperCase()}`);
+        const ts = el('span', 'timestamp', '');
 
-        const ackBtn = document.createElement('button'); ackBtn.className = 'ack-button'; ackBtn.textContent = 'Acknowledge';
-        const omwBtn = document.createElement('button'); omwBtn.className = 'omw-button'; omwBtn.textContent = 'On my way';
-        const asapBtn = document.createElement('button'); asapBtn.className = 'asap-button'; asapBtn.textContent = 'Be there ASAP';
+        const ack = el('button', 'ack-button', 'Acknowledge');
+        const omw = el('button', 'omw-button', 'On my way');
+        const asap = el('button', 'asap-button', 'Be there ASAP');
+        const complete = el('button', 'complete-btn', 'Complete');
 
-        li.append(p, roomSpan, roleSpan, timeSpan, ackBtn, omwBtn, asapBtn);
+        item.appendChild(p);
+        item.appendChild(room);
+        item.appendChild(roleSpan);
+        item.appendChild(ts);
+        item.appendChild(ack);
+        item.appendChild(omw);
+        item.appendChild(asap);
 
-        if ((li.dataset.role || '') === 'cna') {
-            const deferBtn = document.createElement('button'); deferBtn.className = 'defer-btn'; deferBtn.textContent = 'Defer to Nurse';
-            li.appendChild(deferBtn);
+        if (data.role === 'cna') {
+            const deferBtn = el('button', 'defer-btn', 'Defer to Nurse');
+            item.appendChild(deferBtn);
         }
 
-        const completeBtn = document.createElement('button'); completeBtn.className = 'complete-btn'; completeBtn.textContent = 'Complete';
-        li.appendChild(completeBtn);
-
-        list.prepend(li);
+        item.appendChild(complete);
+        list.prepend(item);
         updateAllTimersAndColors();
     }
 
+    // --- SocketIO Event Listeners ---
     socket.on('new_request', function(data) {
         addRequestToDashboard(data);
         playNotificationSound();
     });
-
+    
     socket.on('request_updated', function(data) {
-        const item = document.getElementById(data.id);
-        if (item) {
-            item.classList.remove('cna'); item.classList.add('nurse');
-            item.dataset.role = 'nurse';
-            const roleSpan = item.querySelector('.role-span');
-            if (roleSpan) roleSpan.textContent = 'For: NURSE';
-            const deferButton = item.querySelector('.defer-btn');
-            if (deferButton) deferButton.remove();
-            item.dataset.timestamp = data.new_timestamp || new Date().toISOString();
+        const itemToUpdate = document.getElementById(data.id);
+        if (itemToUpdate) {
+            itemToUpdate.classList.remove('cna');
+            itemToUpdate.classList.add('nurse');
+            const roleSpan = itemToUpdate.querySelector('.role-span');
+            if (roleSpan) {
+                roleSpan.textContent = 'For: NURSE';
+            }
+            const deferButton = itemToUpdate.querySelector('.defer-btn');
+            if (deferButton) {
+                deferButton.remove();
+            }
+            itemToUpdate.dataset.timestamp = data.new_timestamp;
             updateAllTimersAndColors();
         }
     });
 
     socket.on('remove_request', function(data) {
-        const el = document.getElementById(data.id);
-        if (el) { el.style.opacity = '0'; setTimeout(() => el.remove(), 500); }
+        const requestElement = document.getElementById(data.id);
+        if (requestElement) {
+            requestElement.style.opacity = '0';
+            setTimeout(() => requestElement.remove(), 500);
+        }
     });
 
+    // --- Main Setup ---
     document.addEventListener('DOMContentLoaded', function() {
-        const list = document.getElementById('requests-list');
+        const requestsList = document.getElementById('requests-list');
 
-        // Delegate button events
-        list.addEventListener('click', function(event) {
-            const btn = event.target;
-            if (btn.tagName !== 'BUTTON') return;
+        // Event delegation for all buttons
+        requestsList.addEventListener('click', function(event) {
+            const button = event.target;
+            if (button.tagName !== 'BUTTON') return;
 
-            const item = btn.closest('.request-item'); if (!item) return;
-            const requestId = item.dataset.id;
-            const room = item.dataset.room;
+            const parentItem = button.closest('.request-item');
+            if (!parentItem) return;
 
-            if (btn.classList.contains('ack-button')) {
-                btn.disabled = true;
-                socket.emit('acknowledge_request', { room, message: "✅ Your request was received and will be addressed shortly." });
-            } else if (btn.classList.contains('omw-button')) {
-                btn.disabled = true;
-                const ack = item.querySelector('.ack-button'); if (ack) ack.disabled = true;
-                socket.emit('acknowledge_request', { room, message: "✅ A team member is on their way." });
-            } else if (btn.classList.contains('asap-button')) {
-                btn.disabled = true;
-                const ack = item.querySelector('.ack-button'); if (ack) ack.disabled = true;
-                const omw = item.querySelector('.omw-button'); if (omw) omw.disabled = true;
-                socket.emit('acknowledge_request', { room, message: "A team member is with another patient and will be with you as soon as possible." });
-            } else if (btn.classList.contains('defer-btn')) {
+            const requestId = parentItem.dataset.id;
+            const room = parentItem.dataset.room;
+
+            if (button.classList.contains('ack-button')) {
+                button.disabled = true;
+                socket.emit('acknowledge_request', { room: room, message: "✅ Your request was received and will be addressed shortly." });
+            } 
+            else if (button.classList.contains('omw-button')) {
+                button.disabled = true;
+                const ackBtn = parentItem.querySelector('.ack-button');
+                if (ackBtn) ackBtn.disabled = true;
+                socket.emit('acknowledge_request', { room: room, message: "✅ A team member is on their way." });
+            }
+            else if (button.classList.contains('asap-button')) {
+                button.disabled = true;
+                const ackBtn = parentItem.querySelector('.ack-button');
+                const omwBtn = parentItem.querySelector('.omw-button');
+                if (ackBtn) ackBtn.disabled = true;
+                if (omwBtn) omwBtn.disabled = true;
+                socket.emit('acknowledge_request', { room: room, message: "A team member is with another patient and will be with you as soon as possible." });
+            }
+            else if (button.classList.contains('defer-btn')) {
                 socket.emit('defer_request', { id: requestId });
-            } else if (btn.classList.contains('complete-btn')) {
+            } 
+            else if (button.classList.contains('complete-btn')) {
                 socket.emit('complete_request', { request_id: requestId });
             }
         });
 
-        // Kick off timers
+        // Start the single master timer
         setInterval(updateAllTimersAndColors, 60000);
+        // Run once on page load
         updateAllTimersAndColors();
     });
 </script>
