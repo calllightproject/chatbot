@@ -1,22 +1,14 @@
-# -*- coding: utf-8 -*-
 # button_config_bereavement_es.py
-
 button_data = {
-    # --- Core Notifications & Text ---
     "greeting": "Hola. Estamos aquí para apoyarle.",
-    "custom_note_placeholder": "Escribe tu nota para la enfermera aquí...",
+    "custom_note_placeholder": "Escriba su nota para la enfermera aquí...",
     "empty_custom_note": "Por favor, escriba un mensaje en el cuadro.",
-    "send_note_button": "Enviar Nota",
+    "send_note_button": "Enviar nota",
     "cna_notification": "✅ Se ha notificado al asistente de enfermería.",
     "nurse_notification": "✅ Se ha notificado a la enfermera.",
     "back_text": "⬅ Regresar",
+    "unknown_input": "Perdón, no entendí. Por favor use los botones.",
 
-    # Optional AI follow-up strings (safe to include even if unused)
-    "ai_follow_up_question": "¿Le gustaría hablar con su enfermera?",
-    "ai_yes": "Sí, hablar con la enfermera",
-    "ai_no": "No, estoy bien",
-
-    # --- Main Menu Options ---
     "main_buttons": [
         "Tengo una emergencia",
         "Necesito suministros",
@@ -25,14 +17,11 @@ button_data = {
         "Tengo preguntas",
         "Quiero saber sobre el alta",
         "Baño / Ducha",
-        "Control de azúcar en la sangre para mí",
         "Hielo / Agua"
     ],
 
-    # --- Direct Actions & Simple Sub-menus ---
-    "Tengo una emergencia": {"action": "Notify Nurse"},
-    "Mi bomba de IV está sonando": {"action": "Notify Nurse"},
-    "Control de azúcar en la sangre para mí": {"action": "Notify CNA"},
+    "Tengo una emergencia": {"action": "Notificar a la enfermera"},
+    "Mi bomba de IV está sonando": {"action": "Notificar a la enfermera"},
 
     "Hielo / Agua": {
         "question": "Si tiene una persona de apoyo con usted, puede ir a nuestra sala de nutrición, que tiene agua, hielo picado, jugo y pequeños bocadillos. El personal puede mostrarle dónde se encuentra. ¿Qué le gustaría?",
@@ -43,93 +32,69 @@ button_data = {
             "Necesito agua caliente"
         ]
     },
-    "Necesito agua con hielo": {"action": "Notify CNA"},
-    "Necesito hielo picado": {"action": "Notify CNA"},
-    "Necesito agua, sin hielo": {"action": "Notify CNA"},
-    "Necesito agua caliente": {"action": "Notify CNA"},
+    "Necesito agua con hielo": {"action": "Notificar al asistente de enfermería"},
+    "Necesito hielo picado": {"action": "Notificar al asistente de enfermería"},
+    "Necesito agua, sin hielo": {"action": "Notificar al asistente de enfermería"},
+    "Necesito agua caliente": {"action": "Notificar al asistente de enfermería"},
 
     "Baño / Ducha": {
-        "question": "Si ya ha ido al baño una vez con un miembro del personal y se siente estable, puede usar el baño por su cuenta. Por favor, avísenos si todavía necesita ayuda. ¿Qué necesita?",
+        "question": "Si ya ha ido al baño una vez con un miembro del personal y se siente estable, puede usar el baño por su cuenta. Avísenos si todavía necesita ayuda. ¿Qué necesita?",
         "options": [
             "Necesito ayuda para ir al baño",
             "Necesito cubrir mi vía IV para ducharme",
             "¿Puedo tomar una ducha?"
         ]
     },
-    "Necesito ayuda para ir al baño": {"action": "Notify CNA"},
-    "Necesito cubrir mi vía IV para ducharme": {"action": "Notify CNA"},
-    "¿Puedo tomar una ducha?": {
-        "note": "Normalmente sí, pero consulte con su enfermera si tiene una vía intravenosa u otras restricciones."
-    },
+    "Necesito ayuda para ir al baño": {"action": "Notificar al asistente de enfermería"},
+    "Necesito cubrir mi vía IV para ducharme": {"action": "Notificar al asistente de enfermería"},
+    "¿Puedo tomar una ducha?": {"note": "Normalmente sí, pero consulte con su enfermera si tiene una vía intravenosa u otras restricciones."},
 
-    # --- Supplies Category ---
     "Necesito suministros": {
         "question": "¿Qué necesita?",
         "options": ["Toallas sanitarias", "Ropa interior de malla", "Compresa de hielo", "Almohadas"]
     },
-    "Almohadas": {"action": "Notify CNA"},
-    "Ropa interior de malla": {"action": "Notify CNA"},
+    "Almohadas": {"action": "Notificar al asistente de enfermería"},
+    "Ropa interior de malla": {"action": "Notificar al asistente de enfermería"},
     "Toallas sanitarias": {
         "question": "¿Qué tipo de toalla sanitaria necesita?",
         "options": ["Toallas azules", "Toallas blancas"]
     },
-    "Toallas azules": {"action": "Notify CNA"},
-    "Toallas blancas": {"action": "Notify CNA"},
+    "Toallas azules": {"action": "Notificar al asistente de enfermería"},
+    "Toallas blancas": {"action": "Notificar al asistente de enfermería"},
     "Compresa de hielo": {
         "question": "¿Dónde necesita la compresa de hielo?",
         "options": ["Compresa de hielo para el perineo", "Compresa de hielo para la incisión de la cesárea", "Compresa de hielo para los senos"]
     },
-    "Compresa de hielo para el perineo": {"action": "Notify CNA"},
-    "Compresa de hielo para la incisión de la cesárea": {"action": "Notify CNA"},
-    "Compresa de hielo para los senos": {"action": "Notify CNA"},
+    "Compresa de hielo para el perineo": {"action": "Notificar al asistente de enfermería"},
+    "Compresa de hielo para la incisión de la cesárea": {"action": "Notificar al asistente de enfermería"},
+    "Compresa de hielo para los senos": {"action": "Notificar al asistente de enfermería"},
 
-    # --- Medication Category ---
     "Necesito medicamentos": {
         "question": "¿Cuál es su síntoma principal?",
         "options": ["Dolor", "Náuseas/Vómitos", "Picazón", "Dolor por gases", "Estreñimiento"]
     },
-    "Dolor": {"action": "Notify Nurse"},
-    "Náuseas/Vómitos": {"action": "Notify Nurse"},
-    "Picazón": {"action": "Notify Nurse"},
-    "Dolor por gases": {"action": "Notify Nurse"},
-    "Estreñimiento": {"action": "Notify Nurse"},
+    "Dolor": {"action": "Notificar a la enfermera"},
+    "Náuseas/Vómitos": {"action": "Notificar a la enfermera"},
+    "Picazón": {"action": "Notificar a la enfermera"},
+    "Dolor por gases": {"action": "Notificar a la enfermera"},
+    "Estreñimiento": {"action": "Notificar a la enfermera"},
 
-    # --- Questions Category ---
     "Tengo preguntas": {
         "note": "Si su pregunta no está en la lista, su enfermera vendrá tan pronto como sea posible.",
         "options": [
             "¿Puedo ponerme mi propia ropa?",
-            "¿Cómo de seguido debo cambiar mi toalla sanitaria?"
+            "¿Cada cuánto debo cambiar mi toalla sanitaria?"
         ]
     },
-    "¿Puedo ponerme mi propia ropa?": {
-        "note": "Sí, siempre y cuando se sienta cómoda y su enfermera le haya dado el visto bueno."
-    },
-    "¿Cómo de seguido debo cambiar mi toalla sanitaria?": {
-        "note": "Cambie su toalla cada 2–4 horas o cuando esté saturada. Informe a su enfermera si está empapando una toalla grande en menos de 1 hora o si tiene coágulos más grandes que una pelota de golf."
-    },
+    "¿Puedo ponerme mi propia ropa?": {"note": "Sí, siempre que se sienta cómoda y su enfermera le haya dado el visto bueno."},
+    "¿Cada cuánto debo cambiar mi toalla sanitaria?": {"note": "Cambie su toalla cada 2–4 horas o cuando esté saturada. Avise si empapa una toalla en menos de 1 hora o si hay coágulos grandes."},
 
-    # --- Going Home Category ---
     "Quiero saber sobre el alta": {
         "question": "¿Qué le gustaría saber?",
-        "options": [
-            "Parto vaginal",
-            "Parto por cesárea",
-            "¿Cuándo recibiré mis papeles de alta?",
-            "¿Tengo que usar una silla de ruedas?"
-        ]
+        "options": ["Parto vaginal", "Parto por cesárea", "¿Cuándo recibiré mis papeles de alta?", "¿Tengo que usar una silla de ruedas?"]
     },
-    "¿Cuándo recibiré mis papeles de alta?": {
-        "note": "Una vez que el ginecólogo haya ingresado sus notas y órdenes de alta, su enfermera podrá imprimir la documentación."
-    },
-    "¿Tengo que usar una silla de ruedas?": {
-        "note": "No, pero un miembro del personal tiene que acompañarla. Si el personal de enfermería está ocupado, un transportista la acompañará a la salida."
-    },
-    "Parto vaginal": {
-        "note": "Si tuvo un parto vaginal, la estadía mínima es de 24 horas después del parto. Un ginecólogo debe dar el visto bueno para el alta y actualizar el sistema. Típicamente, siempre que su sangrado, presión arterial y dolor estén bajo control, se le permitirá el alta. Sin embargo, el ginecólogo toma la decisión final."
-    },
-    "Parto por cesárea": {
-        "note": "Si tuvo un parto por cesárea, la estadía mínima es de 48 horas. El ginecólogo dará la orden de alta si es apropiado. Típicamente, siempre que su dolor, presión arterial y sangrado sean normales, será dada de alta."
-    }
+    "¿Cuándo recibiré mis papeles de alta?": {"note": "Una vez que el ginecólogo ingrese notas y órdenes de alta, su enfermera imprimirá la documentación."},
+    "¿Tengo que usar una silla de ruedas?": {"note": "No es obligatorio, pero alguien del personal debe acompañarle. Si enfermería está ocupada, le llevará personal de traslado."},
+    "Parto vaginal": {"note": "Estancia mínima 24 h tras parto vaginal; el ginecólogo autoriza el alta."},
+    "Parto por cesárea": {"note": "Estancia mínima 48 h tras cesárea; el ginecólogo indicará el alta si corresponde."}
 }
-
