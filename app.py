@@ -45,21 +45,33 @@ def setup_database():
                 print("Running CREATE TABLE statements...")
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS requests (
-                        id SERIAL PRIMARY KEY, request_id VARCHAR(255) UNIQUE, timestamp TIMESTAMP WITH TIME ZONE,
-                        completion_timestamp TIMESTAMP WITH TIME ZONE, deferral_timestamp TIMESTAMP WITH TIME ZONE,
-                        room VARCHAR(255), user_input TEXT, category VARCHAR(255), reply TEXT, is_first_baby BOOLEAN
+                        id SERIAL PRIMARY KEY,
+                        request_id VARCHAR(255) UNIQUE,
+                        timestamp TIMESTAMP WITH TIME ZONE,
+                        completion_timestamp TIMESTAMP WITH TIME ZONE,
+                        deferral_timestamp TIMESTAMP WITH TIME ZONE,
+                        room VARCHAR(255),
+                        user_input TEXT,
+                        category VARCHAR(255),
+                        reply TEXT,
+                        is_first_baby BOOLEAN
                     );
                 """))
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS assignments (
-                        id SERIAL PRIMARY KEY, assignment_date DATE NOT NULL, room_number VARCHAR(255) NOT NULL,
-                        nurse_name VARCHAR(255) NOT NULL, UNIQUE(assignment_date, room_number)
+                        id SERIAL PRIMARY KEY,
+                        assignment_date DATE NOT NULL,
+                        room_number VARCHAR(255) NOT NULL,
+                        nurse_name VARCHAR(255) NOT NULL,
+                        UNIQUE(assignment_date, room_number)
                     );
                 """))
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS audit_log (
-                        id SERIAL PRIMARY KEY, timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
-                        event_type VARCHAR(255) NOT NULL, details TEXT
+                        id SERIAL PRIMARY KEY,
+                        timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+                        event_type VARCHAR(255) NOT NULL,
+                        details TEXT
                     );
                 """))
                 connection.execute(text("""
@@ -81,13 +93,6 @@ def setup_database():
                         """), {"name": name, "role": role})
                     print("Initial staff population complete.")
 
-        with engine.connect() as connection:
-            with connection.begin():
-                try:
-                    connection.execute(text("ALTER TABLE requests ADD COLUMN deferral_timestamp TIMESTAMP WITH TIME ZONE;"))
-                except ProgrammingError:
-                    pass
-
         print("Database setup complete. Tables are ready.")
     except Exception as e:
         print(f"CRITICAL ERROR during database setup: {e}")
@@ -107,6 +112,14 @@ def localize_role(role: str, lang: str) -> str:
         'zh': {'nurse': '护士', 'cna': '护理助理'},
     }
     return labels.get(lang, labels['en']).get(role, role)
+
+def subject_label(role: str, lang: str) -> str:
+    mapping = {
+        'en': {'nurse': 'Nurse Request', 'cna': 'CNA Request'},
+        'es': {'nurse': 'Solicitud para enfermera', 'cna': 'Solicitud para asistente de enfermería'},
+        'zh': {'nurse': '护士请求', 'cna': '护理助理请求'},
+    }
+    return mapping.get(lang, mapping['en']).get(role, 'Request')
 
 def action_to_role(action_value: str, lang: str = "en") -> str:
     """
@@ -322,11 +335,11 @@ def handle_chat():
                     user_input=note_text,
                     reply_message=reply_message
                 )
-                session['options'] = button_data["main_buttons"]
+                session['options'] = button_data.get("main_buttons", [])
             else:
                 # Localized empty-note message
                 session['reply'] = button_data.get("empty_custom_note", "Please type a message in the box.")
-                session['options'] = button_data["main_buttons"]
+                session['options'] = button_data.get("main_buttons", [])
 
         else:
             user_input = request.form.get("user_input", "").strip()
@@ -344,15 +357,15 @@ def handle_chat():
                 if session['options'] and back_text not in session['options']:
                     session['options'].append(back_text)
                 elif not session['options']:
-                    session['options'] = button_data["main_buttons"]
+                    session['options'] = button_data.get("main_buttons", [])
 
                 if "action" in button_info:
                     action = button_info["action"]
                     # Map localized action labels -> internal role
                     role = action_to_role(action, lang)
 
-                    # Localize the role label in the email subject
-                    subject = f"{localize_role(role, lang)} Request"
+                    # Fully localized email subject
+                    subject = subject_label(role, lang)
 
                     notification_message = button_info.get("note", button_data.get(f"{role}_notification", ""))
                     if not notification_message:
@@ -364,16 +377,16 @@ def handle_chat():
                         user_input=user_input,
                         reply_message=notification_message
                     )
-                    session['options'] = button_data["main_buttons"]
+                    session['options'] = button_data.get("main_buttons", [])
             else:
-                # Step 5: localized "didn't understand" message
+                # Localized "didn't understand" message
                 session['reply'] = button_data.get("unknown_input", "I'm sorry, I didn't understand that. Please use the buttons provided.")
-                session['options'] = button_data["main_buttons"]
+                session['options'] = button_data.get("main_buttons", [])
 
         return redirect(url_for('handle_chat'))
 
-    reply = session.pop('reply', button_data["greeting"])
-    options = session.pop('options', button_data["main_buttons"])
+    reply = session.pop('reply', button_data.get("greeting", "Hello!"))
+    options = session.pop('options', button_data.get("main_buttons", []))
     return render_template("chat.html", reply=reply, options=options, button_data=button_data)
 
 @app.route("/reset-language")
@@ -420,65 +433,126 @@ def analytics():
     multi_baby_labels, multi_baby_values = [], []
     try:
         with engine.connect() as connection:
-            avg_time_result = connection.execute(text("""
-                SELECT AVG(EXTRACT(EPOCH FROM (completion_timestamp - timestamp))) as avg_seconds
-                FROM requests
-                WHERE completion_timestamp IS NOT NULL;
-            """)).scalar_one_or_none()
+            dialect = engine.dialect.name  # 'postgresql', 'sqlite', etc.
+
+            if dialect == 'sqlite':
+                # Average response time (seconds)
+                avg_time_result = connection.execute(text("""
+                    SELECT AVG( (julianday(completion_timestamp) - julianday(timestamp)) * 86400.0 )
+                    FROM requests
+                    WHERE completion_timestamp IS NOT NULL;
+                """)).scalar_one_or_none()
+
+                # Top categories
+                top_requests_result = connection.execute(text("""
+                    SELECT category, COUNT(id) FROM requests
+                    GROUP BY category ORDER BY COUNT(id) DESC;
+                """)).fetchall()
+
+                # Most requested items
+                most_requested_result = connection.execute(text("""
+                    SELECT user_input, COUNT(id) as count
+                    FROM requests
+                    GROUP BY user_input
+                    ORDER BY count DESC
+                    LIMIT 5;
+                """)).fetchall()
+
+                # Requests by hour
+                requests_by_hour_result = connection.execute(text("""
+                    SELECT CAST(strftime('%H', timestamp) AS INTEGER) AS hour, COUNT(id)
+                    FROM requests
+                    GROUP BY hour
+                    ORDER BY hour;
+                """)).fetchall()
+
+                # First-time vs multi
+                first_baby_result = connection.execute(text("""
+                    SELECT user_input, COUNT(id) as count
+                    FROM requests
+                    WHERE is_first_baby = 1
+                    GROUP BY user_input
+                    ORDER BY count DESC
+                    LIMIT 5;
+                """)).fetchall()
+
+                multi_baby_result = connection.execute(text("""
+                    SELECT user_input, COUNT(id) as count
+                    FROM requests
+                    WHERE is_first_baby = 0
+                    GROUP BY user_input
+                    ORDER BY count DESC
+                    LIMIT 5;
+                """)).fetchall()
+
+            else:
+                # PostgreSQL
+                avg_time_result = connection.execute(text("""
+                    SELECT AVG(EXTRACT(EPOCH FROM (completion_timestamp - timestamp))) as avg_seconds
+                    FROM requests
+                    WHERE completion_timestamp IS NOT NULL;
+                """)).scalar_one_or_none()
+
+                top_requests_result = connection.execute(text("""
+                    SELECT category, COUNT(id) FROM requests
+                    GROUP BY category ORDER BY COUNT(id) DESC;
+                """)).fetchall()
+
+                most_requested_result = connection.execute(text("""
+                    SELECT user_input, COUNT(id) as count
+                    FROM requests
+                    GROUP BY user_input
+                    ORDER BY count DESC
+                    LIMIT 5;
+                """)).fetchall()
+
+                requests_by_hour_result = connection.execute(text("""
+                    SELECT EXTRACT(HOUR FROM timestamp) as hour, COUNT(id)
+                    FROM requests
+                    GROUP BY hour
+                    ORDER BY hour;
+                """)).fetchall()
+
+                first_baby_result = connection.execute(text("""
+                    SELECT user_input, COUNT(id) as count
+                    FROM requests
+                    WHERE is_first_baby IS TRUE
+                    GROUP BY user_input
+                    ORDER BY count DESC
+                    LIMIT 5;
+                """)).fetchall()
+
+                multi_baby_result = connection.execute(text("""
+                    SELECT user_input, COUNT(id) as count
+                    FROM requests
+                    WHERE is_first_baby IS FALSE
+                    GROUP BY user_input
+                    ORDER BY count DESC
+                    LIMIT 5;
+                """)).fetchall()
+
             if avg_time_result is not None:
                 minutes, seconds = divmod(int(avg_time_result), 60)
                 avg_response_time = f"{minutes}m {seconds}s"
 
-            top_requests_result = connection.execute(text("""
-                SELECT category, COUNT(id) FROM requests
-                GROUP BY category ORDER BY COUNT(id) DESC;
-            """)).fetchall()
             top_requests_labels = [row[0] for row in top_requests_result]
             top_requests_values = [row[1] for row in top_requests_result]
 
-            most_requested_result = connection.execute(text("""
-                SELECT user_input, COUNT(id) as count
-                FROM requests
-                GROUP BY user_input
-                ORDER BY count DESC
-                LIMIT 5;
-            """)).fetchall()
             most_requested_labels = [row[0] for row in most_requested_result]
             most_requested_values = [row[1] for row in most_requested_result]
 
-            requests_by_hour_result = connection.execute(text("""
-                SELECT EXTRACT(HOUR FROM timestamp) as hour, COUNT(id)
-                FROM requests
-                GROUP BY hour
-                ORDER BY hour;
-            """)).fetchall()
             hourly_counts = defaultdict(int)
             for hour, count in requests_by_hour_result:
                 hourly_counts[int(hour)] = count
             requests_by_hour_labels = [f"{h}:00" for h in range(24)]
             requests_by_hour_values = [hourly_counts[h] for h in range(24)]
 
-            first_baby_result = connection.execute(text("""
-                SELECT user_input, COUNT(id) as count
-                FROM requests
-                WHERE is_first_baby IS TRUE
-                GROUP BY user_input
-                ORDER BY count DESC
-                LIMIT 5;
-            """)).fetchall()
             first_baby_labels = [row[0] for row in first_baby_result]
             first_baby_values = [row[1] for row in first_baby_result]
 
-            multi_baby_result = connection.execute(text("""
-                SELECT user_input, COUNT(id) as count
-                FROM requests
-                WHERE is_first_baby IS FALSE
-                GROUP BY user_input
-                ORDER BY count DESC
-                LIMIT 5;
-            """)).fetchall()
             multi_baby_labels = [row[0] for row in multi_baby_result]
             multi_baby_values = [row[1] for row in multi_baby_result]
+
     except Exception as e:
         print(f"ERROR fetching analytics data: {e}")
 
@@ -543,6 +617,7 @@ def assignments():
     except Exception as e:
         print(f"ERROR fetching assignments: {e}")
 
+    # Note: assignments.html expects 'rooms', 'nurses', 'assignments'
     return render_template('assignments.html', rooms=ALL_ROOMS, nurses=all_nurses, assignments=current_assignments)
 
 @app.route('/login', methods=['GET', 'POST'])
