@@ -95,17 +95,17 @@
     
     <ul id="requests-list">
         {% for request in active_requests %}
-            <li class="request-item {{ request.role }}" 
-                id="{{ request.id }}"
-                data-id="{{ request.id }}"
-                data-room="{{ request.room }}"
-                data-request="{{ request.request }}"
-                data-role="{{ request.role }}"
-                data-timestamp="{{ request.timestamp }}">
+            <li class="request-item {{ request.role | e }}" 
+                id="{{ request.id | e }}"
+                data-id="{{ request.id | e }}"
+                data-room="{{ request.room | e }}"
+                data-request="{{ request.request | e }}"
+                data-role="{{ request.role | e }}"
+                data-timestamp="{{ request.timestamp | e }}">
                 
-                <!-- Explicitly escape user-provided request text -->
+                <!-- Escape user-provided request text -->
                 <p>{{ request.request | e }}</p>
-                <span>Room: {{ request.room }}</span>
+                <span>Room: {{ request.room | e }}</span>
                 <span class="role-span">For: {{ request.role | upper }}</span>
                 <span class="timestamp"></span>
                 <button class="ack-button">Acknowledge</button>
@@ -149,7 +149,6 @@
         oscillator.stop(audioContext.currentTime + 0.5);
     }
 
-    // Single, master function to update timers + color states
     function updateAllTimersAndColors() {
         const requestItems = document.querySelectorAll('#requests-list .request-item');
         const now = new Date();
@@ -174,11 +173,11 @@
         });
     }
 
-    // Safe element builder (avoids innerHTML)
+    // Safe element builder (no innerHTML)
     function el(tag, className, text) {
         const e = document.createElement(tag);
         if (className) e.className = className;
-        if (text !== undefined) e.textContent = text; // textContent prevents HTML injection
+        if (text !== undefined) e.textContent = text;
         return e;
     }
 
@@ -194,8 +193,8 @@
         item.dataset.role = data.role;
         item.dataset.timestamp = data.timestamp;
 
-        const p = el('p', null, data.request);                     // safe text
-        const room = el('span', null, `Room: ${data.room}`);       // safe text
+        const p = el('p', null, data.request);
+        const room = el('span', null, `Room: ${data.room}`);
         const roleSpan = el('span', 'role-span', `For: ${data.role.toUpperCase()}`);
         const ts = el('span', 'timestamp', '');
 
@@ -222,7 +221,7 @@
         updateAllTimersAndColors();
     }
 
-    // --- SocketIO Event Listeners ---
+    // Socket listeners
     socket.on('new_request', function(data) {
         addRequestToDashboard(data);
         playNotificationSound();
@@ -254,11 +253,9 @@
         }
     });
 
-    // --- Main Setup ---
     document.addEventListener('DOMContentLoaded', function() {
         const requestsList = document.getElementById('requests-list');
 
-        // Event delegation for all buttons
         requestsList.addEventListener('click', function(event) {
             const button = event.target;
             if (button.tagName !== 'BUTTON') return;
@@ -295,9 +292,7 @@
             }
         });
 
-        // Start the single master timer
         setInterval(updateAllTimersAndColors, 60000);
-        // Run once on page load
         updateAllTimersAndColors();
     });
 </script>
