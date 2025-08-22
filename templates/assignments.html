@@ -1,62 +1,87 @@
 <!DOCTYPE html>
-<html lang="{{ session.get('language', 'en') }}">
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Staff Assignments</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    :root { --core-blue:#00205b; --accent-blue:#007eb4; }
-    body { font-family:'Inter',sans-serif; background-color:#f4f7f9; }
-    .button-primary { background-color:var(--core-blue); color:#fff; }
-    .button-primary:hover { background-color:#093582; }
-    .link { color:var(--accent-blue); }
-    .link:hover { color:var(--core-blue); }
+    :root {
+      --core-blue: #00205b;
+      --accent-blue: #007eb4;
+    }
+    body { font-family: 'Inter', sans-serif; background-color: #f4f7f9; }
+    .button-primary { background-color: var(--core-blue); }
+    .button-primary:hover { background-color: #093582; }
+    .link { color: var(--accent-blue); }
+    .link:hover { color: var(--core-blue); }
   </style>
 </head>
 <body class="p-4 sm:p-6 lg:p-8">
   <div class="container mx-auto max-w-5xl bg-white p-6 sm:p-8 rounded-xl shadow-md">
     <header class="mb-6 text-center">
       <h1 class="text-3xl font-bold text-gray-800">Staff Assignments</h1>
-      <p class="text-md text-gray-500 mt-1">Assign nurses to rooms for today.</p>
+      <p class="text-md text-gray-500 mt-1">Assign today’s primary nurse per room and CNA coverage by zone.</p>
     </header>
 
-    <!-- Assignments Form (matches app.py expectations) -->
     <form method="POST" action="{{ url_for('assignments') }}">
-      <div class="mb-4 flex items-center gap-3">
-        <label for="nurseFilter" class="text-sm text-gray-700">Filter by nurse:</label>
-        <select id="nurseFilter" class="border-gray-300 rounded-md text-sm py-1 px-2">
-          <option value="">All</option>
-          {% for n in nurses %}
-            <option value="{{ n }}">{{ n }}</option>
-          {% endfor %}
-          <option value="unassigned">Unassigned</option>
-        </select>
+      <!-- CNA zone picks -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div class="border rounded-lg p-4 bg-gray-50">
+          <label for="cna_front" class="block text-sm font-medium text-gray-700">
+            Front CNA (Rooms {{ cna_front_rooms|join(', ') }})
+          </label>
+          <select
+            id="cna_front"
+            name="cna_front"
+            class="mt-2 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+          >
+            <option value="unassigned" {% if not current_cna_front %}selected{% endif %}>Unassigned</option>
+            {% for cna in all_cnas %}
+              <option value="{{ cna }}" {% if current_cna_front == cna %}selected{% endif %}>{{ cna }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="border rounded-lg p-4 bg-gray-50">
+          <label for="cna_back" class="block text-sm font-medium text-gray-700">
+            Back CNA (Rooms {{ cna_back_rooms|join(', ') }})
+          </label>
+          <select
+            id="cna_back"
+            name="cna_back"
+            class="mt-2 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+          >
+            <option value="unassigned" {% if not current_cna_back %}selected{% endif %}>Unassigned</option>
+            {% for cna in all_cnas %}
+              <option value="{{ cna }}" {% if current_cna_back == cna %}selected{% endif %}>{{ cna }}</option>
+            {% endfor %}
+          </select>
+        </div>
       </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" id="roomsGrid">
+      <!-- Nurse per-room grid -->
+      <div class="mb-3">
+        <h2 class="text-xl font-semibold text-gray-700 mb-2">Nurse Assignments (per room)</h2>
+        <p class="text-sm text-gray-600 mb-4">Select a nurse for each room. Choose <em>Unassigned</em> to clear.</p>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {% for room in rooms %}
-          <div class="border rounded-lg p-4">
-            <div class="flex items-baseline justify-between">
-              <h2 class="text-lg font-semibold text-gray-800">Room {{ room }}</h2>
-              {% set assigned = assignments.get(room) %}
-              <span class="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600 assigned-badge">
-                {{ assigned if assigned else 'unassigned' }}
-              </span>
-            </div>
-            <label for="nurse_for_room_{{ room }}" class="block text-sm font-medium text-gray-700 mt-3">
-              Nurse
+          {% set selected_nurse = assignments.get(room) %}
+          <div class="border rounded-lg p-4 bg-gray-50">
+            <label for="nurse_for_room_{{ room }}" class="block text-sm font-medium text-gray-700">
+              Room {{ room }}
             </label>
             <select
-              name="nurse_for_room_{{ room }}"
               id="nurse_for_room_{{ room }}"
-              class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
-              data-room="{{ room }}"
+              name="nurse_for_room_{{ room }}"
+              class="mt-2 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
             >
-              <option value="unassigned" {% if not assigned %}selected{% endif %}>Unassigned</option>
-              {% for n in nurses %}
-                <option value="{{ n }}" {% if assigned == n %}selected{% endif %}>{{ n }}</option>
+              <option value="unassigned" {% if not selected_nurse %}selected{% endif %}>Unassigned</option>
+              {% for nurse in nurses %}
+                <option value="{{ nurse }}" {% if selected_nurse == nurse %}selected{% endif %}>{{ nurse }}</option>
               {% endfor %}
             </select>
           </div>
@@ -64,7 +89,8 @@
       </div>
 
       <div class="mt-8">
-        <button type="submit" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium button-primary transition-colors">
+        <button type="submit"
+          class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white button-primary transition-colors">
           Save All Assignments
         </button>
       </div>
@@ -75,31 +101,5 @@
       <a href="{{ url_for('analytics') }}" class="link">View Analytics →</a>
     </div>
   </div>
-
-  <script>
-    // Live-update the small badge and enable filtering by assigned nurse
-    document.addEventListener('DOMContentLoaded', () => {
-      const grid = document.getElementById('roomsGrid');
-      const filter = document.getElementById('nurseFilter');
-
-      grid.addEventListener('change', (e) => {
-        const sel = e.target;
-        if (!sel.name || !sel.name.startsWith('nurse_for_room_')) return;
-        const card = sel.closest('.border');
-        const badge = card.querySelector('.assigned-badge');
-        badge.textContent = sel.value === 'unassigned' ? 'unassigned' : sel.value;
-      });
-
-      filter.addEventListener('change', () => {
-        const value = filter.value;
-        const cards = grid.querySelectorAll('.border');
-        cards.forEach(card => {
-          const sel = card.querySelector('select[name^="nurse_for_room_"]');
-          const assigned = sel.value || 'unassigned';
-          card.style.display = (!value || value === assigned) ? '' : 'none';
-        });
-      });
-    });
-  </script>
 </body>
 </html>
