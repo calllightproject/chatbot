@@ -3,7 +3,6 @@ import eventlet
 eventlet.monkey_patch()
 
 import os
-import json
 import smtplib
 import importlib
 from datetime import datetime, date, timezone
@@ -18,7 +17,14 @@ from sqlalchemy.exc import ProgrammingError
 # --- App Configuration ---
 app = Flask(__name__, template_folder='templates')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-strong-fallback-secret-key-for-local-development")
-socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*", manage_session=False, ping_timeout=20, ping_interval=10)
+socketio = SocketIO(
+    app,
+    async_mode='eventlet',
+    cors_allowed_origins="*",
+    manage_session=False,
+    ping_timeout=20,
+    ping_interval=10
+)
 
 # --- Master Data Lists ---
 INITIAL_STAFF = {
@@ -28,14 +34,14 @@ INITIAL_STAFF = {
 }
 ALL_ROOMS = [str(room) for room in range(231, 261)]
 
-# CNA “zones”
-CNA_FRONT_ROOMS = [str(r) for r in range(231, 245)] + ["260"]
-CNA_BACK_ROOMS  = [str(r) for r in range(245, 260)]
+# Special “room” keys used to store CNA coverage in the assignments table
+CNA_FRONT_KEY = "__CNA_FRONT__"
+CNA_BACK_KEY  = "__CNA_BACK__"
 
 # --- Database Configuration ---
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
-    print("WARNING: DATABASE_URL environment variable not found. Using a local SQLite database.")
+    print("WARNING: DATABASE_URL not found. Using local SQLite database.")
     DATABASE_URL = "sqlite:///local_call_light.db"
 
 engine = create_engine(DATABASE_URL, pool_recycle=280, pool_pre_ping=True)
@@ -45,7 +51,7 @@ def setup_database():
     try:
         with engine.connect() as connection:
             with connection.begin():
-                print("Running CREATE TABLE statements...")
+                # requests
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS requests (
                         id SERIAL PRIMARY KEY,
@@ -60,6 +66,7 @@ def setup_database():
                         is_first_baby BOOLEAN
                     );
                 """))
+                # assignments
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS assignments (
                         id SERIAL PRIMARY KEY,
@@ -69,6 +76,7 @@ def setup_database():
                         UNIQUE(assignment_date, room_number)
                     );
                 """))
+                # audit_log
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS audit_log (
                         id SERIAL PRIMARY KEY,
@@ -77,6 +85,7 @@ def setup_database():
                         details TEXT
                     );
                 """))
+                # staff
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS staff (
                         id SERIAL PRIMARY KEY,
@@ -84,26 +93,15 @@ def setup_database():
                         role VARCHAR(50) NOT NULL
                     );
                 """))
-                print("CREATE TABLE statements complete.")
 
-                count = connection.execute(text("SELECT COUNT(id) FROM staff;")).scalar()
+                # seed staff if empty
+                count = connection.execute(text("SELECT COUNT(id) FROM staff;")).scalar() or 0
                 if count == 0:
-                    print("Staff table is empty. Populating with initial staff...")
                     for name, role in INITIAL_STAFF.items():
                         connection.execute(text("""
                             INSERT INTO staff (name, role) VALUES (:name, :role)
                             ON CONFLICT (name) DO NOTHING;
                         """), {"name": name, "role": role})
-                    print("Initial staff population complete.")
-
-            # Gentle add of deferral_timestamp if missing (won't crash if exists)
-            with connection.begin():
-                try:
-                    connection.execute(text("ALTER TABLE requests ADD COLUMN deferral_timestamp TIMESTAMP WITH TIME ZONE;"))
-                except ProgrammingError:
-                    pass
-
-        print("Database setup complete. Tables are ready.")
     except Exception as e:
         print(f"CRITICAL ERROR during database setup: {e}")
 
@@ -112,13 +110,13 @@ setup_database()
 # --- Smart Routing Logic ---
 def route_note_intelligently(note_text):
     NURSE_KEYWORDS = ['pain', 'medication', 'bleeding', 'nausea', 'dizzy', 'sick', 'iv', 'pump', 'staples', 'incision']
-    note_lower = note_text.lower()
+    note_lower = (note_text or "").lower()
     for keyword in NURSE_KEYWORDS:
         if keyword in note_lower:
             return 'nurse'
     return 'cna'
 
-# --- Core Helper Functions ---
+# --- Helpers ---
 def log_to_audit_trail(event_type, details):
     try:
         now_utc = datetime.now(timezone.utc)
@@ -127,18 +125,13 @@ def log_to_audit_trail(event_type, details):
                 connection.execute(text("""
                     INSERT INTO audit_log (timestamp, event_type, details)
                     VALUES (:timestamp, :event_type, :details);
-                """), {
-                    "timestamp": now_utc,
-                    "event_type": event_type,
-                    "details": details
-                })
+                """), {"timestamp": now_utc, "event_type": event_type, "details": details})
 
         socketio.emit('new_audit_log', {
             'timestamp': now_utc.strftime('%Y-%m-%d %H:%M:%S') + ' UTC',
             'event_type': event_type,
             'details': details
         })
-
     except Exception as e:
         print(f"ERROR logging to audit trail: {e}")
 
@@ -190,8 +183,11 @@ def process_request(role, subject, user_input, reply_message):
         request_id, role, user_input, reply_message, room_number, is_first_baby
     )
     socketio.emit('new_request', {
-        'id': request_id, 'room': room_number, 'request': user_input,
-        'role': role, 'timestamp': datetime.now(timezone.utc).isoformat()
+        'id': request_id,
+        'room': room_number,
+        'request': user_input,
+        'role': role,
+        'timestamp': datetime.now(timezone.utc).isoformat()
     })
     return reply_message
 
@@ -213,13 +209,12 @@ def set_bereavement_room(room_id):
 @app.route("/", methods=["GET", "POST"])
 def language_selector():
     if request.method == "POST":
-        session["language"] = request.form.get("language")
+        session["language"] = request.form.get("language") or "en"
         pathway = session.get("pathway", "standard")
         if pathway == "bereavement":
             session["is_first_baby"] = None
             return redirect(url_for("handle_chat"))
-        else:
-            return redirect(url_for("demographics"))
+        return redirect(url_for("demographics"))
     return render_template("language.html")
 
 @app.route("/demographics", methods=["GET", "POST"])
@@ -231,20 +226,29 @@ def demographics():
         button_data = button_config.button_data
     except (ImportError, AttributeError):
         return "Error: Language configuration file is missing or invalid."
+
     if request.method == "POST":
         is_first_baby_response = request.form.get("is_first_baby")
         session["is_first_baby"] = True if is_first_baby_response == 'yes' else False
         return redirect(url_for("handle_chat"))
+
     question_text = button_data.get("demographic_question", "Is this your first baby?")
     yes_text = button_data.get("demographic_yes", "Yes")
     no_text = button_data.get("demographic_no", "No")
-    return render_template("demographics.html", question_text=question_text, yes_text=yes_text, no_text=no_text)
+    return render_template("demographics.html",
+                           question_text=question_text,
+                           yes_text=yes_text,
+                           no_text=no_text)
 
 @app.route("/chat", methods=["GET", "POST"])
 def handle_chat():
     pathway = session.get("pathway", "standard")
     lang = session.get("language", "en")
-    config_module_name = f"button_config_bereavement_{lang}" if pathway == "bereavement" else f"button_config_{lang}"
+    config_module_name = (
+        f"button_config_bereavement_{lang}"
+        if pathway == "bereavement"
+        else f"button_config_{lang}"
+    )
     try:
         button_config = importlib.import_module(config_module_name)
         button_data = button_config.button_data
@@ -254,10 +258,10 @@ def handle_chat():
 
     if request.method == 'POST':
         if request.form.get("action") == "send_note":
-            note_text = request.form.get("custom_note", "").strip()
+            note_text = request.form.get("custom_note")
             if note_text:
                 role = route_note_intelligently(note_text)
-                reply_message = button_data.get(f"{role}_notification", button_data.get("nurse_notification", "Your request has been sent."))
+                reply_message = button_data.get(f"{role}_notification", "Your request has been sent.")
                 session['reply'] = process_request(
                     role=role,
                     subject="Custom Patient Note",
@@ -266,12 +270,11 @@ def handle_chat():
                 )
                 session['options'] = button_data["main_buttons"]
             else:
-                # language-aware empty message fallback
                 session['reply'] = button_data.get("empty_custom_note", "Please type a message in the box.")
                 session['options'] = button_data["main_buttons"]
 
         else:
-            user_input = request.form.get("user_input", "").strip()
+            user_input = (request.form.get("user_input") or "").strip()
             if user_input == button_data.get("back_text", "⬅ Back"):
                 session.pop('reply', None)
                 session.pop('options', None)
@@ -292,7 +295,7 @@ def handle_chat():
                     action = button_info["action"]
                     role = "cna" if action == "Notify CNA" else "nurse"
                     subject = f"{role.upper()} Request"
-                    notification_message = button_info.get("note", button_data.get(f"{role}_notification", "Your request has been sent."))
+                    notification_message = button_info.get("note", button_data.get(f"{role}_notification", "✅ Notified."))
                     session['reply'] = process_request(
                         role=role,
                         subject=subject,
@@ -301,8 +304,7 @@ def handle_chat():
                     )
                     session['options'] = button_data["main_buttons"]
             else:
-                # language-aware fallback
-                session['reply'] = button_data.get("not_understood", "I'm sorry, I didn't understand that. Please use the buttons provided.")
+                session['reply'] = "I'm sorry, I didn't understand that. Please use the buttons provided."
                 session['options'] = button_data["main_buttons"]
 
         return redirect(url_for('handle_chat'))
@@ -339,6 +341,7 @@ def dashboard():
         print(f"ERROR fetching active requests: {e}")
     return render_template("dashboard.html", active_requests=active_requests)
 
+# --- Analytics ---
 @app.route('/analytics')
 def analytics():
     avg_response_time = "N/A"
@@ -351,64 +354,55 @@ def analytics():
         with engine.connect() as connection:
             avg_time_result = connection.execute(text("""
                 SELECT AVG(EXTRACT(EPOCH FROM (completion_timestamp - timestamp))) as avg_seconds
-                FROM requests
-                WHERE completion_timestamp IS NOT NULL;
+                FROM requests WHERE completion_timestamp IS NOT NULL;
             """)).scalar_one_or_none()
             if avg_time_result is not None:
                 minutes, seconds = divmod(int(avg_time_result), 60)
                 avg_response_time = f"{minutes}m {seconds}s"
 
-            top_requests_result = connection.execute(text("""
+            # category counts
+            rows = connection.execute(text("""
                 SELECT category, COUNT(id) FROM requests
-                GROUP BY category
-                ORDER BY COUNT(id) DESC;
+                GROUP BY category ORDER BY COUNT(id) DESC;
             """)).fetchall()
-            top_requests_labels = [row[0] for row in top_requests_result]
-            top_requests_values = [row[1] for row in top_requests_result]
+            top_requests_labels = [r[0] for r in rows]
+            top_requests_values = [r[1] for r in rows]
 
-            most_requested_result = connection.execute(text("""
-                SELECT user_input, COUNT(id) as count
-                FROM requests
-                GROUP BY user_input
-                ORDER BY count DESC
-                LIMIT 5;
+            # most requested items
+            rows = connection.execute(text("""
+                SELECT user_input, COUNT(id) as count FROM requests
+                GROUP BY user_input ORDER BY count DESC LIMIT 5;
             """)).fetchall()
-            most_requested_labels = [row[0] for row in most_requested_result]
-            most_requested_values = [row[1] for row in most_requested_result]
+            most_requested_labels = [r[0] for r in rows]
+            most_requested_values = [r[1] for r in rows]
 
-            requests_by_hour_result = connection.execute(text("""
+            # hourly distribution
+            rows = connection.execute(text("""
                 SELECT EXTRACT(HOUR FROM timestamp) as hour, COUNT(id)
-                FROM requests
-                GROUP BY hour
-                ORDER BY hour;
+                FROM requests GROUP BY hour ORDER BY hour;
             """)).fetchall()
             hourly_counts = defaultdict(int)
-            for hour, count in requests_by_hour_result:
+            for hour, count in rows:
                 hourly_counts[int(hour)] = count
             requests_by_hour_labels = [f"{h}:00" for h in range(24)]
             requests_by_hour_values = [hourly_counts[h] for h in range(24)]
 
-            first_baby_result = connection.execute(text("""
+            # prime/multip
+            rows = connection.execute(text("""
                 SELECT user_input, COUNT(id) as count
-                FROM requests
-                WHERE is_first_baby IS TRUE
-                GROUP BY user_input
-                ORDER BY count DESC
-                LIMIT 5;
+                FROM requests WHERE is_first_baby IS TRUE
+                GROUP BY user_input ORDER BY count DESC LIMIT 5;
             """)).fetchall()
-            first_baby_labels = [row[0] for row in first_baby_result]
-            first_baby_values = [row[1] for row in first_baby_result]
+            first_baby_labels = [r[0] for r in rows]
+            first_baby_values = [r[1] for r in rows]
 
-            multi_baby_result = connection.execute(text("""
+            rows = connection.execute(text("""
                 SELECT user_input, COUNT(id) as count
-                FROM requests
-                WHERE is_first_baby IS FALSE
-                GROUP BY user_input
-                ORDER BY count DESC
-                LIMIT 5;
+                FROM requests WHERE is_first_baby IS FALSE
+                GROUP BY user_input ORDER BY count DESC LIMIT 5;
             """)).fetchall()
-            multi_baby_labels = [row[0] for row in multi_baby_result]
-            multi_baby_values = [row[1] for row in multi_baby_result]
+            multi_baby_labels = [r[0] for r in rows]
+            multi_baby_values = [r[1] for r in rows]
     except Exception as e:
         print(f"ERROR fetching analytics data: {e}")
 
@@ -427,18 +421,12 @@ def analytics():
         multi_baby_values=multi_baby_values
     )
 
+# --- Assignments (Nurses by room + CNA Front/Back) ---
 @app.route('/assignments', methods=['GET', 'POST'])
 def assignments():
-    # Optional gate: if you require manager login, keep this
-    # if not session.get('manager_logged_in'):
-    #     return redirect(url_for('login'))
-
     today = date.today()
 
-    # Room groupings for CNA front/back (as you described)
-    FRONT_ROOMS = [str(r) for r in list(range(231, 245)) + [260]]
-    BACK_ROOMS  = [str(r) for r in range(245, 260)]
-
+    # Load staff lists
     all_nurses, all_cnas = [], []
     try:
         with engine.connect() as connection:
@@ -450,14 +438,14 @@ def assignments():
         print(f"ERROR fetching staff lists: {e}")
 
     if request.method == 'POST':
+        # Save per-room nurse assignments
         try:
             with engine.connect() as connection:
                 with connection.begin():
-                    # Save per-room nurse assignments if your form posts fields like nurse_for_room_<room>
                     for room_number in ALL_ROOMS:
                         field = f"nurse_for_room_{room_number}"
                         nurse_name = request.form.get(field)
-                        if nurse_name and nurse_name != 'unassigned':
+                        if nurse_name and nurse_name.lower() != 'unassigned':
                             connection.execute(text("""
                                 INSERT INTO assignments (assignment_date, room_number, nurse_name)
                                 VALUES (:date, :room, :nurse)
@@ -465,14 +453,48 @@ def assignments():
                                 DO UPDATE SET nurse_name = EXCLUDED.nurse_name;
                             """), {"date": today, "room": room_number, "nurse": nurse_name})
                         else:
-                            # If unassigned, remove any existing row
                             connection.execute(text("""
                                 DELETE FROM assignments
                                 WHERE assignment_date = :date AND room_number = :room;
                             """), {"date": today, "room": room_number})
-            print("Assignments saved.")
         except Exception as e:
             print(f"ERROR saving assignments: {e}")
+
+        # Save CNA Front/Back coverage
+        front_name = request.form.get("cna_front")
+        back_name  = request.form.get("cna_back")
+        try:
+            with engine.connect() as connection:
+                with connection.begin():
+                    # FRONT
+                    if front_name and front_name.lower() != 'unassigned':
+                        connection.execute(text("""
+                            INSERT INTO assignments (assignment_date, room_number, nurse_name)
+                            VALUES (:date, :room, :nurse)
+                            ON CONFLICT (assignment_date, room_number)
+                            DO UPDATE SET nurse_name = EXCLUDED.nurse_name;
+                        """), {"date": today, "room": CNA_FRONT_KEY, "nurse": front_name})
+                    else:
+                        connection.execute(text("""
+                            DELETE FROM assignments
+                            WHERE assignment_date = :date AND room_number = :room;
+                        """), {"date": today, "room": CNA_FRONT_KEY})
+
+                    # BACK
+                    if back_name and back_name.lower() != 'unassigned':
+                        connection.execute(text("""
+                            INSERT INTO assignments (assignment_date, room_number, nurse_name)
+                            VALUES (:date, :room, :nurse)
+                            ON CONFLICT (assignment_date, room_number)
+                            DO UPDATE SET nurse_name = EXCLUDED.nurse_name;
+                        """), {"date": today, "room": CNA_BACK_KEY, "nurse": back_name})
+                    else:
+                        connection.execute(text("""
+                            DELETE FROM assignments
+                            WHERE assignment_date = :date AND room_number = :room;
+                        """), {"date": today, "room": CNA_BACK_KEY})
+        except Exception as e:
+            print(f"ERROR saving CNA coverage: {e}")
 
         return redirect(url_for('dashboard'))
 
@@ -480,27 +502,34 @@ def assignments():
     current_assignments = {}
     try:
         with engine.connect() as connection:
-            rows = connection.execute(
-                text("SELECT room_number, nurse_name FROM assignments WHERE assignment_date = :date;"),
-                {"date": today}
-            ).fetchall()
-            for room, nurse in rows:
-                current_assignments[str(room)] = nurse
+            rows = connection.execute(text("""
+                SELECT room_number, nurse_name
+                FROM assignments
+                WHERE assignment_date = :date
+            """), {"date": today}).fetchall()
+            for r in rows:
+                current_assignments[r.room_number] = r.nurse_name
     except Exception as e:
-        print(f"ERROR fetching current assignments: {e}")
+        print(f"ERROR fetching assignments: {e}")
 
+    # Extract CNA selections (if any)
+    cna_front_current = current_assignments.get(CNA_FRONT_KEY)
+    cna_back_current  = current_assignments.get(CNA_BACK_KEY)
+
+    # Render (pass duplicate names for template compatibility)
     return render_template(
         'assignments.html',
-        # Provide everything the template might reference
-        all_rooms=ALL_ROOMS,
-        all_nurses=all_nurses,
+        rooms=ALL_ROOMS,              # for templates expecting 'rooms'
+        all_rooms=ALL_ROOMS,          # for templates expecting 'all_rooms'
+        nurses=all_nurses,            # for templates expecting 'nurses'
+        all_nurses=all_nurses,        # for templates expecting 'all_nurses'
         all_cnas=all_cnas,
-        current_assignments=current_assignments,
-        cna_front_rooms=FRONT_ROOMS,
-        cna_back_rooms=BACK_ROOMS
+        current_assignments={k: v for k, v in current_assignments.items() if k not in (CNA_FRONT_KEY, CNA_BACK_KEY)},
+        cna_front=cna_front_current,
+        cna_back=cna_back_current
     )
 
-
+# --- Manager auth & tools ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -532,38 +561,31 @@ def manager_dashboard():
                         role = request.form.get('role')
                         if name and role:
                             connection.execute(text("""
-                                INSERT INTO staff (name, role)
-                                VALUES (:name, :role)
+                                INSERT INTO staff (name, role) VALUES (:name, :role)
                                 ON CONFLICT (name) DO NOTHING;
                             """), {"name": name, "role": role})
                             log_to_audit_trail("Staff Added", f"Added staff member: {name} ({role})")
-
                     elif action == 'remove_staff':
                         staff_id = request.form.get('staff_id')
                         if staff_id:
                             staff_member = connection.execute(
-                                text("SELECT name, role FROM staff WHERE id = :id;"),
-                                {"id": staff_id}
+                                text("SELECT name, role FROM staff WHERE id = :id;"), {"id": staff_id}
                             ).first()
                             if staff_member:
                                 connection.execute(text("DELETE FROM staff WHERE id = :id;"), {"id": staff_id})
                                 log_to_audit_trail("Staff Removed", f"Removed staff member: {staff_member.name} ({staff_member.role})")
         except Exception as e:
             print(f"ERROR updating staff: {e}")
-
         return redirect(url_for('manager_dashboard'))
 
-    staff_list = []
-    audit_log = []
+    staff_list, audit_log = [], []
     try:
         with engine.connect() as connection:
             staff_result = connection.execute(text("SELECT id, name, role FROM staff ORDER BY name;"))
             staff_list = staff_result.fetchall()
             audit_result = connection.execute(text("""
                 SELECT timestamp, event_type, details
-                FROM audit_log
-                ORDER BY timestamp DESC
-                LIMIT 50;
+                FROM audit_log ORDER BY timestamp DESC LIMIT 50;
             """))
             audit_log = audit_result.fetchall()
     except Exception as e:
@@ -592,18 +614,16 @@ def handle_defer_request(data):
     try:
         with engine.connect() as connection:
             with connection.begin():
-                # IMPORTANT: do NOT update 'timestamp' here (keep original arrival time)
+                # Do NOT overwrite original timestamp; only mark deferral + route to nurse
                 connection.execute(text("""
                     UPDATE requests
-                    SET category = 'nurse',
-                        deferral_timestamp = :now
+                    SET category = 'nurse', deferral_timestamp = :now
                     WHERE request_id = :request_id;
                 """), {"now": now_utc, "request_id": request_id})
-
-        # Do not send a new timestamp in the event, so the dashboard timer won't reset
         socketio.emit('request_updated', {
             'id': request_id,
             'new_role': 'nurse'
+            # Intentionally NOT sending a new timestamp so the dashboard timer doesn't reset
         })
         log_to_audit_trail("Request Deferred", f"Request ID: {request_id} deferred to NURSE.")
     except Exception as e:
@@ -612,31 +632,26 @@ def handle_defer_request(data):
 @socketio.on('complete_request')
 def handle_complete_request(data):
     request_id = data.get('request_id')
-    if request_id:
-        try:
-            with engine.connect() as connection:
-                trans = connection.begin()
-                try:
-                    connection.execute(text("""
-                        UPDATE requests
-                        SET completion_timestamp = :now
-                        WHERE request_id = :request_id;
-                    """), {"now": datetime.now(timezone.utc), "request_id": request_id})
-                    trans.commit()
-                    log_to_audit_trail("Request Completed", f"Request ID: {request_id} marked as complete.")
-                except Exception:
-                    trans.rollback()
-                    raise
-            socketio.emit('remove_request', {'id': request_id})
-        except Exception as e:
-            print(f"ERROR updating completion timestamp: {e}")
-
-# --- Simple health check (optional but handy for Render) ---
-@app.route("/healthz")
-def healthz():
-    return "ok", 200
+    if not request_id:
+        return
+    try:
+        with engine.connect() as connection:
+            with connection.begin():
+                connection.execute(text("""
+                    UPDATE requests SET completion_timestamp = :now
+                    WHERE request_id = :request_id;
+                """), {"now": datetime.now(timezone.utc), "request_id": request_id})
+        socketio.emit('remove_request', {'id': request_id})
+        log_to_audit_trail("Request Completed", f"Request ID: {request_id} marked as complete.")
+    except Exception as e:
+        print(f"ERROR updating completion timestamp: {e}")
 
 # --- App Startup ---
 if __name__ == "__main__":
-    socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
-
+    socketio.run(
+        app,
+        host='0.0.0.0',
+        port=int(os.getenv('PORT', 5000)),
+        debug=False,
+        use_reloader=False
+    )
