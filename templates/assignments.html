@@ -57,6 +57,32 @@
         </div>
       </section>
 
+      <h2 class="text-xl font-semibold text-gray-700 mb-4">CNA Coverage</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+  <div>
+    <label for="cna_front" class="block text-sm font-medium text-gray-700">Front CNA</label>
+    <select name="cna_front" id="cna_front"
+            class="mt-1 block w-full pl-3 pr-10 py-2 border-gray-300 rounded-md">
+      <option value="unassigned">Unassigned</option>
+      {% for cna in all_cnas %}
+        <option value="{{ cna }}" {% if cna_front == cna %}selected{% endif %}>{{ cna }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div>
+    <label for="cna_back" class="block text-sm font-medium text-gray-700">Back CNA</label>
+    <select name="cna_back" id="cna_back"
+            class="mt-1 block w-full pl-3 pr-10 py-2 border-gray-300 rounded-md">
+      <option value="unassigned">Unassigned</option>
+      {% for cna in all_cnas %}
+        <option value="{{ cna }}" {% if cna_back == cna %}selected{% endif %}>{{ cna }}</option>
+      {% endfor %}
+    </select>
+  </div>
+</div>
+
+
       <!-- Nurse per-room assignments -->
       <section>
         <h2 class="text-xl font-semibold text-gray-700 mb-4">Assign Nurses by Room</h2>
