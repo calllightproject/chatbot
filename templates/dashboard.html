@@ -228,22 +228,22 @@
     });
     
     socket.on('request_updated', function(data) {
-        const itemToUpdate = document.getElementById(data.id);
-        if (itemToUpdate) {
-            itemToUpdate.classList.remove('cna');
-            itemToUpdate.classList.add('nurse');
-            const roleSpan = itemToUpdate.querySelector('.role-span');
-            if (roleSpan) {
-                roleSpan.textContent = 'For: NURSE';
-            }
-            const deferButton = itemToUpdate.querySelector('.defer-btn');
-            if (deferButton) {
-                deferButton.remove();
-            }
-            itemToUpdate.dataset.timestamp = data.new_timestamp;
-            updateAllTimersAndColors();
+    const itemToUpdate = document.getElementById(data.id);
+    if (itemToUpdate) {
+        itemToUpdate.classList.remove('cna');
+        itemToUpdate.classList.add('nurse');
+        const roleSpan = itemToUpdate.querySelector('.role-span');
+        if (roleSpan) {
+            roleSpan.textContent = 'For: NURSE';
         }
-    });
+        const deferButton = itemToUpdate.querySelector('.defer-btn');
+        if (deferButton) {
+            deferButton.remove();
+        }
+        // NOTE: Do NOT touch itemToUpdate.dataset.timestamp
+        updateAllTimersAndColors();
+    }
+});
 
     socket.on('remove_request', function(data) {
         const requestElement = document.getElementById(data.id);
@@ -299,3 +299,4 @@
 
 </body>
 </html>
+
