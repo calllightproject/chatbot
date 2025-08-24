@@ -1,4 +1,3 @@
-# These two lines MUST be the very first lines in the file.
 import eventlet
 eventlet.monkey_patch()
 
@@ -22,9 +21,9 @@ socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*", manage
 
 # --- Master Data Lists ---
 INITIAL_STAFF = {
-    'Jackie': 'nurse', 'Carol': 'nurse', 'John': 'nurse',
-    'Maria': 'nurse', 'David': 'nurse', 'Susan': 'nurse',
-    'Peter': 'cna', 'Linda': 'cna'
+    'Sophia': 'nurse', 'Jaimee': 'nurse', 'Kaylee': 'nurse',
+    'Janelle': 'nurse', 'Deb G.': 'nurse', 'Ashley P.': 'nurse',
+    'Lidia': 'cna', 'Cecilia': 'cna'
 }
 ALL_ROOMS = [str(room) for room in range(231, 261)]  # 231-260 inclusive
 
@@ -674,5 +673,6 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
