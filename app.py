@@ -429,104 +429,77 @@ def analytics():
 
 @app.route('/assignments', methods=['GET', 'POST'])
 def assignments():
-    today = date.today()
-    all_nurses, all_cnas = [], []
+    # Optional gate: if you require manager login, keep this
+    # if not session.get('manager_logged_in'):
+    #     return redirect(url_for('login'))
 
-    # Load staff lists
+    today = date.today()
+
+    # Room groupings for CNA front/back (as you described)
+    FRONT_ROOMS = [str(r) for r in list(range(231, 245)) + [260]]
+    BACK_ROOMS  = [str(r) for r in range(245, 260)]
+
+    all_nurses, all_cnas = [], []
     try:
         with engine.connect() as connection:
-            result = connection.execute(text("SELECT name FROM staff WHERE role = 'nurse' ORDER BY name;"))
-            all_nurses = [row[0] for row in result]
-
-            result = connection.execute(text("SELECT name FROM staff WHERE role = 'cna' ORDER BY name;"))
-            all_cnas = [row[0] for row in result]
+            nurse_rows = connection.execute(text("SELECT name FROM staff WHERE role = 'nurse' ORDER BY name;")).fetchall()
+            cna_rows   = connection.execute(text("SELECT name FROM staff WHERE role = 'cna' ORDER BY name;")).fetchall()
+            all_nurses = [r[0] for r in nurse_rows]
+            all_cnas   = [r[0] for r in cna_rows]
     except Exception as e:
-        print(f"ERROR fetching staff: {e}")
+        print(f"ERROR fetching staff lists: {e}")
 
     if request.method == 'POST':
         try:
             with engine.connect() as connection:
                 with connection.begin():
-                    # (A) Handle CNA Front/Back dropdowns if they exist in the form
-                    cna_front = request.form.get('cna_front')
-                    cna_back  = request.form.get('cna_back')
-
-                    if cna_front is not None:
-                        for room in CNA_FRONT_ROOMS:
-                            if cna_front and cna_front != 'unassigned':
-                                connection.execute(text("""
-                                    INSERT INTO assignments (assignment_date, room_number, nurse_name)
-                                    VALUES (:date, :room, :name)
-                                    ON CONFLICT (assignment_date, room_number)
-                                    DO UPDATE SET nurse_name = EXCLUDED.nurse_name;
-                                """), {"date": today, "room": room, "name": cna_front})
-                            else:
-                                connection.execute(text("""
-                                    DELETE FROM assignments
-                                    WHERE assignment_date = :date AND room_number = :room;
-                                """), {"date": today, "room": room})
-
-                    if cna_back is not None:
-                        for room in CNA_BACK_ROOMS:
-                            if cna_back and cna_back != 'unassigned':
-                                connection.execute(text("""
-                                    INSERT INTO assignments (assignment_date, room_number, nurse_name)
-                                    VALUES (:date, :room, :name)
-                                    ON CONFLICT (assignment_date, room_number)
-                                    DO UPDATE SET nurse_name = EXCLUDED.nurse_name;
-                                """), {"date": today, "room": room, "name": cna_back})
-                            else:
-                                connection.execute(text("""
-                                    DELETE FROM assignments
-                                    WHERE assignment_date = :date AND room_number = :room;
-                                """), {"date": today, "room": room})
-
-                    # (B) Optional: nurse-per-room inputs (supports older template versions)
+                    # Save per-room nurse assignments if your form posts fields like nurse_for_room_<room>
                     for room_number in ALL_ROOMS:
-                        field = f'nurse_for_room_{room_number}'
-                        if field in request.form:
-                            nurse_name = request.form.get(field)
-                            if nurse_name and nurse_name != 'unassigned':
-                                connection.execute(text("""
-                                    INSERT INTO assignments (assignment_date, room_number, nurse_name)
-                                    VALUES (:date, :room, :nurse)
-                                    ON CONFLICT (assignment_date, room_number)
-                                    DO UPDATE SET nurse_name = EXCLUDED.nurse_name;
-                                """), {"date": today, "room": room_number, "nurse": nurse_name})
-                            else:
-                                connection.execute(text("""
-                                    DELETE FROM assignments
-                                    WHERE assignment_date = :date AND room_number = :room;
-                                """), {"date": today, "room": room_number})
-
-            print("Assignments saved successfully.")
+                        field = f"nurse_for_room_{room_number}"
+                        nurse_name = request.form.get(field)
+                        if nurse_name and nurse_name != 'unassigned':
+                            connection.execute(text("""
+                                INSERT INTO assignments (assignment_date, room_number, nurse_name)
+                                VALUES (:date, :room, :nurse)
+                                ON CONFLICT (assignment_date, room_number)
+                                DO UPDATE SET nurse_name = EXCLUDED.nurse_name;
+                            """), {"date": today, "room": room_number, "nurse": nurse_name})
+                        else:
+                            # If unassigned, remove any existing row
+                            connection.execute(text("""
+                                DELETE FROM assignments
+                                WHERE assignment_date = :date AND room_number = :room;
+                            """), {"date": today, "room": room_number})
+            print("Assignments saved.")
         except Exception as e:
             print(f"ERROR saving assignments: {e}")
+
         return redirect(url_for('dashboard'))
 
-    # GET: build current assignments mapping: {room: name}
+    # Build current assignments map { room_number: nurse_name }
     current_assignments = {}
     try:
         with engine.connect() as connection:
-            result = connection.execute(text("""
-                SELECT room_number, nurse_name
-                FROM assignments
-                WHERE assignment_date = :date;
-            """), {"date": today})
-            for row in result:
-                current_assignments[row.room_number] = row.nurse_name
+            rows = connection.execute(
+                text("SELECT room_number, nurse_name FROM assignments WHERE assignment_date = :date;"),
+                {"date": today}
+            ).fetchall()
+            for room, nurse in rows:
+                current_assignments[str(room)] = nurse
     except Exception as e:
-        print(f"ERROR fetching assignments: {e}")
+        print(f"ERROR fetching current assignments: {e}")
 
     return render_template(
         'assignments.html',
+        # Provide everything the template might reference
         all_rooms=ALL_ROOMS,
         all_nurses=all_nurses,
         all_cnas=all_cnas,
         current_assignments=current_assignments,
-        cna_front_rooms=CNA_FRONT_ROOMS,
-        cna_back_rooms=CNA_BACK_ROOMS
+        cna_front_rooms=FRONT_ROOMS,
+        cna_back_rooms=BACK_ROOMS
     )
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -666,3 +639,4 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
