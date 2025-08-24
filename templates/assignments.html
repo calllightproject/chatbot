@@ -1,100 +1,91 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Staff Assignments</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root { --core-blue:#00205b; --accent-blue:#007eb4; }
     body { font-family:'Inter',sans-serif; background:#f4f7f9; }
-    .button-primary { background:var(--core-blue); color:#fff; }
-    .button-primary:hover { background:#093582; }
-    .link { color:var(--accent-blue); }
-    .link:hover { color:var(--core-blue); }
-    .card { background:#fff; }
+    .button-primary { background-color: var(--core-blue); }
+    .button-primary:hover { background-color:#093582; }
+    .link { color: var(--accent-blue); }
+    .link:hover { color: var(--core-blue); }
   </style>
 </head>
 <body class="p-4 sm:p-6 lg:p-8">
-  <div class="container mx-auto max-w-5xl card p-6 sm:p-8 rounded-xl shadow-md">
+  <div class="container mx-auto max-w-3xl bg-white p-6 sm:p-8 rounded-xl shadow-md">
     <header class="mb-6">
       <h1 class="text-3xl font-bold text-gray-800">Staff Assignments</h1>
-      <p class="text-md text-gray-500 mt-1">Assign nurses by room and choose CNA coverage zones.</p>
     </header>
 
-    <form method="POST" action="{{ url_for('assignments') }}" class="space-y-8">
-
-      <!-- CNA Front/Back selectors -->
-      <section>
-        <h2 class="text-xl font-semibold text-gray-700 mb-3 border-b pb-2">CNA Coverage</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <form method="POST" action="{{ url_for('assignments') }}">
+      <!-- CNA coverage (labels only; no room lists) -->
+      <section class="mb-8">
+        <h2 class="text-xl font-semibold text-gray-700 mb-4">CNA Coverage</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
           <div>
-            <label for="cna_front" class="block text-sm font-medium text-gray-700">
-              Front CNA (Rooms {{ cna_front_rooms|join(', ') }})
-            </label>
-            <select id="cna_front" name="cna_front"
-                    class="mt-1 block w-full pl-3 pr-10 py-2 border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+            <label for="cna_front" class="block text-sm font-medium text-gray-700 mb-1">Front CNA</label>
+            <select name="cna_front" id="cna_front"
+              class="mt-1 block w-full pl-3 pr-10 py-2 border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
               <option value="unassigned">Unassigned</option>
               {% for cna in all_cnas %}
                 <option value="{{ cna }}"
-                  {% if current_cna_front and current_cna_front == cna %}selected{% endif %}>
+                  {% if assignments.get('CNA_FRONT') == cna
+                        or (cna_front_rooms and assignments.get(cna_front_rooms[0]) == cna)
+                        or (cna_front_rooms and assignments.get(cna_front_rooms[0]) and assignments.get(cna_front_rooms[0]).name == cna) %}selected{% endif %}>
                   {{ cna }}
                 </option>
               {% endfor %}
             </select>
           </div>
-
           <div>
-            <label for="cna_back" class="block text-sm font-medium text-gray-700">
-              Back CNA (Rooms {{ cna_back_rooms|join(', ') }})
-            </label>
-            <select id="cna_back" name="cna_back"
-                    class="mt-1 block w-full pl-3 pr-10 py-2 border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+            <label for="cna_back" class="block text-sm font-medium text-gray-700 mb-1">Back CNA</label>
+            <select name="cna_back" id="cna_back"
+              class="mt-1 block w-full pl-3 pr-10 py-2 border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
               <option value="unassigned">Unassigned</option>
               {% for cna in all_cnas %}
                 <option value="{{ cna }}"
-                  {% if current_cna_back and current_cna_back == cna %}selected{% endif %}>
+                  {% if assignments.get('CNA_BACK') == cna
+                        or (cna_back_rooms and assignments.get(cna_back_rooms[0]) == cna)
+                        or (cna_back_rooms and assignments.get(cna_back_rooms[0]) and assignments.get(cna_back_rooms[0]).name == cna) %}selected{% endif %}>
                   {{ cna }}
                 </option>
               {% endfor %}
             </select>
           </div>
         </div>
-        <p class="text-xs text-gray-500 mt-2">
-          FYI: CNA front = rooms 231–244 & 260; CNA back = rooms 245–259.
-        </p>
       </section>
 
-      <!-- Nurse per-room assignment -->
+      <!-- Single-column nurse-by-room list -->
       <section>
-        <h2 class="text-xl font-semibold text-gray-700 mb-3 border-b pb-2">Nurse by Room</h2>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {% for room in all_rooms %}
-            <div class="flex items-center justify-between gap-3 border rounded-md p-3">
-              <div class="font-medium text-gray-800">Room {{ room }}</div>
-              <div class="flex-1">
-                <select name="nurse_for_room_{{ room }}"
-                        class="block w-full pl-3 pr-10 py-2 border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
-                  <option value="unassigned">Unassigned</option>
-                  {% for nurse in all_nurses %}
-                    <option value="{{ nurse }}"
-                      {% if assignments.get(room) and assignments.get(room) == nurse %}selected{% endif %}>
-                      {{ nurse }}
-                    </option>
-                  {% endfor %}
-                </select>
-              </div>
+        <h2 class="text-xl font-semibold text-gray-700 mb-4">Nurse by Room</h2>
+        <div class="space-y-3">
+          {% for room in rooms %}
+            <div class="flex items-center justify-between bg-gray-50 p-3 rounded-md">
+              <div class="font-medium text-gray-900">Room {{ room }}</div>
+              <select name="nurse_for_room_{{
+                      room }}" class="ml-4 w-48 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                <option value="unassigned">Unassigned</option>
+                {% for n in nurses %}
+                  <option value="{{ n }}"
+                    {% if assignments.get(room) == n
+                          or (assignments.get(room) and assignments.get(room).name == n) %}selected{% endif %}>
+                    {{ n }}
+                  </option>
+                {% endfor %}
+              </select>
             </div>
           {% endfor %}
         </div>
       </section>
 
-      <div>
+      <div class="mt-8">
         <button type="submit"
-                class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium button-primary transition-colors">
-          Save Assignments
+          class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white button-primary transition-colors">
+          Save All Assignments
         </button>
       </div>
     </form>
