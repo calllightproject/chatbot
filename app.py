@@ -628,12 +628,11 @@ def handle_defer_request(data):
         return
 
     now_utc = datetime.now(timezone.utc)
-    new_timestamp_iso = now_utc.isoformat()  # UI-only; DB 'timestamp' remains unchanged
 
     try:
         with engine.connect() as connection:
             with connection.begin():
-                # FIX: Do NOT touch 'timestamp'. Only set category and deferral_timestamp.
+                # Do NOT touch 'timestamp'. Only set category and deferral_timestamp.
                 connection.execute(text("""
                     UPDATE requests
                     SET category = 'nurse',
@@ -641,15 +640,15 @@ def handle_defer_request(data):
                     WHERE request_id = :request_id;
                 """), {"now": now_utc, "request_id": request_id})
 
-        # Keep emitting a UI timestamp so the dashboard can visually "refresh" urgency
+        # IMPORTANT: do NOT send a new_timestamp to the UI
         socketio.emit('request_updated', {
             'id': request_id,
-            'new_role': 'nurse',
-            'new_timestamp': new_timestamp_iso
+            'new_role': 'nurse'
         })
         log_to_audit_trail("Request Deferred", f"Request ID: {request_id} deferred to NURSE.")
     except Exception as e:
         print(f"ERROR deferring request {request_id}: {e}")
+
 
 @socketio.on('complete_request')
 def handle_complete_request(data):
@@ -675,4 +674,5 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
