@@ -9,7 +9,8 @@ from datetime import datetime, date, timezone
 from collections import defaultdict
 from email.message import EmailMessage
 
-from flask import Flask, render_template, request, session, redirect, url_for, flash
+from flask import Flask, render_template, render_template_string, request, session, redirect, url_for, flash
+
 from flask_socketio import SocketIO, join_room
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import ProgrammingError
@@ -608,6 +609,107 @@ def manager_dashboard():
 
     return render_template('manager_dashboard.html', staff=staff_list, audit_log=audit_log)
 
+
+@app.route('/debug/requests')
+def debug_requests():
+    # Only allow managers (uses your existing login/session)
+    if not session.get('manager_logged_in'):
+        return redirect(url_for('login'))
+
+    rows = []
+    backend = "unknown"
+    try:
+        backend = engine.dialect.name  # 'postgresql' or 'sqlite'
+        with engine.connect() as connection:
+            result = connection.execute(text("""
+                SELECT
+                    id,
+                    request_id,
+                    room,
+                    category,
+                    user_input,
+                    timestamp,
+                    deferral_timestamp,
+                    completion_timestamp
+                FROM requests
+                ORDER BY id DESC
+                LIMIT 25;
+            """))
+            # Convert SQLAlchemy rows to plain dicts and stringify datetimes for display
+            for r in result:
+                d = dict(r._mapping)
+                for k in ('timestamp', 'deferral_timestamp', 'completion_timestamp'):
+                    if d.get(k) is not None:
+                        try:
+                            d[k] = d[k].isoformat()
+                        except Exception:
+                            d[k] = str(d[k])
+                rows.append(d)
+    except Exception as e:
+        error_html = f"""
+        <h1>Debug /requests</h1>
+        <p><strong>DB backend:</strong> {backend}</p>
+        <p style='color:#b00'>Error reading from database: {e}</p>
+        <p>Make sure your service can reach the DB and the 'requests' table exists.</p>
+        """
+        return render_template_string(error_html), 500
+
+    html = """
+    <!doctype html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Requests Debug</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding:20px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border:1px solid #ddd; padding:8px; font-size:14px; }
+        th { background:#f7f7f7; text-align:left; }
+        code { background:#f0f0f0; padding:2px 4px; border-radius:4px; }
+      </style>
+    </head>
+    <body>
+      <h1>Requests (latest 25)</h1>
+      <p><strong>DB backend:</strong> {{ backend }}</p>
+      <table>
+        <thead>
+          <tr>
+            <th>id</th>
+            <th>request_id</th>
+            <th>room</th>
+            <th>category</th>
+            <th>user_input</th>
+            <th>timestamp</th>
+            <th>deferral_timestamp</th>
+            <th>completion_timestamp</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td>{{ r.id }}</td>
+            <td><code>{{ r.request_id }}</code></td>
+            <td>{{ r.room }}</td>
+            <td>{{ r.category }}</td>
+            <td>{{ r.user_input }}</td>
+            <td>{{ r.timestamp }}</td>
+            <td>{{ r.deferral_timestamp }}</td>
+            <td>{{ r.completion_timestamp }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="8" style="text-align:center;color:#666">No rows found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <p style="margin-top:16px;">
+        <a href="{{ url_for('dashboard') }}">← Back to Real-Time Dashboard</a>
+      </p>
+    </body>
+    </html>
+    """
+    return render_template_string(html, rows=rows, backend=backend)
+
 # --- SocketIO Event Handlers ---
 @socketio.on('join')
 def on_join(data):
@@ -673,6 +775,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
