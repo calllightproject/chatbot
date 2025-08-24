@@ -27,10 +27,9 @@ INITIAL_STAFF = {
     'Peter': 'cna', 'Linda': 'cna'
 }
 ALL_ROOMS = [str(room) for room in range(231, 261)]
-
-# CNA zones: Front = 231–244 + 260; Back = 245–259
-CNA_FRONT_ROOMS = [str(r) for r in (list(range(231, 245)) + [260])]
-CNA_BACK_ROOMS  = [str(r) for r in range(245, 260)]
+# CNA coverage room sets (kept in code for clarity)
+FRONT_ROOMS = [str(r) for r in list(range(231, 245))] + ["260"]   # 231–244 + 260
+BACK_ROOMS  = [str(r) for r in range(245, 260)]                   # 245–259
 
 # --- Database Configuration ---
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -601,6 +600,125 @@ def manager_dashboard():
 
     return render_template('manager_dashboard.html', staff=staff_list, audit_log=audit_log)
 
+
+@app.route('/staff-login', methods=['GET', 'POST'])
+def staff_login():
+    # Shared lightweight PIN for staff portal (not the manager password)
+    portal_pin = os.getenv('STAFF_PORTAL_PIN', '1234')
+
+    # Get staff list for dropdown
+    staff_list = []
+    try:
+        with engine.connect() as connection:
+            staff_result = connection.execute(text("SELECT name, role FROM staff ORDER BY name;"))
+            staff_list = staff_result.fetchall()
+    except Exception as e:
+        print(f"ERROR fetching staff for staff-login: {e}")
+
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        pin  = request.form.get('pin', '').strip()
+
+        if not name:
+            flash('Please select your name.', 'danger')
+            return render_template('staff_login.html', staff=staff_list)
+
+        if pin != portal_pin:
+            flash('Invalid PIN.', 'danger')
+            return render_template('staff_login.html', staff=staff_list)
+
+        # Look up role for the name
+        role = None
+        for s in staff_list:
+            if s.name == name:
+                role = s.role
+                break
+
+        if role is None:
+            flash('Staff member not found.', 'danger')
+            return render_template('staff_login.html', staff=staff_list)
+
+        session['staff_name'] = name
+        session['staff_role'] = role
+        session['staff_portal'] = True
+        return redirect(url_for('my_assignments'))
+
+    return render_template('staff_login.html', staff=staff_list)
+
+
+@app.route('/my-assignments')
+def my_assignments():
+    # Require staff-portal session
+    if not session.get('staff_portal'):
+        return redirect(url_for('staff_login'))
+
+    today = date.today()
+    name = session.get('staff_name')
+    role = session.get('staff_role')
+    nurse_rooms = []
+    cna_zone = None
+
+    try:
+        with engine.connect() as connection:
+            # Nurse: pull rooms where this nurse is assigned today
+            nurse_rows = connection.execute(
+                text("""
+                    SELECT room_number FROM assignments
+                    WHERE assignment_date = :d AND nurse_name = :n
+                    ORDER BY room_number ASC
+                """),
+                {"d": today, "n": name}
+            ).fetchall()
+            nurse_rooms = [r.room_number for r in nurse_rows]
+
+            # CNA: find front/back owner for today via pseudo-rows
+            # We store a single record for each zone using room_number='CNA_FRONT' or 'CNA_BACK'
+            cna_front_row = connection.execute(
+                text("""
+                    SELECT nurse_name FROM assignments
+                    WHERE assignment_date = :d AND room_number = 'CNA_FRONT'
+                    LIMIT 1
+                """),
+                {"d": today}
+            ).fetchone()
+            cna_back_row = connection.execute(
+                text("""
+                    SELECT nurse_name FROM assignments
+                    WHERE assignment_date = :d AND room_number = 'CNA_BACK'
+                    LIMIT 1
+                """),
+                {"d": today}
+            ).fetchone()
+
+            if role == 'cna':
+                if cna_front_row and cna_front_row.nurse_name == name:
+                    cna_zone = 'front'
+                elif cna_back_row and cna_back_row.nurse_name == name:
+                    cna_zone = 'back'
+                else:
+                    cna_zone = 'unassigned'
+    except Exception as e:
+        print(f"ERROR building my-assignments page: {e}")
+
+    # Build a simple data model for the template
+    data = {
+        "name": name,
+        "role": role,
+        "today": today.strftime("%Y-%m-%d"),
+        "nurse_rooms": nurse_rooms,
+        "cna_zone": cna_zone,
+        "cna_zone_rooms": FRONT_ROOMS if cna_zone == 'front' else (BACK_ROOMS if cna_zone == 'back' else []),
+    }
+    return render_template('my_assignments.html', **data)
+
+
+@app.route('/staff-logout')
+def staff_logout():
+    for k in ('staff_name', 'staff_role', 'staff_portal'):
+        session.pop(k, None)
+    return redirect(url_for('staff_login'))
+
+
 # --- SocketIO Event Handlers ---
 @socketio.on('join')
 def on_join(data):
@@ -664,3 +782,4 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
