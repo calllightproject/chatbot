@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Staff Portal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --core-blue:#00205b; --accent-blue:#007eb4;
+      --light-gray:#f5f5f5; --white:#ffffff;
+    }
+    body { font-family:'Inter',sans-serif; background:var(--light-gray); }
+    .btn { background:var(--core-blue); color:#fff; }
+    .btn:hover { background:#093582; }
+    .link { color:var(--accent-blue); }
+    .link:hover { color:var(--core-blue); }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-6">
+  <div class="w-full max-w-md bg-white rounded-xl shadow-md p-6">
+    <h1 class="text-2xl font-bold text-gray-800 mb-4">Staff Portal</h1>
+    <p class="text-sm text-gray-600 mb-6">
+      Enter the PIN and select your name to view only your assigned rooms.
+    </p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="space-y-2 mb-4">
+          {% for category, message in messages %}
+            <div class="px-3 py-2 rounded border
+                        {% if category == 'danger' %}bg-red-50 border-red-300 text-red-700{% else %}bg-blue-50 border-blue-300 text-blue-700{% endif %}">
+              {{ message }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <form method="POST" action="{{ url_for('staff_portal') }}" class="space-y-4">
+      <div>
+        <label for="pin" class="block text-sm font-medium text-gray-700">PIN</label>
+        <input id="pin" name="pin" type="password" required
+               class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+      </div>
+
+      <div>
+        <label for="nurse_name" class="block text-sm font-medium text-gray-700">Nurse</label>
+        <select id="nurse_name" name="nurse_name" required
+                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+          <option value="">Select your name…</option>
+          {% for n in nurses %}
+            <option value="{{ n }}">{{ n }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <button type="submit" class="w-full btn rounded-md py-2 font-medium transition-colors">View My Rooms</button>
+    </form>
+
+    <div class="mt-6 text-center">
+      <a href="{{ url_for('dashboard') }}" class="link">← Back to Full Dashboard</a>
+    </div>
+  </div>
+</body>
+</html>
