@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Real-Time Request Dashboard</title>
+    <title>{% if nurse_view %}My Rooms — {{ nurse_name }}{% else %}Real-Time Request Dashboard{% endif %}</title>
     <style>
         :root {
             --core-blue: #00205b;
@@ -11,6 +11,7 @@
             --neutral-gray-text: #303235;
             --light-gray-background: #f5f5f5;
             --white: #ffffff;
+            --nurse-red: #d43f27;
         }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -26,10 +27,55 @@
             border-radius: 8px;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }
+        .topbar {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
         h1 {
             color: var(--core-blue);
-            text-align: center;
+            margin: 0;
+            font-size: 22px;
         }
+        .top-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .btn-link {
+            background: var(--core-blue);
+            color: #fff;
+            text-decoration: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .btn-link.secondary {
+            background: var(--accent-blue);
+        }
+        .assigned {
+            margin: 8px 0 16px 0;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+        }
+        .assigned-label {
+            font-weight: 600;
+            color: #4b5563;
+        }
+        .chip {
+            display: inline-block;
+            padding: 4px 8px;
+            border: 1px solid #e5e7eb;
+            border-radius: 9999px;
+            background: #f9fafb;
+            font-size: 12px;
+            color: #374151;
+        }
+
         #requests-list {
             list-style-type: none;
             padding: 0;
@@ -46,10 +92,10 @@
             transition: background-color 0.5s ease, opacity 0.5s ease;
         }
         .request-item.cna { border-left: 5px solid var(--accent-blue); }
-        .request-item.nurse { border-left: 5px solid #d43f27; }
+        .request-item.nurse { border-left: 5px solid var(--nurse-red); }
         .request-item p {
             margin: 0;
-            font-size: 1.1em;
+            font-size: 1.05em;
             flex-grow: 1;
         }
         .request-item span {
@@ -77,36 +123,65 @@
         }
         .footer {
             text-align: center;
-            margin-top: 30px;
+            margin-top: 20px;
         }
         .footer a {
             color: var(--accent-blue);
             text-decoration: none;
         }
-        .status-new { background-color: #d4edda; }
-        .status-warn { background-color: #fff3cd; }
-        .status-urgent { background-color: #f8d7da; }
+        .status-new { background-color: #f1fdf3; }      /* fresh */
+        .status-warn { background-color: #fff8e5; }     /* >=5m */
+        .status-urgent { background-color: #fff0f0; }   /* >=10m */
+        .empty-state {
+            text-align: center;
+            color: #6b7280;
+            margin: 20px 0;
+        }
     </style>
 </head>
 <body>
 
 <div class="dashboard-container">
-    <h1>Real-Time Request Dashboard</h1>
-    
+    <div class="topbar">
+        <h1>
+            {% if nurse_view %}
+                My Rooms — {{ nurse_name }}
+            {% else %}
+                Real-Time Request Dashboard
+            {% endif %}
+        </h1>
+        <div class="top-actions">
+            {% if nurse_view %}
+                <a href="{{ url_for('dashboard') }}" class="btn-link">View All Requests</a>
+            {% else %}
+                <!-- Optional: you could place a link to nurse view if you know the nurse name -->
+                <a href="{{ url_for('analytics') }}" class="btn-link secondary">View Analytics</a>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if nurse_view and assigned_rooms %}
+        <div class="assigned">
+            <span class="assigned-label">Assigned rooms today:</span>
+            {% for r in assigned_rooms %}
+                <span class="chip">{{ r }}</span>
+            {% endfor %}
+        </div>
+    {% endif %}
+
     <ul id="requests-list">
         {% for request in active_requests %}
-            <li class="request-item {{ request.role | e }}" 
-                id="{{ request.id | e }}"
-                data-id="{{ request.id | e }}"
-                data-room="{{ request.room | e }}"
-                data-request="{{ request.request | e }}"
-                data-role="{{ request.role | e }}"
-                data-timestamp="{{ request.timestamp | e }}">
+            <li class="request-item {{ request.role }}" 
+                id="{{ request.id }}"
+                data-id="{{ request.id }}"
+                data-room="{{ request.room }}"
+                data-request="{{ request.request }}"
+                data-role="{{ request.role }}"
+                data-timestamp="{{ request.timestamp }}">
                 
-                <!-- Escape user-provided request text -->
-                <p>{{ request.request | e }}</p>
-                <span>Room: {{ request.room | e }}</span>
-                <span class="role-span">For: {{ request.role | upper }}</span>
+                <p>{{ request.request }}</p>
+                <span>Room: {{ request.room }}</span>
+                <span class="role-span">For: {{ request.role.upper() }}</span>
                 <span class="timestamp"></span>
                 <button class="ack-button">Acknowledge</button>
                 <button class="omw-button">On my way</button>
@@ -116,17 +191,31 @@
                 {% endif %}
                 <button class="complete-btn">Complete</button>
             </li>
+        {% else %}
+            <div class="empty-state">
+                {% if nurse_view %}
+                    No active requests for your rooms right now.
+                {% else %}
+                    No active requests at the moment.
+                {% endif %}
+            </div>
         {% endfor %}
     </ul>
 
     <div class="footer">
-        <a href="{{ url_for('analytics') }}">View Analytics Dashboard</a>
+        {% if not nurse_view %}
+            <a href="{{ url_for('analytics') }}">View Analytics Dashboard</a>
+        {% endif %}
     </div>
 </div>
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script type="text/javascript">
     var socket = io();
+
+    // Nurse view flags/rooms come from server
+    var nurseView = {{ 'true' if nurse_view else 'false' }};
+    var assignedRooms = {{ assigned_rooms|tojson if nurse_view else '[]' }};
 
     let audioContext;
     function playNotificationSound() {
@@ -149,6 +238,7 @@
         oscillator.stop(audioContext.currentTime + 0.5);
     }
 
+    // A single, master function to update all timers + SLA color band
     function updateAllTimersAndColors() {
         const requestItems = document.querySelectorAll('#requests-list .request-item');
         const now = new Date();
@@ -156,7 +246,7 @@
         requestItems.forEach(item => {
             const requestTime = new Date(item.dataset.timestamp);
             const minutes = Math.floor((now - requestTime) / 60000);
-            
+
             const timestampSpan = item.querySelector('.timestamp');
             if (timestampSpan) {
                 timestampSpan.textContent = minutes > 0 ? `${minutes}m ago` : 'Just now';
@@ -173,77 +263,83 @@
         });
     }
 
-    // Safe element builder (no innerHTML)
-    function el(tag, className, text) {
-        const e = document.createElement(tag);
-        if (className) e.className = className;
-        if (text !== undefined) e.textContent = text;
-        return e;
-    }
-
     function addRequestToDashboard(data) {
+        // If nurse view, ignore rooms that are not assigned to this nurse
+        if (nurseView && assignedRooms.indexOf(String(data.room)) === -1) {
+            return;
+        }
+
         const list = document.getElementById('requests-list');
+
+        // Remove empty state if present
+        const empty = document.querySelector('.empty-state');
+        if (empty) empty.remove();
+
         if (document.getElementById(data.id)) return;
 
-        const item = el('li', `request-item ${data.role}`);
+        const item = document.createElement('li');
         item.id = data.id;
+        item.className = 'request-item ' + data.role;
         item.dataset.id = data.id;
         item.dataset.room = data.room;
         item.dataset.request = data.request;
         item.dataset.role = data.role;
         item.dataset.timestamp = data.timestamp;
 
-        const p = el('p', null, data.request);
-        const room = el('span', null, `Room: ${data.room}`);
-        const roleSpan = el('span', 'role-span', `For: ${data.role.toUpperCase()}`);
-        const ts = el('span', 'timestamp', '');
-
-        const ack = el('button', 'ack-button', 'Acknowledge');
-        const omw = el('button', 'omw-button', 'On my way');
-        const asap = el('button', 'asap-button', 'Be there ASAP');
-        const complete = el('button', 'complete-btn', 'Complete');
-
-        item.appendChild(p);
-        item.appendChild(room);
-        item.appendChild(roleSpan);
-        item.appendChild(ts);
-        item.appendChild(ack);
-        item.appendChild(omw);
-        item.appendChild(asap);
-
+        let deferButtonHtml = '';
         if (data.role === 'cna') {
-            const deferBtn = el('button', 'defer-btn', 'Defer to Nurse');
-            item.appendChild(deferBtn);
+            deferButtonHtml = '<button class="defer-btn">Defer to Nurse</button>';
         }
 
-        item.appendChild(complete);
+        item.innerHTML =
+            `<p>${data.request}</p>
+             <span>Room: ${data.room}</span>
+             <span class="role-span">For: ${data.role.toUpperCase()}</span>
+             <span class="timestamp"></span>
+             <button class="ack-button">Acknowledge</button>
+             <button class="omw-button">On my way</button>
+             <button class="asap-button">Be there ASAP</button>
+             ${deferButtonHtml}
+             <button class="complete-btn">Complete</button>`;
+
         list.prepend(item);
         updateAllTimersAndColors();
     }
 
-    // Socket listeners
+    // --- SocketIO Event Listeners ---
     socket.on('new_request', function(data) {
+        // Server emits English `data.request` per your translation step.
         addRequestToDashboard(data);
         playNotificationSound();
     });
-    
+
     socket.on('request_updated', function(data) {
-    const itemToUpdate = document.getElementById(data.id);
-    if (itemToUpdate) {
-        itemToUpdate.classList.remove('cna');
-        itemToUpdate.classList.add('nurse');
-        const roleSpan = itemToUpdate.querySelector('.role-span');
-        if (roleSpan) {
-            roleSpan.textContent = 'For: NURSE';
+        const itemToUpdate = document.getElementById(data.id);
+        if (itemToUpdate) {
+            itemToUpdate.classList.remove('cna');
+            itemToUpdate.classList.add('nurse');
+
+            const roleSpan = itemToUpdate.querySelector('.role-span');
+            if (roleSpan) {
+                roleSpan.textContent = 'For: NURSE';
+            }
+
+            // IMPORTANT: Do NOT overwrite the original timestamp (so the timer does not reset)
+            // itemToUpdate.dataset.timestamp = data.new_timestamp;  // intentionally NOT doing this
+
+            // If nurse view and the room isn't assigned, remove the card (edge cases)
+            if (nurseView && assignedRooms.indexOf(String(itemToUpdate.dataset.room)) === -1) {
+                itemToUpdate.remove();
+            } else {
+                updateAllTimersAndColors();
+            }
+        } else {
+            // If the card doesn't exist yet and it's nurse view, we could add it only if room assigned.
+            if (!nurseView || assignedRooms.indexOf(String(data.room)) !== -1) {
+                addRequestToDashboard(data);
+            }
         }
-        const deferButton = itemToUpdate.querySelector('.defer-btn');
-        if (deferButton) {
-            deferButton.remove();
-        }
-        // NOTE: Do NOT touch itemToUpdate.dataset.timestamp
-        updateAllTimersAndColors();
-    }
-});
+    });
 
     socket.on('remove_request', function(data) {
         const requestElement = document.getElementById(data.id);
@@ -253,6 +349,7 @@
         }
     });
 
+    // --- Main Setup ---
     document.addEventListener('DOMContentLoaded', function() {
         const requestsList = document.getElementById('requests-list');
 
@@ -272,16 +369,16 @@
             } 
             else if (button.classList.contains('omw-button')) {
                 button.disabled = true;
-                const ackBtn = parentItem.querySelector('.ack-button');
-                if (ackBtn) ackBtn.disabled = true;
+                const ack = parentItem.querySelector('.ack-button');
+                if (ack) ack.disabled = true;
                 socket.emit('acknowledge_request', { room: room, message: "✅ A team member is on their way." });
             }
             else if (button.classList.contains('asap-button')) {
                 button.disabled = true;
-                const ackBtn = parentItem.querySelector('.ack-button');
-                const omwBtn = parentItem.querySelector('.omw-button');
-                if (ackBtn) ackBtn.disabled = true;
-                if (omwBtn) omwBtn.disabled = true;
+                const ack = parentItem.querySelector('.ack-button');
+                const omw = parentItem.querySelector('.omw-button');
+                if (ack) ack.disabled = true;
+                if (omw) omw.disabled = true;
                 socket.emit('acknowledge_request', { room: room, message: "A team member is with another patient and will be with you as soon as possible." });
             }
             else if (button.classList.contains('defer-btn')) {
@@ -292,6 +389,7 @@
             }
         });
 
+        // Start the single master timer
         setInterval(updateAllTimersAndColors, 60000);
         updateAllTimersAndColors();
     });
@@ -299,4 +397,3 @@
 
 </body>
 </html>
-
