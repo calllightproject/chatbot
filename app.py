@@ -416,6 +416,84 @@ def nurse_dashboard(nurse_name):
         filtered_for=nurse_name,
         filtered_rooms=assigned_rooms
     )
+# --- Staff Portal (PIN + nurse select) ---
+@app.route('/staff-portal', methods=['GET', 'POST'])
+def staff_portal():
+    # Pull PIN from env (set this on Render: STAFF_PORTAL_PIN)
+    required_pin = os.getenv('STAFF_PORTAL_PIN', '0000')
+
+    # Fetch the nurse list for the select dropdown
+    nurses = []
+    try:
+        with engine.connect() as connection:
+            result = connection.execute(text("SELECT name FROM staff WHERE role = 'nurse' ORDER BY name;"))
+            nurses = [row[0] for row in result]
+    except Exception as e:
+        print(f"ERROR fetching nurses for staff portal: {e}")
+
+    if request.method == 'POST':
+        pin = request.form.get('pin', '').strip()
+        nurse_name = request.form.get('nurse_name', '').strip()
+        if pin != required_pin:
+            flash('Invalid PIN.', 'danger')
+            return render_template('staff_portal.html', nurses=nurses)
+        if not nurse_name:
+            flash('Please select your name.', 'danger')
+            return render_template('staff_portal.html', nurses=nurses)
+        # Success → go to the filtered dashboard for that nurse
+        return redirect(url_for('staff_rooms', nurse_name=nurse_name))
+
+    # GET
+    return render_template('staff_portal.html', nurses=nurses)
+
+
+# --- Filtered Dashboard: only this nurse's rooms ---
+@app.route('/staff-rooms/<nurse_name>')
+def staff_rooms(nurse_name):
+    today = date.today()
+    # 1) Figure out this nurse's rooms for today
+    nurse_room_numbers = []
+    try:
+        with engine.connect() as connection:
+            result = connection.execute(
+                text("SELECT room_number FROM assignments WHERE assignment_date = :d AND nurse_name = :n;"),
+                {"d": today, "n": nurse_name}
+            )
+            nurse_room_numbers = [row[0] for row in result]
+    except Exception as e:
+        print(f"ERROR fetching nurse rooms for {nurse_name}: {e}")
+
+    # 2) Pull active requests, then filter to those rooms
+    active_requests = []
+    try:
+        with engine.connect() as connection:
+            result = connection.execute(text("""
+                SELECT request_id, room, user_input, category as role, timestamp
+                FROM requests
+                WHERE completion_timestamp IS NULL
+                ORDER BY timestamp DESC;
+            """))
+            for row in result:
+                if row.room in nurse_room_numbers:
+                    active_requests.append({
+                        'id': row.request_id,
+                        'room': row.room,
+                        'request': row.user_input,
+                        'role': row.role,
+                        'timestamp': row.timestamp.isoformat()
+                    })
+    except Exception as e:
+        print(f"ERROR fetching filtered active requests for {nurse_name}: {e}")
+
+    # Reuse the same dashboard template; it will simply render the list we pass.
+    # (Extras below are safe if your template ignores them.)
+    return render_template(
+        "dashboard.html",
+        active_requests=active_requests,
+        is_staff_view=True,
+        nurse_name=nurse_name,
+        nurse_rooms=nurse_room_numbers
+    )
 
 @app.route('/staff-portal', methods=['GET'])
 def staff_portal():
@@ -723,4 +801,5 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
