@@ -417,6 +417,12 @@ def nurse_dashboard(nurse_name):
         filtered_rooms=assigned_rooms
     )
 
+@app.route('/staff-portal', methods=['GET'])
+def staff_portal():
+    # Temporary stub so /dashboard can render without a BuildError.
+    # We’ll replace this with the proper PIN + nurse-select flow next.
+    return redirect(url_for('dashboard'))
+
 @app.route('/analytics')
 def analytics():
     avg_response_time = "N/A"
@@ -717,3 +723,4 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
