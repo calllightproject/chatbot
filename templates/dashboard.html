@@ -1,399 +1,331 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% if nurse_view %}My Rooms — {{ nurse_name }}{% else %}Real-Time Request Dashboard{% endif %}</title>
-    <style>
-        :root {
-            --core-blue: #00205b;
-            --accent-blue: #007eb4;
-            --neutral-gray-text: #303235;
-            --light-gray-background: #f5f5f5;
-            --white: #ffffff;
-            --nurse-red: #d43f27;
-        }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            padding: 20px;
-            background-color: var(--light-gray-background);
-            color: var(--neutral-gray-text);
-        }
-        .dashboard-container {
-            max-width: 900px;
-            margin: 20px auto;
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        }
-        .topbar {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: space-between;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 10px;
-        }
-        h1 {
-            color: var(--core-blue);
-            margin: 0;
-            font-size: 22px;
-        }
-        .top-actions {
-            display: flex;
-            gap: 10px;
-        }
-        .btn-link {
-            background: var(--core-blue);
-            color: #fff;
-            text-decoration: none;
-            padding: 8px 12px;
-            border-radius: 6px;
-            font-size: 14px;
-        }
-        .btn-link.secondary {
-            background: var(--accent-blue);
-        }
-        .assigned {
-            margin: 8px 0 16px 0;
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 8px;
-        }
-        .assigned-label {
-            font-weight: 600;
-            color: #4b5563;
-        }
-        .chip {
-            display: inline-block;
-            padding: 4px 8px;
-            border: 1px solid #e5e7eb;
-            border-radius: 9999px;
-            background: #f9fafb;
-            font-size: 12px;
-            color: #374151;
-        }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>{% if nurse_context %}My Rooms — {{ nurse_name }}{% else %}Real-Time Request Dashboard{% endif %}</title>
+  <style>
+    :root {
+      --core-blue: #00205b;
+      --accent-blue: #007eb4;
+      --neutral-gray-text: #303235;
+      --light-gray-background: #f5f5f5;
+      --white: #ffffff;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      padding: 20px;
+      background-color: var(--light-gray-background);
+      color: var(--neutral-gray-text);
+    }
+    .dashboard-container {
+      max-width: 900px;
+      margin: 20px auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    h1 {
+      color: var(--core-blue);
+      margin: 0;
+      font-size: 1.5rem;
+    }
+    .subline {
+      margin: 0 0 8px 0;
+      font-size: 0.95rem;
+      color: #555;
+    }
+    .nav-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .link-btn {
+      display: inline-block;
+      padding: 8px 12px;
+      border-radius: 6px;
+      text-decoration: none;
+      border: 1px solid var(--core-blue);
+      background: var(--core-blue);
+      color: #fff;
+      font-size: 0.9rem;
+      transition: background-color .2s ease;
+      white-space: nowrap;
+    }
+    .link-btn:hover { background: #093582; }
 
-        #requests-list {
-            list-style-type: none;
-            padding: 0;
-        }
-        .request-item {
-            display: flex;
-            align-items: center;
-            border: 1px solid #ddd;
-            padding: 15px;
-            margin-bottom: 10px;
-            border-radius: 5px;
-            background-color: #fff;
-            gap: 15px;
-            transition: background-color 0.5s ease, opacity 0.5s ease;
-        }
-        .request-item.cna { border-left: 5px solid var(--accent-blue); }
-        .request-item.nurse { border-left: 5px solid var(--nurse-red); }
-        .request-item p {
-            margin: 0;
-            font-size: 1.05em;
-            flex-grow: 1;
-        }
-        .request-item span {
-            font-size: 0.9em;
-            color: #555;
-            white-space: nowrap;
-        }
-        .request-item button {
-            padding: 8px 12px;
-            border: none;
-            color: white;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: opacity 0.3s;
-        }
-        .ack-button { background-color: #ffc107; color: black; }
-        .omw-button { background-color: #28a745; }
-        .asap-button { background-color: #6f42c1; }
-        .complete-btn { background-color: #6c757d; }
-        .defer-btn { background-color: #17a2b8; }
-        .request-item button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        .footer {
-            text-align: center;
-            margin-top: 20px;
-        }
-        .footer a {
-            color: var(--accent-blue);
-            text-decoration: none;
-        }
-        .status-new { background-color: #f1fdf3; }      /* fresh */
-        .status-warn { background-color: #fff8e5; }     /* >=5m */
-        .status-urgent { background-color: #fff0f0; }   /* >=10m */
-        .empty-state {
-            text-align: center;
-            color: #6b7280;
-            margin: 20px 0;
-        }
-    </style>
+    .chips {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin: 6px 0 16px 0;
+    }
+    .chip {
+      padding: 6px 10px;
+      border-radius: 9999px;
+      background: #eef2f7;
+      border: 1px solid #d7dde6;
+      font-size: 0.85rem;
+      color: #334155;
+    }
+
+    #requests-list { list-style: none; padding: 0; margin: 0; }
+    .request-item {
+      display: flex;
+      align-items: center;
+      border: 1px solid #ddd;
+      padding: 15px;
+      margin-bottom: 10px;
+      border-radius: 5px;
+      background-color: #fff;
+      gap: 15px;
+      transition: background-color 0.5s ease, opacity 0.5s ease;
+    }
+    .request-item.cna   { border-left: 5px solid var(--accent-blue); }
+    .request-item.nurse { border-left: 5px solid #d43f27; }
+
+    .request-item p { margin: 0; font-size: 1.05rem; flex-grow: 1; }
+    .meta { display: flex; gap: 10px; align-items: center; white-space: nowrap; }
+    .role-span { font-size: 0.9rem; color: #555; }
+    .timestamp { font-size: 0.9rem; color: #555; }
+
+    .request-item button {
+      padding: 8px 12px;
+      border: none;
+      color: white;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: opacity 0.3s;
+    }
+    .ack-button    { background-color: #ffc107; color: #000; }
+    .omw-button    { background-color: #28a745; }
+    .asap-button   { background-color: #6f42c1; }
+    .defer-btn     { background-color: #17a2b8; }
+    .complete-btn  { background-color: #6c757d; }
+    .request-item button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .status-new    { background-color: #d4edda; }
+    .status-warn   { background-color: #fff3cd; }
+    .status-urgent { background-color: #f8d7da; }
+  </style>
 </head>
 <body>
 
-<div class="dashboard-container">
-    <div class="topbar">
+  <div class="dashboard-container">
+    <div class="header">
+      <div>
         <h1>
-            {% if nurse_view %}
-                My Rooms — {{ nurse_name }}
-            {% else %}
-                Real-Time Request Dashboard
-            {% endif %}
+          {% if nurse_context %}
+            My Rooms — {{ nurse_name }}
+          {% else %}
+            Real-Time Request Dashboard
+          {% endif %}
         </h1>
-        <div class="top-actions">
-            {% if nurse_view %}
-                <a href="{{ url_for('dashboard') }}" class="btn-link">View All Requests</a>
-            {% else %}
-                <!-- Optional: you could place a link to nurse view if you know the nurse name -->
-                <a href="{{ url_for('analytics') }}" class="btn-link secondary">View Analytics</a>
-            {% endif %}
-        </div>
-    </div>
 
-    {% if nurse_view and assigned_rooms %}
-        <div class="assigned">
-            <span class="assigned-label">Assigned rooms today:</span>
-            {% for r in assigned_rooms %}
+        {% if nurse_context %}
+          {% if nurse_rooms and nurse_rooms|length > 0 %}
+            <p class="subline">Assigned rooms today:</p>
+            <div class="chips">
+              {% for r in nurse_rooms %}
                 <span class="chip">{{ r }}</span>
-            {% endfor %}
-        </div>
-    {% endif %}
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="subline">No rooms assigned yet for today.</p>
+          {% endif %}
+        {% endif %}
+      </div>
+
+      <div class="nav-actions">
+        {% if nurse_context %}
+          <a class="link-btn" href="{{ url_for('dashboard') }}">View All Requests</a>
+        {% else %}
+          <a class="link-btn" href="{{ url_for('staff_portal') }}">View My Rooms</a>
+          <a class="link-btn" href="{{ url_for('analytics') }}">View Analytics</a>
+        {% endif %}
+      </div>
+    </div>
 
     <ul id="requests-list">
-        {% for request in active_requests %}
-            <li class="request-item {{ request.role }}" 
-                id="{{ request.id }}"
-                data-id="{{ request.id }}"
-                data-room="{{ request.room }}"
-                data-request="{{ request.request }}"
-                data-role="{{ request.role }}"
-                data-timestamp="{{ request.timestamp }}">
-                
-                <p>{{ request.request }}</p>
-                <span>Room: {{ request.room }}</span>
-                <span class="role-span">For: {{ request.role.upper() }}</span>
-                <span class="timestamp"></span>
-                <button class="ack-button">Acknowledge</button>
-                <button class="omw-button">On my way</button>
-                <button class="asap-button">Be there ASAP</button>
-                {% if request.role == 'cna' %}
-                    <button class="defer-btn">Defer to Nurse</button>
-                {% endif %}
-                <button class="complete-btn">Complete</button>
-            </li>
-        {% else %}
-            <div class="empty-state">
-                {% if nurse_view %}
-                    No active requests for your rooms right now.
-                {% else %}
-                    No active requests at the moment.
-                {% endif %}
-            </div>
-        {% endfor %}
+      {% for request in active_requests %}
+        <li class="request-item {{ request.role }}"
+            id="{{ request.id }}"
+            data-id="{{ request.id }}"
+            data-room="{{ request.room }}"
+            data-request="{{ request.request }}"
+            data-role="{{ request.role }}"
+            data-timestamp="{{ request.timestamp }}">
+          <p>{{ request.request }}</p>
+          <div class="meta">
+            <span>Room: {{ request.room }}</span>
+            <span class="role-span">For: {{ request.role.upper() }}</span>
+            <span class="timestamp"></span>
+          </div>
+          <button class="ack-button">Acknowledge</button>
+          <button class="omw-button">On my way</button>
+          <button class="asap-button">Be there ASAP</button>
+          {% if request.role == 'cna' %}
+            <button class="defer-btn">Defer to Nurse</button>
+          {% endif %}
+          <button class="complete-btn">Complete</button>
+        </li>
+      {% else %}
+        <li class="request-item" style="justify-content:center">
+          <p>No active requests.</p>
+        </li>
+      {% endfor %}
     </ul>
+  </div>
 
-    <div class="footer">
-        {% if not nurse_view %}
-            <a href="{{ url_for('analytics') }}">View Analytics Dashboard</a>
-        {% endif %}
-    </div>
-</div>
-
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-<script type="text/javascript">
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script type="text/javascript">
     var socket = io();
-
-    // Nurse view flags/rooms come from server
-    var nurseView = {{ 'true' if nurse_view else 'false' }};
-    var assignedRooms = {{ assigned_rooms|tojson if nurse_view else '[]' }};
 
     let audioContext;
     function playNotificationSound() {
-        if (!audioContext) {
-            audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        }
-        if (audioContext.state === 'suspended') {
-            audioContext.resume();
-        }
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        oscillator.type = 'sine';
-        oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
-        gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-        gainNode.gain.linearRampToValueAtTime(0.5, audioContext.currentTime + 0.05);
-        gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.5);
-        oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + 0.5);
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioContext.state === 'suspended') audioContext.resume();
+
+      const osc = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      osc.connect(gain); gain.connect(audioContext.destination);
+      osc.type = 'sine'; osc.frequency.setValueAtTime(880, audioContext.currentTime);
+      gain.gain.setValueAtTime(0, audioContext.currentTime);
+      gain.gain.linearRampToValueAtTime(0.5, audioContext.currentTime + 0.05);
+      gain.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.5);
+      osc.start(audioContext.currentTime);
+      osc.stop(audioContext.currentTime + 0.5);
     }
 
-    // A single, master function to update all timers + SLA color band
     function updateAllTimersAndColors() {
-        const requestItems = document.querySelectorAll('#requests-list .request-item');
-        const now = new Date();
+      const items = document.querySelectorAll('#requests-list .request-item');
+      const now = new Date();
 
-        requestItems.forEach(item => {
-            const requestTime = new Date(item.dataset.timestamp);
-            const minutes = Math.floor((now - requestTime) / 60000);
+      items.forEach(item => {
+        const ts = new Date(item.dataset.timestamp);
+        const minutes = Math.floor((now - ts) / 60000);
 
-            const timestampSpan = item.querySelector('.timestamp');
-            if (timestampSpan) {
-                timestampSpan.textContent = minutes > 0 ? `${minutes}m ago` : 'Just now';
-            }
+        const tsEl = item.querySelector('.timestamp');
+        if (tsEl) tsEl.textContent = minutes > 0 ? `${minutes}m ago` : 'Just now';
 
-            item.classList.remove('status-new', 'status-warn', 'status-urgent');
-            if (minutes >= 10) {
-                item.classList.add('status-urgent');
-            } else if (minutes >= 5) {
-                item.classList.add('status-warn');
-            } else {
-                item.classList.add('status-new');
-            }
-        });
+        item.classList.remove('status-new', 'status-warn', 'status-urgent');
+        if (minutes >= 10) item.classList.add('status-urgent');
+        else if (minutes >= 5) item.classList.add('status-warn');
+        else item.classList.add('status-new');
+      });
     }
 
     function addRequestToDashboard(data) {
-        // If nurse view, ignore rooms that are not assigned to this nurse
-        if (nurseView && assignedRooms.indexOf(String(data.room)) === -1) {
-            return;
-        }
+      const list = document.getElementById('requests-list');
+      if (document.getElementById(data.id)) return;
 
-        const list = document.getElementById('requests-list');
+      const li = document.createElement('li');
+      li.id = data.id;
+      li.className = 'request-item ' + data.role;
+      li.dataset.id = data.id;
+      li.dataset.room = data.room;
+      li.dataset.request = data.request;
+      li.dataset.role = data.role;
+      li.dataset.timestamp = data.timestamp;
 
-        // Remove empty state if present
-        const empty = document.querySelector('.empty-state');
-        if (empty) empty.remove();
+      let deferBtn = '';
+      if (data.role === 'cna') {
+        deferBtn = '<button class="defer-btn">Defer to Nurse</button>';
+      }
 
-        if (document.getElementById(data.id)) return;
-
-        const item = document.createElement('li');
-        item.id = data.id;
-        item.className = 'request-item ' + data.role;
-        item.dataset.id = data.id;
-        item.dataset.room = data.room;
-        item.dataset.request = data.request;
-        item.dataset.role = data.role;
-        item.dataset.timestamp = data.timestamp;
-
-        let deferButtonHtml = '';
-        if (data.role === 'cna') {
-            deferButtonHtml = '<button class="defer-btn">Defer to Nurse</button>';
-        }
-
-        item.innerHTML =
-            `<p>${data.request}</p>
-             <span>Room: ${data.room}</span>
-             <span class="role-span">For: ${data.role.toUpperCase()}</span>
-             <span class="timestamp"></span>
-             <button class="ack-button">Acknowledge</button>
-             <button class="omw-button">On my way</button>
-             <button class="asap-button">Be there ASAP</button>
-             ${deferButtonHtml}
-             <button class="complete-btn">Complete</button>`;
-
-        list.prepend(item);
-        updateAllTimersAndColors();
+      li.innerHTML = `
+        <p>${data.request}</p>
+        <div class="meta">
+          <span>Room: ${data.room}</span>
+          <span class="role-span">For: ${data.role.toUpperCase()}</span>
+          <span class="timestamp"></span>
+        </div>
+        <button class="ack-button">Acknowledge</button>
+        <button class="omw-button">On my way</button>
+        <button class="asap-button">Be there ASAP</button>
+        ${deferBtn}
+        <button class="complete-btn">Complete</button>
+      `;
+      list.prepend(li);
+      updateAllTimersAndColors();
     }
 
-    // --- SocketIO Event Listeners ---
+    // --- Socket events ---
     socket.on('new_request', function(data) {
-        // Server emits English `data.request` per your translation step.
-        addRequestToDashboard(data);
-        playNotificationSound();
+      addRequestToDashboard(data);
+      playNotificationSound();
     });
 
     socket.on('request_updated', function(data) {
-        const itemToUpdate = document.getElementById(data.id);
-        if (itemToUpdate) {
-            itemToUpdate.classList.remove('cna');
-            itemToUpdate.classList.add('nurse');
-
-            const roleSpan = itemToUpdate.querySelector('.role-span');
-            if (roleSpan) {
-                roleSpan.textContent = 'For: NURSE';
-            }
-
-            // IMPORTANT: Do NOT overwrite the original timestamp (so the timer does not reset)
-            // itemToUpdate.dataset.timestamp = data.new_timestamp;  // intentionally NOT doing this
-
-            // If nurse view and the room isn't assigned, remove the card (edge cases)
-            if (nurseView && assignedRooms.indexOf(String(itemToUpdate.dataset.room)) === -1) {
-                itemToUpdate.remove();
-            } else {
-                updateAllTimersAndColors();
-            }
-        } else {
-            // If the card doesn't exist yet and it's nurse view, we could add it only if room assigned.
-            if (!nurseView || assignedRooms.indexOf(String(data.room)) !== -1) {
-                addRequestToDashboard(data);
-            }
-        }
+      const item = document.getElementById(data.id);
+      if (item) {
+        item.classList.remove('cna');
+        item.classList.add('nurse');
+        const roleSpan = item.querySelector('.role-span');
+        if (roleSpan) roleSpan.textContent = 'For: NURSE';
+        const deferBtn = item.querySelector('.defer-btn');
+        if (deferBtn) deferBtn.remove();
+        updateAllTimersAndColors(); // keep original timestamp
+      }
     });
 
     socket.on('remove_request', function(data) {
-        const requestElement = document.getElementById(data.id);
-        if (requestElement) {
-            requestElement.style.opacity = '0';
-            setTimeout(() => requestElement.remove(), 500);
-        }
+      const el = document.getElementById(data.id);
+      if (el) {
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 500);
+      }
     });
 
-    // --- Main Setup ---
+    // --- Click handlers ---
     document.addEventListener('DOMContentLoaded', function() {
-        const requestsList = document.getElementById('requests-list');
+      const list = document.getElementById('requests-list');
 
-        requestsList.addEventListener('click', function(event) {
-            const button = event.target;
-            if (button.tagName !== 'BUTTON') return;
+      list.addEventListener('click', function(e) {
+        const btn = e.target;
+        if (btn.tagName !== 'BUTTON') return;
 
-            const parentItem = button.closest('.request-item');
-            if (!parentItem) return;
+        const item = btn.closest('.request-item');
+        if (!item) return;
 
-            const requestId = parentItem.dataset.id;
-            const room = parentItem.dataset.room;
+        const requestId = item.dataset.id;
+        const room = item.dataset.room;
 
-            if (button.classList.contains('ack-button')) {
-                button.disabled = true;
-                socket.emit('acknowledge_request', { room: room, message: "✅ Your request was received and will be addressed shortly." });
-            } 
-            else if (button.classList.contains('omw-button')) {
-                button.disabled = true;
-                const ack = parentItem.querySelector('.ack-button');
-                if (ack) ack.disabled = true;
-                socket.emit('acknowledge_request', { room: room, message: "✅ A team member is on their way." });
-            }
-            else if (button.classList.contains('asap-button')) {
-                button.disabled = true;
-                const ack = parentItem.querySelector('.ack-button');
-                const omw = parentItem.querySelector('.omw-button');
-                if (ack) ack.disabled = true;
-                if (omw) omw.disabled = true;
-                socket.emit('acknowledge_request', { room: room, message: "A team member is with another patient and will be with you as soon as possible." });
-            }
-            else if (button.classList.contains('defer-btn')) {
-                socket.emit('defer_request', { id: requestId });
-            } 
-            else if (button.classList.contains('complete-btn')) {
-                socket.emit('complete_request', { request_id: requestId });
-            }
-        });
+        if (btn.classList.contains('ack-button')) {
+          btn.disabled = true;
+          socket.emit('acknowledge_request', { room: room, message: "✅ Your request was received and will be addressed shortly." });
+        } else if (btn.classList.contains('omw-button')) {
+          btn.disabled = true;
+          const ack = item.querySelector('.ack-button'); if (ack) ack.disabled = true;
+          socket.emit('acknowledge_request', { room: room, message: "✅ A team member is on their way." });
+        } else if (btn.classList.contains('asap-button')) {
+          btn.disabled = true;
+          const ack = item.querySelector('.ack-button'); if (ack) ack.disabled = true;
+          const omw = item.querySelector('.omw-button'); if (omw) omw.disabled = true;
+          socket.emit('acknowledge_request', { room: room, message: "A team member is with another patient and will be with you as soon as possible." });
+        } else if (btn.classList.contains('defer-btn')) {
+          socket.emit('defer_request', { id: requestId });
+        } else if (btn.classList.contains('complete-btn')) {
+          socket.emit('complete_request', { request_id: requestId });
+        }
+      });
 
-        // Start the single master timer
-        setInterval(updateAllTimersAndColors, 60000);
-        updateAllTimersAndColors();
+      updateAllTimersAndColors();
+      setInterval(updateAllTimersAndColors, 60000);
     });
-</script>
-
+  </script>
 </body>
 </html>
