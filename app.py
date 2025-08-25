@@ -30,164 +30,26 @@ ALL_ROOMS = [str(room) for room in range(231, 261)]
 
 # --- Lightweight in-app translation (labels only) ---
 SPANISH_TO_EN = {
-    # Main
-    "Tengo una emergencia":"I'm having an emergency",
-    "Necesito suministros":"I need supplies",
-    "Necesito medicamentos":"I need medication",
-    "Mi bomba de IV está sonando":"My IV pump is beeping",
-    "Tengo preguntas":"I have questions",
-    "Quiero saber sobre el alta":"I want to know about going home",
-    "Baño / Ducha":"Bathroom/Shower",
-    "Necesito ayuda para amamantar":"I need help breastfeeding",
-    "Azúcar en la sangre":"Blood sugar",
-    "Hielo / Agua":"Ice Chips/Water",
-
-    # Blood sugar
-    "Mamá (azúcar en la sangre)":"Mom (blood sugar)",
-    "Bebé (azúcar en la sangre)":"Baby (blood sugar)",
-    "Control de azúcar en la sangre para mí":"Blood sugar for me",
-
-    # Water / Ice
-    "Necesito agua con hielo":"I need ice water",
-    "Necesito hielo picado":"I need ice chips",
-    "Necesito agua, sin hielo":"I need water, no ice",
-    "Necesito agua caliente":"I need hot water",
-
-    # Bathroom/Shower
-    "Necesito ayuda para ir al baño":"I need help to the bathroom",
-    "Necesito cubrir mi vía IV para bañarme":"I need my IV covered to shower",
-    "Necesito cubrir mi vía IV para ducharme":"I need my IV covered to shower",
-    "¿Puedo tomar una ducha?":"Can I take a shower?",
-
-    # Supplies
-    "Necesito suministros":"I need supplies",
-    "Artículos para bebé":"Baby items",
-    "Artículos para mamá":"Mom items",
-    "Pañales":"Diapers",
-    "Fórmula":"Formula",
-    "Manta para envolver":"Swaddle",
-    "Toallitas húmedas":"Wipes",
-    "Ropa interior de malla":"Mesh underwear",
-    "Toallas sanitarias":"Pads",
-    "Almohadas":"Pillows",
-    "Toallas azules":"Blue pads",
-    "Toallas blancas":"White pads",
-    "Compresa de hielo":"Ice pack",
-    "Compresa de hielo para el perineo":"Ice Pack for Bottom",
-    "Compresa de hielo para la incisión de la cesárea":"Ice Pack for C-section incision",
-    "Compresa de hielo para los senos":"Ice Pack for Breasts",
-    "Similac Total Comfort (etiqueta morada)":"Similac Total Comfort (purple label)",
-    "Similac 360 (etiqueta azul)":"Similac 360 (blue label)",
-    "Similac Neosure (etiqueta amarilla)":"Similac Neosure (yellow label)",
-    "Enfamil Newborn (etiqueta amarilla)":"Enfamil Newborn (yellow label)",
-    "Enfamil Gentlease (etiqueta morada)":"Enfamil Gentlease (purple label)",
-
-    # Medication
-    "Dolor":"Pain",
-    "Náuseas/Vómitos":"Nausea/Vomiting",
-    "Picazón":"Itchy",
-    "Dolor por gases":"Gas pain",
-    "Estreñimiento":"Constipation",
-
-    # Questions
-    "Preguntas sobre la mamá":"Questions about mom",
-    "Preguntas sobre el bebé":"Questions about baby",
-    "¿Puedo ponerme mi propia ropa?":"Can I put on my own clothes?",
-    "¿Cómo de seguido debo cambiar mi toalla sanitaria?":"How often should I change my pad?",
-    "¿Cómo de seguido debo usar el sacaleches?":"How often should I use the breast pump?",
-    "No consigo sacar leche cuando uso el sacaleches. ¿Es normal?":"I'm not getting any breastmilk when I pump. Is that normal?",
-    "¿Cómo de seguido debo alimentar a mi bebé?":"How often should I feed my baby?",
-    "Me preocupa que mi bebé no esté recibiendo suficiente leche materna.":"I'm concerned that my baby is not getting enough breastmilk.",
-    "Mi bebé tiene hipo.":"My baby has hiccups.",
-    "Mi bebé suena congestionado o ha estado estornudando. ¿Es normal?":"My baby sounds stuffy or has been sneezing. Is that normal?",
-    "¿Le harán a mi bebé un examen de la vista?":"Will my baby have their vision tested?",
-    "¿Puedo vestir a mi bebé con su propia ropa?":"Can I put clothes on my baby?",
-
-    # Going home
-    "Parto vaginal":"Vaginal delivery",
-    "Parto por cesárea":"C-section delivery",
-    "Bebé":"Baby",
-    "¿Cuándo recibiré mis papeles de alta?":"When will I get my discharge paperwork?",
-    "¿Tengo que usar una silla de ruedas?":"Do I have to take a wheelchair?"
+    "Tengo una emergencia":"I'm having an emergency","Necesito suministros":"I need supplies","Necesito medicamentos":"I need medication","Mi bomba de IV está sonando":"My IV pump is beeping","Tengo preguntas":"I have questions","Quiero saber sobre el alta":"I want to know about going home","Baño / Ducha":"Bathroom/Shower","Necesito ayuda para amamantar":"I need help breastfeeding","Azúcar en la sangre":"Blood sugar","Hielo / Agua":"Ice Chips/Water",
+    "Mamá (azúcar en la sangre)":"Mom (blood sugar)","Bebé (azúcar en la sangre)":"Baby (blood sugar)","Control de azúcar en la sangre para mí":"Blood sugar for me",
+    "Necesito agua con hielo":"I need ice water","Necesito hielo picado":"I need ice chips","Necesito agua, sin hielo":"I need water, no ice","Necesito agua caliente":"I need hot water",
+    "Necesito ayuda para ir al baño":"I need help to the bathroom","Necesito cubrir mi vía IV para bañarme":"I need my IV covered to shower","Necesito cubrir mi vía IV para ducharme":"I need my IV covered to shower","¿Puedo tomar una ducha?":"Can I take a shower?",
+    "Artículos para bebé":"Baby items","Artículos para mamá":"Mom items","Pañales":"Diapers","Fórmula":"Formula","Manta para envolver":"Swaddle","Toallitas húmedas":"Wipes","Ropa interior de malla":"Mesh underwear","Toallas sanitarias":"Pads","Almohadas":"Pillows","Toallas azules":"Blue pads","Toallas blancas":"White pads","Compresa de hielo":"Ice pack","Compresa de hielo para el perineo":"Ice Pack for Bottom","Compresa de hielo para la incisión de la cesárea":"Ice Pack for C-section incision","Compresa de hielo para los senos":"Ice Pack for Breasts",
+    "Similac Total Comfort (etiqueta morada)":"Similac Total Comfort (purple label)","Similac 360 (etiqueta azul)":"Similac 360 (blue label)","Similac Neosure (etiqueta amarilla)":"Similac Neosure (yellow label)","Enfamil Newborn (etiqueta amarilla)":"Enfamil Newborn (yellow label)","Enfamil Gentlease (etiqueta morada)":"Enfamil Gentlease (purple label)",
+    "Dolor":"Pain","Náuseas/Vómitos":"Nausea/Vomiting","Picazón":"Itchy","Dolor por gases":"Gas pain","Estreñimiento":"Constipation",
+    "Preguntas sobre la mamá":"Questions about mom","Preguntas sobre el bebé":"Questions about baby","¿Puedo ponerme mi propia ropa?":"Can I put on my own clothes?","¿Cómo de seguido debo cambiar mi toalla sanitaria?":"How often should I change my pad?","¿Cómo de seguido debo usar el sacaleches?":"How often should I use the breast pump?","No consigo sacar leche cuando uso el sacaleches. ¿Es normal?":"I'm not getting any breastmilk when I pump. Is that normal?","¿Cómo de seguido debo alimentar a mi bebé?":"How often should I feed my baby?","Me preocupa que mi bebé no esté recibiendo suficiente leche materna.":"I'm concerned that my baby is not getting enough breastmilk.","Mi bebé tiene hipo.":"My baby has hiccups.","Mi bebé suena congestionado o ha estado estornudando. ¿Es normal?":"My baby sounds stuffy or has been sneezing. Is that normal?","¿Le harán a mi bebé un examen de la vista?":"Will my baby have their vision tested?","¿Puedo vestir a mi bebé con su propia ropa?":"Can I put clothes on my baby?",
+    "Parto vaginal":"Vaginal delivery","Parto por cesárea":"C-section delivery","Bebé":"Baby","¿Cuándo recibiré mis papeles de alta?":"When will I get my discharge paperwork?","¿Tengo que usar una silla de ruedas?":"Do I have to take a wheelchair?"
 }
-
 CHINESE_TO_EN = {
-    # Main
-    "我有紧急情况":"I'm having an emergency",
-    "我需要用品":"I need supplies",
-    "我需要药物":"I need medication",
-    "我的静脉输液泵在响":"My IV pump is beeping",
-    "我有问题":"I have questions",
-    "我想了解出院信息":"I want to know about going home",
-    "浴室/淋浴":"Bathroom/Shower",
-    "我需要母乳喂养方面的帮助":"I need help breastfeeding",
-    "血糖":"Blood sugar",
-    "冰块/水":"Ice Chips/Water",
-
-    # Blood sugar
-    "妈妈（血糖）":"Mom (blood sugar)",
-    "宝宝（血糖）":"Baby (blood sugar)",
-
-    # Water / Ice
-    "我需要冰水":"I need ice water",
-    "我需要冰块":"I need ice chips",
-    "我需要不加冰的水":"I need water, no ice",
-    "我需要热水":"I need hot water",
-
-    # Bathroom/Shower
-    "我需要帮助去卫生间":"I need help to the bathroom",
-    "我需要包裹我的静脉输液管以便洗澡":"I need my IV covered to shower",
-    "我可以洗澡吗？":"Can I take a shower?",
-
-    # Supplies
-    "宝宝用品":"Baby items",
-    "妈妈用品":"Mom items",
-    "尿布":"Diapers",
-    "配方奶":"Formula",
-    "襁褓巾":"Swaddle",
-    "湿巾":"Wipes",
-    "网眼内裤":"Mesh underwear",
-    "卫生巾":"Pads",
-    "枕头":"Pillows",
-    "蓝色卫生巾":"Blue pads",
-    "白色卫生巾":"White pads",
-    "冰袋":"Ice pack",
-    "用于会阴部的冰袋":"Ice Pack for Bottom",
-    "用于剖腹产切口的冰袋":"Ice Pack for C-section incision",
-    "用于乳房的冰袋":"Ice Pack for Breasts",
-    "Similac Total Comfort (紫色标签)":"Similac Total Comfort (purple label)",
-    "Similac 360 (蓝色标签)":"Similac 360 (blue label)",
-    "Similac Neosure (黄色标签)":"Similac Neosure (yellow label)",
-    "Enfamil Newborn (黄色标签)":"Enfamil Newborn (yellow label)",
-    "Enfamil Gentlease (紫色标签)":"Enfamil Gentlease (purple label)",
-
-    # Medication
-    "疼痛":"Pain",
-    "恶心/呕吐":"Nausea/Vomiting",
-    "瘙痒":"Itchy",
-    "胀气痛":"Gas pain",
-    "便秘":"Constipation",
-
-    # Questions
-    "关于妈妈的问题":"Questions about mom",
-    "关于宝宝的问题":"Questions about baby",
-    "我可以穿自己的衣服吗？":"Can I put on my own clothes?",
-    "我应该多久更换一次卫生巾？":"How often should I change my pad?",
-    "我应该多久使用一次吸奶器？":"How often should I use the breast pump?",
-    "我用吸奶器时吸不出母乳，这正常吗？":"I'm not getting any breastmilk when I pump. Is that normal?",
-    "我应该多久喂一次宝宝？":"How often should I feed my baby?",
-    "我担心宝宝没有吃到足够的母乳。":"I'm concerned that my baby is not getting enough breastmilk.",
-    "我的宝宝打嗝了。":"My baby has hiccups.",
-    "我的宝宝听起来鼻塞或一直在打喷嚏，这正常吗？":"My baby sounds stuffy or has been sneezing. Is that normal?",
-    "会给我的宝宝做视力测试吗？":"Will my baby have their vision tested?",
-    "我可以给宝宝穿衣服吗？":"Can I put clothes on my baby?",
-
-    # Going home
-    "顺产出院":"Vaginal delivery",
-    "剖腹产出院":"C-section delivery",
-    "宝宝出院":"Baby",
-    "我什么时候能拿到出院文件？":"When will I get my discharge paperwork?",
-    "我必须坐轮椅吗？":"Do I have to take a wheelchair?"
+    "我有紧急情况":"I'm having an emergency","我需要用品":"I need supplies","我需要药物":"I need medication","我的静脉输液泵在响":"My IV pump is beeping","我有问题":"I have questions","我想了解出院信息":"I want to know about going home","浴室/淋浴":"Bathroom/Shower","我需要母乳喂养方面的帮助":"I need help breastfeeding","血糖":"Blood sugar","冰块/水":"Ice Chips/Water",
+    "妈妈（血糖）":"Mom (blood sugar)","宝宝（血糖）":"Baby (blood sugar)",
+    "我需要冰水":"I need ice water","我需要冰块":"I need ice chips","我需要不加冰的水":"I need water, no ice","我需要热水":"I need hot water",
+    "我需要帮助去卫生间":"I need help to the bathroom","我需要包裹我的静脉输液管以便洗澡":"I need my IV covered to shower","我可以洗澡吗？":"Can I take a shower?",
+    "宝宝用品":"Baby items","妈妈用品":"Mom items","尿布":"Diapers","配方奶":"Formula","襁褓巾":"Swaddle","湿巾":"Wipes","网眼内裤":"Mesh underwear","卫生巾":"Pads","枕头":"Pillows","蓝色卫生巾":"Blue pads","白色卫生巾":"White pads","冰袋":"Ice pack","用于会阴部的冰袋":"Ice Pack for Bottom","用于剖腹产切口的冰袋":"Ice Pack for C-section incision","用于乳房的冰袋":"Ice Pack for Breasts",
+    "Similac Total Comfort (紫色标签)":"Similac Total Comfort (purple label)","Similac 360 (蓝色标签)":"Similac 360 (blue label)","Similac Neosure (黄色标签)":"Similac Neosure (yellow label)","Enfamil Newborn (黄色标签)":"Enfamil Newborn (yellow label)","Enfamil Gentlease (紫色标签)":"Enfamil Gentlease (purple label)",
+    "疼痛":"Pain","恶心/呕吐":"Nausea/Vomiting","瘙痒":"Itchy","胀气痛":"Gas pain","便秘":"Constipation",
+    "关于妈妈的问题":"Questions about mom","关于宝宝的问题":"Questions about baby","我可以穿自己的衣服吗？":"Can I put on my own clothes?","我应该多久更换一次卫生巾？":"How often should I change my pad?","我应该多久使用一次吸奶器？":"How often should I use the breast pump?","我用吸奶器时吸不出母乳，这正常吗？":"I'm not getting any breastmilk when I pump. Is that normal?","我应该多久喂一次宝宝？":"How often should I feed my baby?","我担心宝宝没有吃到足够的母乳。":"I'm concerned that my baby is not getting enough breastmilk.","我的宝宝打嗝了。":"My baby has hiccups.","我的宝宝听起来鼻塞或一直在打喷嚏，这正常吗？":"My baby sounds stuffy or has been sneezing. Is that normal?","会给我的宝宝做视力测试吗？":"Will my baby have their vision tested?","我可以给宝宝穿衣服吗？":"Can I put clothes on my baby?",
+    "顺产出院":"Vaginal delivery","剖腹产出院":"C-section delivery","宝宝出院":"Baby","我什么时候能拿到出院文件？":"When will I get my discharge paperwork?","我必须坐轮椅吗？":"Do I have to take a wheelchair?"
 }
 
 def translate_to_en(lang: str, text: str) -> str:
@@ -260,8 +122,6 @@ def setup_database():
                         UNIQUE (assignment_date, zone)
                     );
                 """))
-
-                # Backfill columns if the table existed before
                 try:
                     connection.execute(text("ALTER TABLE requests ADD COLUMN deferral_timestamp TIMESTAMP WITH TIME ZONE;"))
                 except ProgrammingError:
@@ -271,7 +131,6 @@ def setup_database():
                 except ProgrammingError:
                     pass
 
-                # Seed staff if empty
                 count = connection.execute(text("SELECT COUNT(id) FROM staff;")).scalar()
                 if count == 0:
                     for name, role in INITIAL_STAFF.items():
@@ -357,7 +216,6 @@ def process_request(role, subject, user_input, reply_message):
     lang = session.get('language', 'en') or 'en'
     user_input_en = translate_to_en(lang, user_input)
 
-    # Email (body keeps original), DB (store both), Socket (emit English)
     socketio.start_background_task(send_email_alert, subject, user_input, room_number)
     socketio.start_background_task(
         log_request_to_db,
@@ -507,6 +365,58 @@ def dashboard():
         print(f"ERROR fetching active requests: {e}")
     return render_template("dashboard.html", active_requests=active_requests)
 
+# --- NEW: Nurse-specific dashboard (filtered by today's room assignments) ---
+@app.route("/nurse/<nurse_name>")
+def nurse_dashboard(nurse_name):
+    """Shows only requests for rooms assigned to this nurse today."""
+    today = date.today()
+    assigned_rooms = []
+    try:
+        with engine.connect() as connection:
+            rows = connection.execute(text("""
+                SELECT room_number
+                FROM assignments
+                WHERE assignment_date = :d AND nurse_name = :n
+                ORDER BY room_number::int
+            """), {"d": today, "n": nurse_name}).fetchall()
+            assigned_rooms = [r[0] for r in rows]
+    except Exception as e:
+        print(f"ERROR fetching rooms for nurse {nurse_name}: {e}")
+
+    active_requests = []
+    try:
+        with engine.connect() as connection:
+            result = connection.execute(text("""
+                SELECT request_id,
+                       room,
+                       COALESCE(user_input_en, user_input) AS request_text,
+                       category as role,
+                       timestamp
+                FROM requests
+                WHERE completion_timestamp IS NULL
+                ORDER BY timestamp DESC;
+            """))
+            allowed = set(assigned_rooms)
+            for row in result:
+                if row.room in allowed:
+                    active_requests.append({
+                        'id': row.request_id,
+                        'room': row.room,
+                        'request': row.request_text,
+                        'role': row.role,
+                        'timestamp': (row.timestamp or datetime.now(timezone.utc)).isoformat()
+                    })
+    except Exception as e:
+        print(f"ERROR fetching filtered requests: {e}")
+
+    # We pass extra context (template can ignore it for now)
+    return render_template(
+        "dashboard.html",
+        active_requests=active_requests,
+        filtered_for=nurse_name,
+        filtered_rooms=assigned_rooms
+    )
+
 @app.route('/analytics')
 def analytics():
     avg_response_time = "N/A"
@@ -584,7 +494,6 @@ def analytics():
         multi_baby_values=multi_baby_values
     )
 
-# --- Assignments (unchanged from your working version) ---
 @app.route('/assignments', methods=['GET', 'POST'])
 def assignments():
     today = date.today()
@@ -771,7 +680,6 @@ def handle_defer_request(data):
     try:
         with engine.connect() as connection:
             with connection.begin():
-                # Do NOT overwrite original timestamp
                 connection.execute(text("""
                     UPDATE requests
                     SET category = 'nurse',
