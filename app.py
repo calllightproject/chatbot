@@ -27,39 +27,11 @@ INITIAL_STAFF = {
     'Peter': 'cna', 'Linda': 'cna'
 }
 ALL_ROOMS = [str(room) for room in range(231, 261)]
-
-# --- Lightweight in-app translation (labels only) ---
-SPANISH_TO_EN = {
-    "Tengo una emergencia":"I'm having an emergency","Necesito suministros":"I need supplies","Necesito medicamentos":"I need medication","Mi bomba de IV está sonando":"My IV pump is beeping","Tengo preguntas":"I have questions","Quiero saber sobre el alta":"I want to know about going home","Baño / Ducha":"Bathroom/Shower","Necesito ayuda para amamantar":"I need help breastfeeding","Azúcar en la sangre":"Blood sugar","Hielo / Agua":"Ice Chips/Water",
-    "Mamá (azúcar en la sangre)":"Mom (blood sugar)","Bebé (azúcar en la sangre)":"Baby (blood sugar)","Control de azúcar en la sangre para mí":"Blood sugar for me",
-    "Necesito agua con hielo":"I need ice water","Necesito hielo picado":"I need ice chips","Necesito agua, sin hielo":"I need water, no ice","Necesito agua caliente":"I need hot water",
-    "Necesito ayuda para ir al baño":"I need help to the bathroom","Necesito cubrir mi vía IV para bañarme":"I need my IV covered to shower","Necesito cubrir mi vía IV para ducharme":"I need my IV covered to shower","¿Puedo tomar una ducha?":"Can I take a shower?",
-    "Artículos para bebé":"Baby items","Artículos para mamá":"Mom items","Pañales":"Diapers","Fórmula":"Formula","Manta para envolver":"Swaddle","Toallitas húmedas":"Wipes","Ropa interior de malla":"Mesh underwear","Toallas sanitarias":"Pads","Almohadas":"Pillows","Toallas azules":"Blue pads","Toallas blancas":"White pads","Compresa de hielo":"Ice pack","Compresa de hielo para el perineo":"Ice Pack for Bottom","Compresa de hielo para la incisión de la cesárea":"Ice Pack for C-section incision","Compresa de hielo para los senos":"Ice Pack for Breasts",
-    "Similac Total Comfort (etiqueta morada)":"Similac Total Comfort (purple label)","Similac 360 (etiqueta azul)":"Similac 360 (blue label)","Similac Neosure (etiqueta amarilla)":"Similac Neosure (yellow label)","Enfamil Newborn (etiqueta amarilla)":"Enfamil Newborn (yellow label)","Enfamil Gentlease (etiqueta morada)":"Enfamil Gentlease (purple label)",
-    "Dolor":"Pain","Náuseas/Vómitos":"Nausea/Vomiting","Picazón":"Itchy","Dolor por gases":"Gas pain","Estreñimiento":"Constipation",
-    "Preguntas sobre la mamá":"Questions about mom","Preguntas sobre el bebé":"Questions about baby","¿Puedo ponerme mi propia ropa?":"Can I put on my own clothes?","¿Cómo de seguido debo cambiar mi toalla sanitaria?":"How often should I change my pad?","¿Cómo de seguido debo usar el sacaleches?":"How often should I use the breast pump?","No consigo sacar leche cuando uso el sacaleches. ¿Es normal?":"I'm not getting any breastmilk when I pump. Is that normal?","¿Cómo de seguido debo alimentar a mi bebé?":"How often should I feed my baby?","Me preocupa que mi bebé no esté recibiendo suficiente leche materna.":"I'm concerned that my baby is not getting enough breastmilk.","Mi bebé tiene hipo.":"My baby has hiccups.","Mi bebé suena congestionado o ha estado estornudando. ¿Es normal?":"My baby sounds stuffy or has been sneezing. Is that normal?","¿Le harán a mi bebé un examen de la vista?":"Will my baby have their vision tested?","¿Puedo vestir a mi bebé con su propia ropa?":"Can I put clothes on my baby?",
-    "Parto vaginal":"Vaginal delivery","Parto por cesárea":"C-section delivery","Bebé":"Baby","¿Cuándo recibiré mis papeles de alta?":"When will I get my discharge paperwork?","¿Tengo que usar una silla de ruedas?":"Do I have to take a wheelchair?"
-}
-CHINESE_TO_EN = {
-    "我有紧急情况":"I'm having an emergency","我需要用品":"I need supplies","我需要药物":"I need medication","我的静脉输液泵在响":"My IV pump is beeping","我有问题":"I have questions","我想了解出院信息":"I want to know about going home","浴室/淋浴":"Bathroom/Shower","我需要母乳喂养方面的帮助":"I need help breastfeeding","血糖":"Blood sugar","冰块/水":"Ice Chips/Water",
-    "妈妈（血糖）":"Mom (blood sugar)","宝宝（血糖）":"Baby (blood sugar)",
-    "我需要冰水":"I need ice water","我需要冰块":"I need ice chips","我需要不加冰的水":"I need water, no ice","我需要热水":"I need hot water",
-    "我需要帮助去卫生间":"I need help to the bathroom","我需要包裹我的静脉输液管以便洗澡":"I need my IV covered to shower","我可以洗澡吗？":"Can I take a shower?",
-    "宝宝用品":"Baby items","妈妈用品":"Mom items","尿布":"Diapers","配方奶":"Formula","襁褓巾":"Swaddle","湿巾":"Wipes","网眼内裤":"Mesh underwear","卫生巾":"Pads","枕头":"Pillows","蓝色卫生巾":"Blue pads","白色卫生巾":"White pads","冰袋":"Ice pack","用于会阴部的冰袋":"Ice Pack for Bottom","用于剖腹产切口的冰袋":"Ice Pack for C-section incision","用于乳房的冰袋":"Ice Pack for Breasts",
-    "Similac Total Comfort (紫色标签)":"Similac Total Comfort (purple label)","Similac 360 (蓝色标签)":"Similac 360 (blue label)","Similac Neosure (黄色标签)":"Similac Neosure (yellow label)","Enfamil Newborn (黄色标签)":"Enfamil Newborn (yellow label)","Enfamil Gentlease (紫色标签)":"Enfamil Gentlease (purple label)",
-    "疼痛":"Pain","恶心/呕吐":"Nausea/Vomiting","瘙痒":"Itchy","胀气痛":"Gas pain","便秘":"Constipation",
-    "关于妈妈的问题":"Questions about mom","关于宝宝的问题":"Questions about baby","我可以穿自己的衣服吗？":"Can I put on my own clothes?","我应该多久更换一次卫生巾？":"How often should I change my pad?","我应该多久使用一次吸奶器？":"How often should I use the breast pump?","我用吸奶器时吸不出母乳，这正常吗？":"I'm not getting any breastmilk when I pump. Is that normal?","我应该多久喂一次宝宝？":"How often should I feed my baby?","我担心宝宝没有吃到足够的母乳。":"I'm concerned that my baby is not getting enough breastmilk.","我的宝宝打嗝了。":"My baby has hiccups.","我的宝宝听起来鼻塞或一直在打喷嚏，这正常吗？":"My baby sounds stuffy or has been sneezing. Is that normal?","会给我的宝宝做视力测试吗？":"Will my baby have their vision tested?","我可以给宝宝穿衣服吗？":"Can I put clothes on my baby?",
-    "顺产出院":"Vaginal delivery","剖腹产出院":"C-section delivery","宝宝出院":"Baby","我什么时候能拿到出院文件？":"When will I get my discharge paperwork?","我必须坐轮椅吗？":"Do I have to take a wheelchair?"
-}
-
-def translate_to_en(lang: str, text: str) -> str:
-    if not text:
-        return text
-    if lang == 'es':
-        return SPANISH_TO_EN.get(text, text)
-    if lang.startswith('zh'):
-        return CHINESE_TO_EN.get(text, text)
-    return text
+# CNA coverage pseudo-room keys for storage in assignments
+CNA_FRONT_KEY = "CNA_FRONT"
+CNA_BACK_KEY  = "CNA_BACK"
+CNA_FRONT_ROOMS = [*map(str, range(231, 245)), "260"]  # 231–244 + 260
+CNA_BACK_ROOMS  = [*map(str, range(245, 260))]         # 245–259
 
 # --- Database Configuration ---
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -69,8 +41,27 @@ if not DATABASE_URL:
 
 engine = create_engine(DATABASE_URL, pool_recycle=280, pool_pre_ping=True)
 
-# --- Database Setup ---
+# --- Database Setup (idempotent & safe) ---
 def setup_database():
+    def ensure_column(table: str, col_name: str, col_def: str):
+        """Add a column if missing (safe for Postgres & SQLite)."""
+        try:
+            dialect = engine.dialect.name
+            if dialect.startswith("sqlite"):
+                with engine.connect() as c:
+                    cols = c.execute(text(f"PRAGMA table_info({table});")).fetchall()
+                    existing = {row[1] for row in cols}  # row[1] = column name
+                    if col_name in existing:
+                        return
+                    with c.begin():
+                        c.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_def};"))
+            else:
+                with engine.connect() as c:
+                    with c.begin():
+                        c.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_name} {col_def};"))
+        except Exception as e:
+            print(f"INFO: ensure_column skipped/failed for {table}.{col_name}: {e}")
+
     try:
         with engine.connect() as connection:
             with connection.begin():
@@ -83,10 +74,12 @@ def setup_database():
                         deferral_timestamp TIMESTAMP WITH TIME ZONE,
                         room VARCHAR(255),
                         user_input TEXT,
-                        user_input_en TEXT,
                         category VARCHAR(255),
                         reply TEXT,
-                        is_first_baby BOOLEAN
+                        is_first_baby BOOLEAN,
+                        -- optional pretranslated fields (safe to exist even if unused)
+                        user_input_en TEXT,
+                        reply_en TEXT
                     );
                 """))
                 connection.execute(text("""
@@ -113,31 +106,24 @@ def setup_database():
                         role VARCHAR(50) NOT NULL
                     );
                 """))
-                connection.execute(text("""
-                    CREATE TABLE IF NOT EXISTS cna_coverage (
-                        id SERIAL PRIMARY KEY,
-                        assignment_date DATE NOT NULL,
-                        zone VARCHAR(10) NOT NULL CHECK (zone IN ('front','back')),
-                        cna_name VARCHAR(255) NOT NULL,
-                        UNIQUE (assignment_date, zone)
-                    );
-                """))
-                try:
-                    connection.execute(text("ALTER TABLE requests ADD COLUMN deferral_timestamp TIMESTAMP WITH TIME ZONE;"))
-                except ProgrammingError:
-                    pass
-                try:
-                    connection.execute(text("ALTER TABLE requests ADD COLUMN user_input_en TEXT;"))
-                except ProgrammingError:
-                    pass
 
-                count = connection.execute(text("SELECT COUNT(id) FROM staff;")).scalar()
+        # Seed staff once
+        with engine.connect() as connection:
+            with connection.begin():
+                count = connection.execute(text("SELECT COUNT(id) FROM staff;")).scalar() or 0
                 if count == 0:
                     for name, role in INITIAL_STAFF.items():
                         connection.execute(text("""
                             INSERT INTO staff (name, role) VALUES (:name, :role)
                             ON CONFLICT (name) DO NOTHING;
                         """), {"name": name, "role": role})
+
+        # Ensure columns exist (idempotent)
+        ensure_column("requests", "deferral_timestamp", "TIMESTAMP WITH TIME ZONE")
+        ensure_column("requests", "user_input_en", "TEXT")
+        ensure_column("requests", "reply_en", "TEXT")
+
+        print("Database setup complete. Tables/columns are ready.")
     except Exception as e:
         print(f"CRITICAL ERROR during database setup: {e}")
 
@@ -170,24 +156,24 @@ def log_to_audit_trail(event_type, details):
     except Exception as e:
         print(f"ERROR logging to audit trail: {e}")
 
-def log_request_to_db(request_id, category, user_input, user_input_en, reply, room, is_first_baby):
+def log_request_to_db(request_id, category, user_input, reply, room, is_first_baby):
     try:
         with engine.connect() as connection:
             with connection.begin():
                 connection.execute(text("""
-                    INSERT INTO requests (request_id, timestamp, room, category, user_input, user_input_en, reply, is_first_baby)
-                    VALUES (:request_id, :timestamp, :room, :category, :user_input, :user_input_en, :reply, :is_first_baby);
+                    INSERT INTO requests (request_id, timestamp, room, category, user_input, reply, is_first_baby)
+                    VALUES (:request_id, :timestamp, :room, :category, :user_input, :reply, :is_first_baby);
                 """), {
                     "request_id": request_id,
                     "timestamp": datetime.now(timezone.utc),
                     "room": room,
                     "category": category,
                     "user_input": user_input,
-                    "user_input_en": user_input_en,
                     "reply": reply,
                     "is_first_baby": is_first_baby
                 })
-        log_to_audit_trail("Request Created", f"Room: {room}, Request: '{user_input_en}', Assigned to: {category.upper()}")
+        log_to_audit_trail("Request Created",
+                           f"Room: {room}, Request: '{user_input}', Assigned to: {category.upper()}")
     except Exception as e:
         print(f"ERROR logging to database: {e}")
 
@@ -210,23 +196,14 @@ def send_email_alert(subject, body, room_number):
         print(f"ERROR: Email failed to send: {e}")
 
 def process_request(role, subject, user_input, reply_message):
-    request_id = 'req_' + str(datetime.now(timezone.utc)).replace(' ', '_').replace(':', '').replace('.', '')
+    request_id = 'req_' + str(datetime.now(timezone.utc).timestamp()).replace('.', '')
     room_number = session.get('room_number', 'N/A')
     is_first_baby = session.get('is_first_baby')
-    lang = session.get('language', 'en') or 'en'
-    user_input_en = translate_to_en(lang, user_input)
-
     socketio.start_background_task(send_email_alert, subject, user_input, room_number)
-    socketio.start_background_task(
-        log_request_to_db,
-        request_id, role, user_input, user_input_en, reply_message, room_number, is_first_baby
-    )
+    socketio.start_background_task(log_request_to_db, request_id, role, user_input, reply_message, room_number, is_first_baby)
     socketio.emit('new_request', {
-        'id': request_id,
-        'room': room_number,
-        'request': user_input_en,
-        'role': role,
-        'timestamp': datetime.now(timezone.utc).isoformat()
+        'id': request_id, 'room': room_number, 'request': user_input,
+        'role': role, 'timestamp': datetime.now(timezone.utc).isoformat()
     })
     return reply_message
 
@@ -298,6 +275,7 @@ def handle_chat():
             else:
                 session['reply'] = button_data.get("empty_custom_note", "Please type a message in the box.")
                 session['options'] = button_data["main_buttons"]
+
         else:
             user_input = request.form.get("user_input", "").strip()
             if user_input == button_data.get("back_text", "⬅ Back"):
@@ -324,7 +302,7 @@ def handle_chat():
                     session['reply'] = process_request(role=role, subject=subject, user_input=user_input, reply_message=notification_message)
                     session['options'] = button_data["main_buttons"]
             else:
-                session['reply'] = button_data.get("not_understood", "I'm sorry, I didn't understand that. Please use the buttons provided.")
+                session['reply'] = "I'm sorry, I didn't understand that. Please use the buttons provided."
                 session['options'] = button_data["main_buttons"]
 
         return redirect(url_for('handle_chat'))
@@ -338,132 +316,17 @@ def reset_language():
     session.clear()
     return redirect(url_for("language_selector"))
 
+# --- Dashboards ---
 @app.route("/dashboard")
 def dashboard():
-    active_requests = []
-    try:
-        with engine.connect() as connection:
-            result = connection.execute(text("""
-                SELECT request_id,
-                       room,
-                       COALESCE(user_input_en, user_input) AS request_text,
-                       category as role,
-                       timestamp
-                FROM requests
-                WHERE completion_timestamp IS NULL
-                ORDER BY timestamp DESC;
-            """))
-            for row in result:
-                active_requests.append({
-                    'id': row.request_id,
-                    'room': row.room,
-                    'request': row.request_text,
-                    'role': row.role,
-                    'timestamp': (row.timestamp or datetime.now(timezone.utc)).isoformat()
-                })
-    except Exception as e:
-        print(f"ERROR fetching active requests: {e}")
-    return render_template("dashboard.html", active_requests=active_requests)
-
-# --- NEW: Nurse-specific dashboard (filtered by today's room assignments) ---
-@app.route("/nurse/<nurse_name>")
-def nurse_dashboard(nurse_name):
-    """Shows only requests for rooms assigned to this nurse today."""
+    """Main dashboard; supports optional nurse-specific view via query params:
+       /dashboard?view=mine&nurse=Maria
+    """
+    view = request.args.get('view')
+    nurse_filter = request.args.get('nurse')
     today = date.today()
-    assigned_rooms = []
-    try:
-        with engine.connect() as connection:
-            rows = connection.execute(text("""
-                SELECT room_number
-                FROM assignments
-                WHERE assignment_date = :d AND nurse_name = :n
-                ORDER BY room_number::int
-            """), {"d": today, "n": nurse_name}).fetchall()
-            assigned_rooms = [r[0] for r in rows]
-    except Exception as e:
-        print(f"ERROR fetching rooms for nurse {nurse_name}: {e}")
 
-    active_requests = []
-    try:
-        with engine.connect() as connection:
-            result = connection.execute(text("""
-                SELECT request_id,
-                       room,
-                       COALESCE(user_input_en, user_input) AS request_text,
-                       category as role,
-                       timestamp
-                FROM requests
-                WHERE completion_timestamp IS NULL
-                ORDER BY timestamp DESC;
-            """))
-            allowed = set(assigned_rooms)
-            for row in result:
-                if row.room in allowed:
-                    active_requests.append({
-                        'id': row.request_id,
-                        'room': row.room,
-                        'request': row.request_text,
-                        'role': row.role,
-                        'timestamp': (row.timestamp or datetime.now(timezone.utc)).isoformat()
-                    })
-    except Exception as e:
-        print(f"ERROR fetching filtered requests: {e}")
-
-    # We pass extra context (template can ignore it for now)
-    return render_template(
-        "dashboard.html",
-        active_requests=active_requests,
-        filtered_for=nurse_name,
-        filtered_rooms=assigned_rooms
-    )
-# --- Staff Portal (PIN + nurse select) ---
-@app.route('/staff-portal', methods=['GET', 'POST'])
-def staff_portal():
-    # Pull PIN from env (set this on Render: STAFF_PORTAL_PIN)
-    required_pin = os.getenv('STAFF_PORTAL_PIN', '0000')
-
-    # Fetch the nurse list for the select dropdown
-    nurses = []
-    try:
-        with engine.connect() as connection:
-            result = connection.execute(text("SELECT name FROM staff WHERE role = 'nurse' ORDER BY name;"))
-            nurses = [row[0] for row in result]
-    except Exception as e:
-        print(f"ERROR fetching nurses for staff portal: {e}")
-
-    if request.method == 'POST':
-        pin = request.form.get('pin', '').strip()
-        nurse_name = request.form.get('nurse_name', '').strip()
-        if pin != required_pin:
-            flash('Invalid PIN.', 'danger')
-            return render_template('staff_portal.html', nurses=nurses)
-        if not nurse_name:
-            flash('Please select your name.', 'danger')
-            return render_template('staff_portal.html', nurses=nurses)
-        # Success → go to the filtered dashboard for that nurse
-        return redirect(url_for('staff_rooms', nurse_name=nurse_name))
-
-    # GET
-    return render_template('staff_portal.html', nurses=nurses)
-
-
-# --- Filtered Dashboard: only this nurse's rooms ---
-@app.route('/staff-rooms/<nurse_name>')
-def staff_rooms(nurse_name):
-    today = date.today()
-    # 1) Figure out this nurse's rooms for today
-    nurse_room_numbers = []
-    try:
-        with engine.connect() as connection:
-            result = connection.execute(
-                text("SELECT room_number FROM assignments WHERE assignment_date = :d AND nurse_name = :n;"),
-                {"d": today, "n": nurse_name}
-            )
-            nurse_room_numbers = [row[0] for row in result]
-    except Exception as e:
-        print(f"ERROR fetching nurse rooms for {nurse_name}: {e}")
-
-    # 2) Pull active requests, then filter to those rooms
+    # Pull all active requests
     active_requests = []
     try:
         with engine.connect() as connection:
@@ -474,32 +337,35 @@ def staff_rooms(nurse_name):
                 ORDER BY timestamp DESC;
             """))
             for row in result:
-                if row.room in nurse_room_numbers:
-                    active_requests.append({
-                        'id': row.request_id,
-                        'room': row.room,
-                        'request': row.user_input,
-                        'role': row.role,
-                        'timestamp': row.timestamp.isoformat()
-                    })
+                active_requests.append({
+                    'id': row.request_id,
+                    'room': row.room,
+                    'request': row.user_input,
+                    'role': row.role,
+                    'timestamp': row.timestamp.isoformat() if row.timestamp else datetime.now(timezone.utc).isoformat()
+                })
     except Exception as e:
-        print(f"ERROR fetching filtered active requests for {nurse_name}: {e}")
+        print(f"ERROR fetching active requests: {e}")
 
-    # Reuse the same dashboard template; it will simply render the list we pass.
-    # (Extras below are safe if your template ignores them.)
-    return render_template(
-        "dashboard.html",
-        active_requests=active_requests,
-        is_staff_view=True,
-        nurse_name=nurse_name,
-        nurse_rooms=nurse_room_numbers
-    )
+    is_mine_view = (view == 'mine' and nurse_filter)
 
-@app.route('/staff-portal', methods=['GET'])
-def staff_portal():
-    # Temporary stub so /dashboard can render without a BuildError.
-    # We’ll replace this with the proper PIN + nurse-select flow next.
-    return redirect(url_for('dashboard'))
+    # If nurse-specific view, reduce to rooms assigned to that nurse today
+    if is_mine_view:
+        try:
+            with engine.connect() as connection:
+                rows = connection.execute(text("""
+                    SELECT room_number FROM assignments
+                    WHERE assignment_date = :d AND nurse_name = :n;
+                """), {"d": today, "n": nurse_filter}).fetchall()
+                my_rooms = {r[0] for r in rows}
+            active_requests = [r for r in active_requests if r['room'] in my_rooms]
+        except Exception as e:
+            print(f"ERROR filtering dashboard by nurse {nurse_filter}: {e}")
+
+    return render_template("dashboard.html",
+                           active_requests=active_requests,
+                           is_mine=is_mine_view,
+                           nurse_name=nurse_filter)
 
 @app.route('/analytics')
 def analytics():
@@ -513,8 +379,7 @@ def analytics():
         with engine.connect() as connection:
             avg_time_result = connection.execute(text("""
                 SELECT AVG(EXTRACT(EPOCH FROM (completion_timestamp - timestamp))) as avg_seconds
-                FROM requests
-                WHERE completion_timestamp IS NOT NULL;
+                FROM requests WHERE completion_timestamp IS NOT NULL;
             """)).scalar_one_or_none()
             if avg_time_result is not None:
                 minutes, seconds = divmod(int(avg_time_result), 60)
@@ -528,16 +393,16 @@ def analytics():
             top_requests_values = [row[1] for row in top_requests_result]
 
             most_requested_result = connection.execute(text("""
-                SELECT user_input, COUNT(id) as count FROM requests
-                GROUP BY user_input ORDER BY count DESC LIMIT 5;
+                SELECT user_input, COUNT(id) as count
+                FROM requests GROUP BY user_input
+                ORDER BY count DESC LIMIT 5;
             """)).fetchall()
             most_requested_labels = [row[0] for row in most_requested_result]
             most_requested_values = [row[1] for row in most_requested_result]
 
             requests_by_hour_result = connection.execute(text("""
                 SELECT EXTRACT(HOUR FROM timestamp) as hour, COUNT(id)
-                FROM requests
-                GROUP BY hour ORDER BY hour;
+                FROM requests GROUP BY hour ORDER BY hour;
             """)).fetchall()
             hourly_counts = defaultdict(int)
             for hour, count in requests_by_hour_result:
@@ -578,11 +443,14 @@ def analytics():
         multi_baby_values=multi_baby_values
     )
 
+# --- Assignments (Managers) ---
 @app.route('/assignments', methods=['GET', 'POST'])
 def assignments():
     today = date.today()
+    all_nurses = []
+    all_cnas = []
 
-    all_nurses, all_cnas = [], []
+    # Load staff lists
     try:
         with engine.connect() as connection:
             nurse_rows = connection.execute(text("SELECT name FROM staff WHERE role = 'nurse' ORDER BY name;")).fetchall()
@@ -590,12 +458,45 @@ def assignments():
             all_nurses = [r[0] for r in nurse_rows]
             all_cnas = [r[0] for r in cna_rows]
     except Exception as e:
-        print(f"ERROR fetching staff lists: {e}")
+        print(f"ERROR fetching nurses/CNAs: {e}")
 
     if request.method == 'POST':
         try:
             with engine.connect() as connection:
                 with connection.begin():
+                    # Save CNA front/back selection using pseudo-rooms
+                    front = request.form.get('cna_front', 'unassigned')
+                    back  = request.form.get('cna_back', 'unassigned')
+
+                    # FRONT
+                    if front and front != 'unassigned':
+                        connection.execute(text("""
+                            INSERT INTO assignments (assignment_date, room_number, nurse_name)
+                            VALUES (:d, :r, :n)
+                            ON CONFLICT (assignment_date, room_number)
+                            DO UPDATE SET nurse_name = EXCLUDED.nurse_name;
+                        """), {"d": today, "r": CNA_FRONT_KEY, "n": front})
+                    else:
+                        connection.execute(text("""
+                            DELETE FROM assignments
+                            WHERE assignment_date = :d AND room_number = :r;
+                        """), {"d": today, "r": CNA_FRONT_KEY})
+
+                    # BACK
+                    if back and back != 'unassigned':
+                        connection.execute(text("""
+                            INSERT INTO assignments (assignment_date, room_number, nurse_name)
+                            VALUES (:d, :r, :n)
+                            ON CONFLICT (assignment_date, room_number)
+                            DO UPDATE SET nurse_name = EXCLUDED.nurse_name;
+                        """), {"d": today, "r": CNA_BACK_KEY, "n": back})
+                    else:
+                        connection.execute(text("""
+                            DELETE FROM assignments
+                            WHERE assignment_date = :d AND room_number = :r;
+                        """), {"d": today, "r": CNA_BACK_KEY})
+
+                    # Save per-room nurse picks
                     for room_number in ALL_ROOMS:
                         field = f"nurse_for_room_{room_number}"
                         nurse_name = request.form.get(field)
@@ -611,73 +512,43 @@ def assignments():
                                 DELETE FROM assignments
                                 WHERE assignment_date = :date AND room_number = :room;
                             """), {"date": today, "room": room_number})
-
-                    cna_front = request.form.get('cna_front', 'unassigned')
-                    cna_back  = request.form.get('cna_back', 'unassigned')
-
-                    if cna_front and cna_front != 'unassigned':
-                        connection.execute(text("""
-                            INSERT INTO cna_coverage (assignment_date, zone, cna_name)
-                            VALUES (:date, 'front', :name)
-                            ON CONFLICT (assignment_date, zone)
-                            DO UPDATE SET cna_name = EXCLUDED.cna_name;
-                        """), {"date": today, "name": cna_front})
-                    else:
-                        connection.execute(text("DELETE FROM cna_coverage WHERE assignment_date=:date AND zone='front';"),
-                                           {"date": today})
-
-                    if cna_back and cna_back != 'unassigned':
-                        connection.execute(text("""
-                            INSERT INTO cna_coverage (assignment_date, zone, cna_name)
-                            VALUES (:date, 'back', :name)
-                            ON CONFLICT (assignment_date, zone)
-                            DO UPDATE SET cna_name = EXCLUDED.cna_name;
-                        """), {"date": today, "name": cna_back})
-                    else:
-                        connection.execute(text("DELETE FROM cna_coverage WHERE assignment_date=:date AND zone='back';"),
-                                           {"date": today})
+            print("Assignments saved successfully.")
         except Exception as e:
             print(f"ERROR saving assignments: {e}")
-        return redirect(url_for('assignments'))
+        return redirect(url_for('dashboard'))
 
+    # Build current assignments map { room_number: nurse_name }
     current_assignments = {}
+    cna_front_current = 'unassigned'
+    cna_back_current = 'unassigned'
     try:
         with engine.connect() as connection:
-            result = connection.execute(text("""
-                SELECT room_number, nurse_name
-                FROM assignments
-                WHERE assignment_date = :date;
-            """), {"date": today})
-            for row in result:
-                current_assignments[row.room_number] = row.nurse_name
+            rows = connection.execute(text("""
+                SELECT room_number, nurse_name FROM assignments WHERE assignment_date = :d;
+            """), {"d": today}).fetchall()
+            for r in rows:
+                if r.room_number == CNA_FRONT_KEY:
+                    cna_front_current = r.nurse_name
+                elif r.room_number == CNA_BACK_KEY:
+                    cna_back_current = r.nurse_name
+                else:
+                    current_assignments[r.room_number] = r.nurse_name
     except Exception as e:
         print(f"ERROR fetching assignments: {e}")
 
-    cna_front_val, cna_back_val = None, None
-    try:
-        with engine.connect() as connection:
-            cov = connection.execute(text("""
-                SELECT zone, cna_name FROM cna_coverage
-                WHERE assignment_date = :date;
-            """), {"date": today}).fetchall()
-            for zone, name in cov:
-                if zone == 'front':
-                    cna_front_val = name
-                elif zone == 'back':
-                    cna_back_val = name
-    except Exception as e:
-        print(f"ERROR fetching CNA coverage: {e}")
-
     return render_template(
         'assignments.html',
-        rooms=ALL_ROOMS,
-        nurses=all_nurses,
-        assignments=current_assignments,
+        all_nurses=all_nurses,
         all_cnas=all_cnas,
-        cna_front=cna_front_val,
-        cna_back=cna_back_val
+        all_rooms=ALL_ROOMS,
+        current_assignments=current_assignments,
+        cna_front=cna_front_current,
+        cna_back=cna_back_current,
+        cna_front_rooms=CNA_FRONT_ROOMS,
+        cna_back_rooms=CNA_BACK_ROOMS
     )
 
+# --- Simple manager auth (for staff list/audit log) ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -713,6 +584,7 @@ def manager_dashboard():
                                 ON CONFLICT (name) DO NOTHING;
                             """), {"name": name, "role": role})
                             log_to_audit_trail("Staff Added", f"Added staff member: {name} ({role})")
+
                     elif action == 'remove_staff':
                         staff_id = request.form.get('staff_id')
                         if staff_id:
@@ -721,7 +593,8 @@ def manager_dashboard():
                             ), {"id": staff_id}).first()
                             if staff_member:
                                 connection.execute(text("DELETE FROM staff WHERE id = :id;"), {"id": staff_id})
-                                log_to_audit_trail("Staff Removed", f"Removed staff member: {staff_member.name} ({staff_member.role})")
+                                log_to_audit_trail("Staff Removed",
+                                                   f"Removed staff member: {staff_member.name} ({staff_member.role})")
         except Exception as e:
             print(f"ERROR updating staff: {e}")
         return redirect(url_for('manager_dashboard'))
@@ -733,14 +606,26 @@ def manager_dashboard():
             staff_result = connection.execute(text("SELECT id, name, role FROM staff ORDER BY name;"))
             staff_list = staff_result.fetchall()
             audit_result = connection.execute(text("""
-                SELECT timestamp, event_type, details FROM audit_log
-                ORDER BY timestamp DESC LIMIT 50;
+                SELECT timestamp, event_type, details
+                FROM audit_log ORDER BY timestamp DESC LIMIT 50;
             """))
             audit_log = audit_result.fetchall()
     except Exception as e:
         print(f"ERROR fetching manager dashboard data: {e}")
 
     return render_template('manager_dashboard.html', staff=staff_list, audit_log=audit_log)
+
+# --- Lightweight staff portal pin (for future nurse-views if needed) ---
+@app.route("/staff", methods=["GET", "POST"])
+def staff_portal():
+    """Optional simple PIN gate—kept minimal. Not required for dashboard filter links."""
+    if request.method == "POST":
+        pin = request.form.get("pin", "")
+        if pin and os.getenv("STAFF_PORTAL_PIN") and pin == os.getenv("STAFF_PORTAL_PIN"):
+            session["staff_portal_ok"] = True
+            return redirect(url_for("dashboard"))
+        flash("Invalid PIN", "danger")
+    return render_template("login.html")  # reuse a basic form if desired
 
 # --- SocketIO Event Handlers ---
 @socketio.on('join')
@@ -756,6 +641,7 @@ def handle_acknowledge(data):
 
 @socketio.on('defer_request')
 def handle_defer_request(data):
+    """Defer to nurse WITHOUT resetting the original timestamp (so timers don't restart)."""
     request_id = data.get('id')
     if not request_id:
         return
@@ -766,8 +652,7 @@ def handle_defer_request(data):
             with connection.begin():
                 connection.execute(text("""
                     UPDATE requests
-                    SET category = 'nurse',
-                        deferral_timestamp = :now
+                    SET category = 'nurse', deferral_timestamp = :now
                     WHERE request_id = :request_id;
                 """), {"now": now_utc, "request_id": request_id})
         socketio.emit('request_updated', {
@@ -798,8 +683,11 @@ def handle_complete_request(data):
         except Exception as e:
             print(f"ERROR updating completion timestamp: {e}")
 
+# --- Healthcheck (useful for Render) ---
+@app.route("/healthz")
+def healthz():
+    return {"status": "ok", "time": datetime.utcnow().isoformat()}
+
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
-
-
