@@ -7,32 +7,42 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    :root { --core-blue:#00205b; --accent-blue:#007eb4; }
-    body { font-family:'Inter',sans-serif; background:#f4f7f9; }
-    .button-primary { background:var(--core-blue); }
-    .button-primary:hover { background:#093582; }
-    .link { color:var(--accent-blue); }
-    .link:hover { color:var(--core-blue); }
+    :root {
+      --core-blue: #00205b;
+      --accent-blue: #007eb4;
+      --light-gray-background: #f5f5f5;
+      --white: #ffffff;
+    }
+    body { font-family: 'Inter', sans-serif; background-color: var(--light-gray-background); }
+    .button-primary { background-color: var(--core-blue); color: var(--white); }
+    .button-primary:hover { background-color: #093582; }
+    .link { color: var(--accent-blue); }
+    .link:hover { color: var(--core-blue); }
   </style>
 </head>
 <body class="p-4 sm:p-6 lg:p-8">
-  <div class="container mx-auto max-w-4xl bg-white p-6 sm:p-8 rounded-xl shadow-md">
+  <div class="container mx-auto max-w-5xl bg-white p-6 sm:p-8 rounded-xl shadow-md">
+
     <header class="mb-6">
-      <h1 class="text-3xl font-bold text-gray-800">Staff Assignments</h1>
+      <h1 class="text-3xl font-bold text-gray-900">Staff Assignments</h1>
     </header>
 
-    <!-- Single CNA Coverage section -->
+    <!-- Assignments form -->
     <form method="POST" action="{{ url_for('assignments') }}">
+
+      <!-- CNA Coverage -->
       <section class="mb-8">
         <h2 class="text-xl font-semibold text-gray-700 mb-4">CNA Coverage</h2>
+
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <!-- Front CNA -->
-          <div>
-            <label for="cna_front" class="block text-sm font-medium text-gray-700">Front CNA</label>
+          <div class="border rounded-lg p-4">
+            <label for="cna_front" class="block text-sm font-medium text-gray-700 mb-2">Front CNA</label>
             <select
               name="cna_front" id="cna_front"
-              class="mt-1 block w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-              <option value="unassigned" {% if not cna_front %}selected{% endif %}>Unassigned</option>
+              class="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="unassigned" {% if cna_front == 'unassigned' %}selected{% endif %}>Unassigned</option>
               {% for cna in all_cnas %}
                 <option value="{{ cna }}" {% if cna_front == cna %}selected{% endif %}>{{ cna }}</option>
               {% endfor %}
@@ -40,12 +50,13 @@
           </div>
 
           <!-- Back CNA -->
-          <div>
-            <label for="cna_back" class="block text-sm font-medium text-gray-700">Back CNA</label>
+          <div class="border rounded-lg p-4">
+            <label for="cna_back" class="block text-sm font-medium text-gray-700 mb-2">Back CNA</label>
             <select
               name="cna_back" id="cna_back"
-              class="mt-1 block w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-              <option value="unassigned" {% if not cna_back %}selected{% endif %}>Unassigned</option>
+              class="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="unassigned" {% if cna_back == 'unassigned' %}selected{% endif %}>Unassigned</option>
               {% for cna in all_cnas %}
                 <option value="{{ cna }}" {% if cna_back == cna %}selected{% endif %}>{{ cna }}</option>
               {% endfor %}
@@ -55,20 +66,26 @@
       </section>
 
       <!-- Nurse by Room -->
-      <section>
+      <section class="mb-10">
         <h2 class="text-xl font-semibold text-gray-700 mb-4">Nurse by Room</h2>
+
+        <!-- 1 column on small screens; 2 columns on md+ -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {% for room in rooms %}
+          {% for room in all_rooms %}
             <div class="border rounded-lg p-4">
-              <label class="block text-sm font-medium text-gray-700" for="nurse_for_room_{{ room }}">
-                Room {{ room }}
-              </label>
+              <label class="block text-sm font-medium text-gray-700 mb-2" for="room_{{ room }}">Room {{ room }}</label>
               <select
-                name="nurse_for_room_{{ room }}" id="nurse_for_room_{{ room }}"
-                class="mt-1 block w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-                <option value="unassigned" {% if not assignments.get(room) %}selected{% endif %}>Unassigned</option>
-                {% for nurse in nurses %}
-                  <option value="{{ nurse }}" {% if assignments.get(room) == nurse %}selected{% endif %}>{{ nurse }}</option>
+                name="nurse_for_room_{{ room }}" id="room_{{ room }}"
+                class="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="unassigned"
+                  {% if not current_assignments.get(room) or current_assignments.get(room) == 'unassigned' %}selected{% endif %}
+                >Unassigned</option>
+
+                {% for nurse in all_nurses %}
+                  <option value="{{ nurse }}"
+                    {% if current_assignments.get(room) == nurse %}selected{% endif %}
+                  >{{ nurse }}</option>
                 {% endfor %}
               </select>
             </div>
@@ -76,18 +93,21 @@
         </div>
       </section>
 
-      <div class="mt-8">
+      <!-- Save button -->
+      <div>
         <button type="submit"
-          class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white button-primary transition-colors">
+          class="w-full sm:w-auto px-6 py-3 rounded-md shadow-sm text-sm font-medium button-primary transition-colors">
           Save All Assignments
         </button>
       </div>
     </form>
 
+    <!-- Footer links -->
     <div class="text-center mt-8 space-x-6">
       <a href="{{ url_for('dashboard') }}" class="link">← Back to Dashboard</a>
       <a href="{{ url_for('analytics') }}" class="link">View Analytics →</a>
     </div>
+
   </div>
 </body>
 </html>
