@@ -27,11 +27,6 @@ INITIAL_STAFF = {
     'Peter': 'cna', 'Linda': 'cna'
 }
 ALL_ROOMS = [str(room) for room in range(231, 261)]
-# CNA coverage pseudo-room keys for storage in assignments
-CNA_FRONT_KEY = "CNA_FRONT"
-CNA_BACK_KEY  = "CNA_BACK"
-CNA_FRONT_ROOMS = [*map(str, range(231, 245)), "260"]  # 231–244 + 260
-CNA_BACK_ROOMS  = [*map(str, range(245, 260))]         # 245–259
 
 # --- Database Configuration ---
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -41,62 +36,29 @@ if not DATABASE_URL:
 
 engine = create_engine(DATABASE_URL, pool_recycle=280, pool_pre_ping=True)
 
-# --- Database Setup (idempotent & safe) ---
+# --- Database Setup ---
 def setup_database():
-    def ensure_column(table: str, col_name: str, col_def: str):
-        """Add a column if missing (safe for Postgres & SQLite)."""
-        try:
-            dialect = engine.dialect.name
-            if dialect.startswith("sqlite"):
-                with engine.connect() as c:
-                    cols = c.execute(text(f"PRAGMA table_info({table});")).fetchall()
-                    existing = {row[1] for row in cols}  # row[1] = column name
-                    if col_name in existing:
-                        return
-                    with c.begin():
-                        c.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_def};"))
-            else:
-                with engine.connect() as c:
-                    with c.begin():
-                        c.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_name} {col_def};"))
-        except Exception as e:
-            print(f"INFO: ensure_column skipped/failed for {table}.{col_name}: {e}")
-
     try:
         with engine.connect() as connection:
             with connection.begin():
+                print("Running CREATE TABLE statements...")
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS requests (
-                        id SERIAL PRIMARY KEY,
-                        request_id VARCHAR(255) UNIQUE,
-                        timestamp TIMESTAMP WITH TIME ZONE,
-                        completion_timestamp TIMESTAMP WITH TIME ZONE,
-                        deferral_timestamp TIMESTAMP WITH TIME ZONE,
-                        room VARCHAR(255),
-                        user_input TEXT,
-                        category VARCHAR(255),
-                        reply TEXT,
-                        is_first_baby BOOLEAN,
-                        -- optional pretranslated fields (safe to exist even if unused)
-                        user_input_en TEXT,
-                        reply_en TEXT
+                        id SERIAL PRIMARY KEY, request_id VARCHAR(255) UNIQUE, timestamp TIMESTAMP WITH TIME ZONE,
+                        completion_timestamp TIMESTAMP WITH TIME ZONE, deferral_timestamp TIMESTAMP WITH TIME ZONE,
+                        room VARCHAR(255), user_input TEXT, category VARCHAR(255), reply TEXT, is_first_baby BOOLEAN
                     );
                 """))
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS assignments (
-                        id SERIAL PRIMARY KEY,
-                        assignment_date DATE NOT NULL,
-                        room_number VARCHAR(255) NOT NULL,
-                        nurse_name VARCHAR(255) NOT NULL,
-                        UNIQUE(assignment_date, room_number)
+                        id SERIAL PRIMARY KEY, assignment_date DATE NOT NULL, room_number VARCHAR(255) NOT NULL,
+                        nurse_name VARCHAR(255) NOT NULL, UNIQUE(assignment_date, room_number)
                     );
                 """))
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS audit_log (
-                        id SERIAL PRIMARY KEY,
-                        timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
-                        event_type VARCHAR(255) NOT NULL,
-                        details TEXT
+                        id SERIAL PRIMARY KEY, timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+                        event_type VARCHAR(255) NOT NULL, details TEXT
                     );
                 """))
                 connection.execute(text("""
@@ -106,28 +68,151 @@ def setup_database():
                         role VARCHAR(50) NOT NULL
                     );
                 """))
+                print("CREATE TABLE statements complete.")
 
-        # Seed staff once
-        with engine.connect() as connection:
-            with connection.begin():
-                count = connection.execute(text("SELECT COUNT(id) FROM staff;")).scalar() or 0
+                count = connection.execute(text("SELECT COUNT(id) FROM staff;")).scalar()
                 if count == 0:
+                    print("Staff table is empty. Populating with initial staff...")
                     for name, role in INITIAL_STAFF.items():
                         connection.execute(text("""
                             INSERT INTO staff (name, role) VALUES (:name, :role)
                             ON CONFLICT (name) DO NOTHING;
                         """), {"name": name, "role": role})
+                    print("Initial staff population complete.")
 
-        # Ensure columns exist (idempotent)
-        ensure_column("requests", "deferral_timestamp", "TIMESTAMP WITH TIME ZONE")
-        ensure_column("requests", "user_input_en", "TEXT")
-        ensure_column("requests", "reply_en", "TEXT")
+        with engine.connect() as connection:
+            with connection.begin():
+                try:
+                    connection.execute(text("ALTER TABLE requests ADD COLUMN deferral_timestamp TIMESTAMP WITH TIME ZONE;"))
+                except ProgrammingError:
+                    pass
 
-        print("Database setup complete. Tables/columns are ready.")
+        print("Database setup complete. Tables are ready.")
     except Exception as e:
         print(f"CRITICAL ERROR during database setup: {e}")
 
 setup_database()
+
+# --- Localized label -> English maps for structured buttons ---
+ES_TO_EN = {
+    "Tengo una emergencia": "I'm having an emergency",
+    "Necesito suministros": "I need supplies",
+    "Necesito medicamentos": "I need medication",
+    "Mi bomba de IV está sonando": "My IV pump is beeping",
+    "Tengo preguntas": "I have questions",
+    "Quiero saber sobre el alta": "I want to know about going home",
+    "Baño / Ducha": "Bathroom/Shower",
+    "Necesito ayuda para amamantar": "I need help breastfeeding",
+    "Azúcar en la sangre": "Blood sugar",
+    "Hielo / Agua": "Ice Chips/Water",
+
+    "Mamá (azúcar en la sangre)": "Mom (blood sugar)",
+    "Bebé (azúcar en la sangre)": "Baby (blood sugar)",
+
+    "Necesito agua con hielo": "I need ice water",
+    "Necesito hielo picado": "I need ice chips",
+    "Necesito agua, sin hielo": "I need water, no ice",
+    "Necesito agua caliente": "I need hot water",
+
+    "Necesito ayuda para ir al baño": "I need help to the bathroom",
+    "Necesito cubrir mi vía IV para bañarme": "I need my IV covered to shower",
+    "¿Puedo tomar una ducha?": "Can I take a shower?",
+
+    "Artículos para bebé": "Baby items",
+    "Artículos para mamá": "Mom items",
+    "Pañales": "Diapers",
+    "Fórmula": "Formula",
+    "Manta para envolver": "Swaddle",
+    "Toallitas húmedas": "Wipes",
+    "Toallas sanitarias": "Pads",
+    "Ropa interior de malla": "Mesh underwear",
+    "Compresa de hielo": "Ice pack",
+    "Almohadas": "Pillows",
+
+    "Toallas azules": "Blue pads",
+    "Toallas blancas": "White pads",
+
+    "Compresa de hielo para el perineo": "Ice Pack for Bottom",
+    "Compresa de hielo para la incisión de la cesárea": "Ice Pack for C-section incision",
+    "Compresa de hielo para los senos": "Ice Pack for Breasts",
+
+    "Similac Total Comfort (etiqueta morada)": "Similac Total Comfort (purple label)",
+    "Similac 360 (etiqueta azul)": "Similac 360 (blue label)",
+    "Similac Neosure (etiqueta amarilla)": "Similac Neosure (yellow label)",
+    "Enfamil Newborn (etiqueta amarilla)": "Enfamil Newborn (yellow label)",
+    "Enfamil Gentlease (etiqueta morada)": "Enfamil Gentlease (purple label)",
+
+    "Dolor": "Pain",
+    "Náuseas/Vómitos": "Nausea/Vomiting",
+    "Picazón": "Itchy",
+    "Dolor por gases": "Gas pain",
+    "Estreñimiento": "Constipation",
+}
+
+ZH_TO_EN = {
+    "我有紧急情况": "I'm having an emergency",
+    "我需要用品": "I need supplies",
+    "我需要药物": "I need medication",
+    "我的静脉输液泵在响": "My IV pump is beeping",
+    "我有问题": "I have questions",
+    "我想了解出院信息": "I want to know about going home",
+    "浴室/淋浴": "Bathroom/Shower",
+    "我需要母乳喂养方面的帮助": "I need help breastfeeding",
+    "血糖": "Blood sugar",
+    "冰块/水": "Ice Chips/Water",
+
+    "妈妈（血糖）": "Mom (blood sugar)",
+    "宝宝（血糖）": "Baby (blood sugar)",
+
+    "我需要冰水": "I need ice water",
+    "我需要冰块": "I need ice chips",
+    "我需要不加冰的水": "I need water, no ice",
+    "我需要热水": "I need hot water",
+
+    "我需要帮助去卫生间": "I need help to the bathroom",
+    "我需要包裹我的静脉输液管以便洗澡": "I need my IV covered to shower",
+    "我可以洗澡吗？": "Can I take a shower?",
+
+    "宝宝用品": "Baby items",
+    "妈妈用品": "Mom items",
+    "尿布": "Diapers",
+    "配方奶": "Formula",
+    "襁褓巾": "Swaddle",
+    "湿巾": "Wipes",
+    "卫生巾": "Pads",
+    "网眼内裤": "Mesh underwear",
+    "冰袋": "Ice pack",
+    "枕头": "Pillows",
+
+    "蓝色卫生巾": "Blue pads",
+    "白色卫生巾": "White pads",
+
+    "用于会阴部的冰袋": "Ice Pack for Bottom",
+    "用于剖腹产切口的冰袋": "Ice Pack for C-section incision",
+    "用于乳房的冰袋": "Ice Pack for Breasts",
+
+    "Similac Total Comfort (紫色标签)": "Similac Total Comfort (purple label)",
+    "Similac 360 (蓝色标签)": "Similac 360 (blue label)",
+    "Similac Neosure (黄色标签)": "Similac Neosure (yellow label)",
+    "Enfamil Newborn (黄色标签)": "Enfamil Newborn (yellow label)",
+    "Enfamil Gentlease (紫色标签)": "Enfamil Gentlease (purple label)",
+
+    "疼痛": "Pain",
+    "恶心/呕吐": "Nausea/Vomiting",
+    "瘙痒": "Itchy",
+    "胀气痛": "Gas pain",
+    "便秘": "Constipation",
+}
+
+def to_english_label(text: str, lang: str) -> str:
+    """Return an English label for structured buttons. For unknown/custom notes, tag language."""
+    if not text:
+        return text
+    if lang == "es":
+        return ES_TO_EN.get(text, f"[ES] {text}")
+    if lang == "zh":
+        return ZH_TO_EN.get(text, f"[ZH] {text}")
+    return text
 
 # --- Smart Routing Logic ---
 def route_note_intelligently(note_text):
@@ -147,12 +232,18 @@ def log_to_audit_trail(event_type, details):
                 connection.execute(text("""
                     INSERT INTO audit_log (timestamp, event_type, details)
                     VALUES (:timestamp, :event_type, :details);
-                """), {"timestamp": now_utc, "event_type": event_type, "details": details})
+                """), {
+                    "timestamp": now_utc,
+                    "event_type": event_type,
+                    "details": details
+                })
+
         socketio.emit('new_audit_log', {
             'timestamp': now_utc.strftime('%Y-%m-%d %H:%M:%S') + ' UTC',
             'event_type': event_type,
             'details': details
         })
+
     except Exception as e:
         print(f"ERROR logging to audit trail: {e}")
 
@@ -164,16 +255,10 @@ def log_request_to_db(request_id, category, user_input, reply, room, is_first_ba
                     INSERT INTO requests (request_id, timestamp, room, category, user_input, reply, is_first_baby)
                     VALUES (:request_id, :timestamp, :room, :category, :user_input, :reply, :is_first_baby);
                 """), {
-                    "request_id": request_id,
-                    "timestamp": datetime.now(timezone.utc),
-                    "room": room,
-                    "category": category,
-                    "user_input": user_input,
-                    "reply": reply,
-                    "is_first_baby": is_first_baby
+                    "request_id": request_id, "timestamp": datetime.now(timezone.utc), "room": room,
+                    "category": category, "user_input": user_input, "reply": reply, "is_first_baby": is_first_baby
                 })
-        log_to_audit_trail("Request Created",
-                           f"Room: {room}, Request: '{user_input}', Assigned to: {category.upper()}")
+        log_to_audit_trail("Request Created", f"Room: {room}, Request: '{user_input}', Assigned to: {category.upper()}")
     except Exception as e:
         print(f"ERROR logging to database: {e}")
 
@@ -196,13 +281,26 @@ def send_email_alert(subject, body, room_number):
         print(f"ERROR: Email failed to send: {e}")
 
 def process_request(role, subject, user_input, reply_message):
+    # Normalize to English for dashboard/email/logs; tag unknown custom notes with language
+    lang = session.get('language', 'en')
+    english_user_input = to_english_label(user_input, lang)
+
     request_id = 'req_' + str(datetime.now(timezone.utc).timestamp()).replace('.', '')
     room_number = session.get('room_number', 'N/A')
     is_first_baby = session.get('is_first_baby')
-    socketio.start_background_task(send_email_alert, subject, user_input, room_number)
-    socketio.start_background_task(log_request_to_db, request_id, role, user_input, reply_message, room_number, is_first_baby)
+
+    socketio.start_background_task(send_email_alert, subject, english_user_input, room_number)
+    socketio.start_background_task(
+        log_request_to_db,
+        request_id,
+        role,
+        english_user_input,  # store/emit English text
+        reply_message,
+        room_number,
+        is_first_baby
+    )
     socketio.emit('new_request', {
-        'id': request_id, 'room': room_number, 'request': user_input,
+        'id': request_id, 'room': room_number, 'request': english_user_input,
         'role': role, 'timestamp': datetime.now(timezone.utc).isoformat()
     })
     return reply_message
@@ -273,6 +371,7 @@ def handle_chat():
                 session['reply'] = process_request(role=role, subject="Custom Patient Note", user_input=note_text, reply_message=reply_message)
                 session['options'] = button_data["main_buttons"]
             else:
+                # Use localized empty message if present; fall back to English
                 session['reply'] = button_data.get("empty_custom_note", "Please type a message in the box.")
                 session['options'] = button_data["main_buttons"]
 
@@ -302,7 +401,7 @@ def handle_chat():
                     session['reply'] = process_request(role=role, subject=subject, user_input=user_input, reply_message=notification_message)
                     session['options'] = button_data["main_buttons"]
             else:
-                session['reply'] = "I'm sorry, I didn't understand that. Please use the buttons provided."
+                session['reply'] = button_data.get("fallback_unrecognized", "I'm sorry, I didn't understand that. Please use the buttons provided.")
                 session['options'] = button_data["main_buttons"]
 
         return redirect(url_for('handle_chat'))
@@ -316,17 +415,8 @@ def reset_language():
     session.clear()
     return redirect(url_for("language_selector"))
 
-# --- Dashboards ---
 @app.route("/dashboard")
 def dashboard():
-    """Main dashboard; supports optional nurse-specific view via query params:
-       /dashboard?view=mine&nurse=Maria
-    """
-    view = request.args.get('view')
-    nurse_filter = request.args.get('nurse')
-    today = date.today()
-
-    # Pull all active requests
     active_requests = []
     try:
         with engine.connect() as connection:
@@ -342,31 +432,13 @@ def dashboard():
                     'room': row.room,
                     'request': row.user_input,
                     'role': row.role,
-                    'timestamp': row.timestamp.isoformat() if row.timestamp else datetime.now(timezone.utc).isoformat()
+                    'timestamp': row.timestamp.isoformat()
                 })
     except Exception as e:
         print(f"ERROR fetching active requests: {e}")
+    return render_template("dashboard.html", active_requests=active_requests)
 
-    is_mine_view = (view == 'mine' and nurse_filter)
-
-    # If nurse-specific view, reduce to rooms assigned to that nurse today
-    if is_mine_view:
-        try:
-            with engine.connect() as connection:
-                rows = connection.execute(text("""
-                    SELECT room_number FROM assignments
-                    WHERE assignment_date = :d AND nurse_name = :n;
-                """), {"d": today, "n": nurse_filter}).fetchall()
-                my_rooms = {r[0] for r in rows}
-            active_requests = [r for r in active_requests if r['room'] in my_rooms]
-        except Exception as e:
-            print(f"ERROR filtering dashboard by nurse {nurse_filter}: {e}")
-
-    return render_template("dashboard.html",
-                           active_requests=active_requests,
-                           is_mine=is_mine_view,
-                           nurse_name=nurse_filter)
-
+# --- Analytics ---
 @app.route('/analytics')
 def analytics():
     avg_response_time = "N/A"
@@ -379,7 +451,8 @@ def analytics():
         with engine.connect() as connection:
             avg_time_result = connection.execute(text("""
                 SELECT AVG(EXTRACT(EPOCH FROM (completion_timestamp - timestamp))) as avg_seconds
-                FROM requests WHERE completion_timestamp IS NOT NULL;
+                FROM requests
+                WHERE completion_timestamp IS NOT NULL;
             """)).scalar_one_or_none()
             if avg_time_result is not None:
                 minutes, seconds = divmod(int(avg_time_result), 60)
@@ -387,22 +460,27 @@ def analytics():
 
             top_requests_result = connection.execute(text("""
                 SELECT category, COUNT(id) FROM requests
-                GROUP BY category ORDER BY COUNT(id) DESC;
+                GROUP BY category
+                ORDER BY COUNT(id) DESC;
             """)).fetchall()
             top_requests_labels = [row[0] for row in top_requests_result]
             top_requests_values = [row[1] for row in top_requests_result]
 
             most_requested_result = connection.execute(text("""
                 SELECT user_input, COUNT(id) as count
-                FROM requests GROUP BY user_input
-                ORDER BY count DESC LIMIT 5;
+                FROM requests
+                GROUP BY user_input
+                ORDER BY count DESC
+                LIMIT 5;
             """)).fetchall()
             most_requested_labels = [row[0] for row in most_requested_result]
             most_requested_values = [row[1] for row in most_requested_result]
 
             requests_by_hour_result = connection.execute(text("""
                 SELECT EXTRACT(HOUR FROM timestamp) as hour, COUNT(id)
-                FROM requests GROUP BY hour ORDER BY hour;
+                FROM requests
+                GROUP BY hour
+                ORDER BY hour;
             """)).fetchall()
             hourly_counts = defaultdict(int)
             for hour, count in requests_by_hour_result:
@@ -412,16 +490,22 @@ def analytics():
 
             first_baby_result = connection.execute(text("""
                 SELECT user_input, COUNT(id) as count
-                FROM requests WHERE is_first_baby IS TRUE
-                GROUP BY user_input ORDER BY count DESC LIMIT 5;
+                FROM requests
+                WHERE is_first_baby IS TRUE
+                GROUP BY user_input
+                ORDER BY count DESC
+                LIMIT 5;
             """)).fetchall()
             first_baby_labels = [row[0] for row in first_baby_result]
             first_baby_values = [row[1] for row in first_baby_result]
 
             multi_baby_result = connection.execute(text("""
                 SELECT user_input, COUNT(id) as count
-                FROM requests WHERE is_first_baby IS FALSE
-                GROUP BY user_input ORDER BY count DESC LIMIT 5;
+                FROM requests
+                WHERE is_first_baby IS FALSE
+                GROUP BY user_input
+                ORDER BY count DESC
+                LIMIT 5;
             """)).fetchall()
             multi_baby_labels = [row[0] for row in multi_baby_result]
             multi_baby_values = [row[1] for row in multi_baby_result]
@@ -443,63 +527,24 @@ def analytics():
         multi_baby_values=multi_baby_values
     )
 
-# --- Assignments (Managers) ---
+# --- Assignments ---
 @app.route('/assignments', methods=['GET', 'POST'])
 def assignments():
     today = date.today()
     all_nurses = []
-    all_cnas = []
-
-    # Load staff lists
     try:
         with engine.connect() as connection:
-            nurse_rows = connection.execute(text("SELECT name FROM staff WHERE role = 'nurse' ORDER BY name;")).fetchall()
-            cna_rows = connection.execute(text("SELECT name FROM staff WHERE role = 'cna' ORDER BY name;")).fetchall()
-            all_nurses = [r[0] for r in nurse_rows]
-            all_cnas = [r[0] for r in cna_rows]
+            result = connection.execute(text("SELECT name FROM staff WHERE role = 'nurse' ORDER BY name;"))
+            all_nurses = [row[0] for row in result]
     except Exception as e:
-        print(f"ERROR fetching nurses/CNAs: {e}")
+        print(f"ERROR fetching nurses: {e}")
 
     if request.method == 'POST':
         try:
             with engine.connect() as connection:
                 with connection.begin():
-                    # Save CNA front/back selection using pseudo-rooms
-                    front = request.form.get('cna_front', 'unassigned')
-                    back  = request.form.get('cna_back', 'unassigned')
-
-                    # FRONT
-                    if front and front != 'unassigned':
-                        connection.execute(text("""
-                            INSERT INTO assignments (assignment_date, room_number, nurse_name)
-                            VALUES (:d, :r, :n)
-                            ON CONFLICT (assignment_date, room_number)
-                            DO UPDATE SET nurse_name = EXCLUDED.nurse_name;
-                        """), {"d": today, "r": CNA_FRONT_KEY, "n": front})
-                    else:
-                        connection.execute(text("""
-                            DELETE FROM assignments
-                            WHERE assignment_date = :d AND room_number = :r;
-                        """), {"d": today, "r": CNA_FRONT_KEY})
-
-                    # BACK
-                    if back and back != 'unassigned':
-                        connection.execute(text("""
-                            INSERT INTO assignments (assignment_date, room_number, nurse_name)
-                            VALUES (:d, :r, :n)
-                            ON CONFLICT (assignment_date, room_number)
-                            DO UPDATE SET nurse_name = EXCLUDED.nurse_name;
-                        """), {"d": today, "r": CNA_BACK_KEY, "n": back})
-                    else:
-                        connection.execute(text("""
-                            DELETE FROM assignments
-                            WHERE assignment_date = :d AND room_number = :r;
-                        """), {"d": today, "r": CNA_BACK_KEY})
-
-                    # Save per-room nurse picks
                     for room_number in ALL_ROOMS:
-                        field = f"nurse_for_room_{room_number}"
-                        nurse_name = request.form.get(field)
+                        nurse_name = request.form.get(f'nurse_for_room_{room_number}')
                         if nurse_name and nurse_name != 'unassigned':
                             connection.execute(text("""
                                 INSERT INTO assignments (assignment_date, room_number, nurse_name)
@@ -517,38 +562,22 @@ def assignments():
             print(f"ERROR saving assignments: {e}")
         return redirect(url_for('dashboard'))
 
-    # Build current assignments map { room_number: nurse_name }
     current_assignments = {}
-    cna_front_current = 'unassigned'
-    cna_back_current = 'unassigned'
     try:
         with engine.connect() as connection:
-            rows = connection.execute(text("""
-                SELECT room_number, nurse_name FROM assignments WHERE assignment_date = :d;
-            """), {"d": today}).fetchall()
-            for r in rows:
-                if r.room_number == CNA_FRONT_KEY:
-                    cna_front_current = r.nurse_name
-                elif r.room_number == CNA_BACK_KEY:
-                    cna_back_current = r.nurse_name
-                else:
-                    current_assignments[r.room_number] = r.nurse_name
+            result = connection.execute(text("""
+                SELECT room_number, nurse_name FROM assignments
+                WHERE assignment_date = :date;
+            """), {"date": today})
+            for row in result:
+                current_assignments[row.room_number] = row.nurse_name
     except Exception as e:
         print(f"ERROR fetching assignments: {e}")
 
-    return render_template(
-        'assignments.html',
-        all_nurses=all_nurses,
-        all_cnas=all_cnas,
-        all_rooms=ALL_ROOMS,
-        current_assignments=current_assignments,
-        cna_front=cna_front_current,
-        cna_back=cna_back_current,
-        cna_front_rooms=CNA_FRONT_ROOMS,
-        cna_back_rooms=CNA_BACK_ROOMS
-    )
+    return render_template('assignments.html',
+                           rooms=ALL_ROOMS, nurses=all_nurses, assignments=current_assignments)
 
-# --- Simple manager auth (for staff list/audit log) ---
+# --- Auth for Manager (unchanged) ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -593,10 +622,10 @@ def manager_dashboard():
                             ), {"id": staff_id}).first()
                             if staff_member:
                                 connection.execute(text("DELETE FROM staff WHERE id = :id;"), {"id": staff_id})
-                                log_to_audit_trail("Staff Removed",
-                                                   f"Removed staff member: {staff_member.name} ({staff_member.role})")
+                                log_to_audit_trail("Staff Removed", f"Removed staff member: {staff_member.name} ({staff_member.role})")
         except Exception as e:
             print(f"ERROR updating staff: {e}")
+
         return redirect(url_for('manager_dashboard'))
 
     staff_list = []
@@ -607,7 +636,9 @@ def manager_dashboard():
             staff_list = staff_result.fetchall()
             audit_result = connection.execute(text("""
                 SELECT timestamp, event_type, details
-                FROM audit_log ORDER BY timestamp DESC LIMIT 50;
+                FROM audit_log
+                ORDER BY timestamp DESC
+                LIMIT 50;
             """))
             audit_log = audit_result.fetchall()
     except Exception as e:
@@ -615,17 +646,65 @@ def manager_dashboard():
 
     return render_template('manager_dashboard.html', staff=staff_list, audit_log=audit_log)
 
-# --- Lightweight staff portal pin (for future nurse-views if needed) ---
-@app.route("/staff", methods=["GET", "POST"])
+# --- Staff Portal (PIN + nurse-specific dashboard) ---
+@app.route('/staff-portal', methods=['GET', 'POST'])
 def staff_portal():
-    """Optional simple PIN gate—kept minimal. Not required for dashboard filter links."""
-    if request.method == "POST":
-        pin = request.form.get("pin", "")
-        if pin and os.getenv("STAFF_PORTAL_PIN") and pin == os.getenv("STAFF_PORTAL_PIN"):
-            session["staff_portal_ok"] = True
-            return redirect(url_for("dashboard"))
-        flash("Invalid PIN", "danger")
-    return render_template("login.html")  # reuse a basic form if desired
+    pin_required = os.getenv("STAFF_PORTAL_PIN")
+    if request.method == 'POST':
+        entered_pin = request.form.get('pin', '').strip()
+        if pin_required and entered_pin != pin_required:
+            flash("Invalid PIN.", "danger")
+            return render_template('staff_portal.html')
+        nurse_name = request.form.get('nurse_name', '').strip()
+        if nurse_name:
+            return redirect(url_for('staff_dashboard_for_nurse', nurse_name=nurse_name))
+        else:
+            flash("Please enter your name.", "danger")
+    return render_template('staff_portal.html')
+
+@app.route('/staff/dashboard/<nurse_name>')
+def staff_dashboard_for_nurse(nurse_name):
+    today = date.today()
+    # Find this nurse's rooms for today
+    rooms_for_nurse = []
+    try:
+        with engine.connect() as connection:
+            rows = connection.execute(text("""
+                SELECT room_number FROM assignments
+                WHERE assignment_date = :d AND nurse_name = :n
+                ORDER BY room_number;
+            """), {"d": today, "n": nurse_name}).fetchall()
+            rooms_for_nurse = [r[0] for r in rows]
+    except Exception as e:
+        print(f"ERROR fetching rooms for nurse {nurse_name}: {e}")
+
+    # Get active requests limited to these rooms
+    active_requests = []
+    if rooms_for_nurse:
+        try:
+            with engine.connect() as connection:
+                result = connection.execute(text(f"""
+                    SELECT request_id, room, user_input, category as role, timestamp
+                    FROM requests
+                    WHERE completion_timestamp IS NULL
+                      AND room = ANY(:room_list)
+                    ORDER BY timestamp DESC;
+                """), {"room_list": rooms_for_nurse})
+                for row in result:
+                    active_requests.append({
+                        'id': row.request_id,
+                        'room': row.room,
+                        'request': row.user_input,
+                        'role': row.role,
+                        'timestamp': row.timestamp.isoformat()
+                    })
+        except Exception as e:
+            print(f"ERROR fetching nurse dashboard requests: {e}")
+
+    return render_template("dashboard.html",
+                           active_requests=active_requests,
+                           nurse_view=True,
+                           nurse_name=nurse_name)
 
 # --- SocketIO Event Handlers ---
 @socketio.on('join')
@@ -641,7 +720,6 @@ def handle_acknowledge(data):
 
 @socketio.on('defer_request')
 def handle_defer_request(data):
-    """Defer to nurse WITHOUT resetting the original timestamp (so timers don't restart)."""
     request_id = data.get('id')
     if not request_id:
         return
@@ -650,6 +728,7 @@ def handle_defer_request(data):
     try:
         with engine.connect() as connection:
             with connection.begin():
+                # IMPORTANT: do NOT overwrite original timestamp; only set category + deferral_timestamp
                 connection.execute(text("""
                     UPDATE requests
                     SET category = 'nurse', deferral_timestamp = :now
@@ -671,7 +750,8 @@ def handle_complete_request(data):
                 trans = connection.begin()
                 try:
                     connection.execute(text("""
-                        UPDATE requests SET completion_timestamp = :now
+                        UPDATE requests
+                        SET completion_timestamp = :now
                         WHERE request_id = :request_id;
                     """), {"now": datetime.now(timezone.utc), "request_id": request_id})
                     trans.commit()
@@ -682,11 +762,6 @@ def handle_complete_request(data):
             socketio.emit('remove_request', {'id': request_id})
         except Exception as e:
             print(f"ERROR updating completion timestamp: {e}")
-
-# --- Healthcheck (useful for Render) ---
-@app.route("/healthz")
-def healthz():
-    return {"status": "ok", "time": datetime.utcnow().isoformat()}
 
 # --- App Startup ---
 if __name__ == "__main__":
