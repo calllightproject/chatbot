@@ -52,7 +52,7 @@ def setup_database():
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS assignments (
                         id SERIAL PRIMARY KEY, assignment_date DATE NOT NULL, room_number VARCHAR(255) NOT NULL,
-                        nurse_name VARCHAR(255) NOT NULL, UNIQUE(assignment_date, room_number)
+                        staff_name VARCHAR(255) NOT NULL, UNIQUE(assignment_date, room_number)
                     );
                 """))
                 connection.execute(text("""
@@ -544,14 +544,14 @@ def assignments():
             with engine.connect() as connection:
                 with connection.begin():
                     for room_number in ALL_ROOMS:
-                        nurse_name = request.form.get(f'nurse_for_room_{room_number}')
-                        if nurse_name and nurse_name != 'unassigned':
+                        staff_name = request.form.get(f'nurse_for_room_{room_number}')
+                        if staff_name and staff_name != 'unassigned':
                             connection.execute(text("""
-                                INSERT INTO assignments (assignment_date, room_number, nurse_name)
+                                INSERT INTO assignments (assignment_date, room_number, staff_name)
                                 VALUES (:date, :room, :nurse)
                                 ON CONFLICT (assignment_date, room_number)
-                                DO UPDATE SET nurse_name = EXCLUDED.nurse_name;
-                            """), {"date": today, "room": room_number, "nurse": nurse_name})
+                                DO UPDATE SET staff_name = EXCLUDED.staff_name;
+                            """), {"date": today, "room": room_number, "nurse": staff_name})
                         else:
                             connection.execute(text("""
                                 DELETE FROM assignments
@@ -567,11 +567,11 @@ def assignments():
     try:
         with engine.connect() as connection:
             result = connection.execute(text("""
-                SELECT room_number, nurse_name FROM assignments
+                SELECT room_number, staff_name FROM assignments
                 WHERE assignment_date = :date;
             """), {"date": today})
             for row in result:
-                current_assignments[row.room_number] = row.nurse_name
+                current_assignments[row.room_number] = row.staff_name
     except Exception as e:
         print(f"ERROR fetching assignments: {e}")
 
@@ -657,15 +657,15 @@ def staff_portal():
         if pin_required and entered_pin != pin_required:
             flash("Invalid PIN.", "danger")
             return render_template('staff_portal.html')
-        nurse_name = request.form.get('nurse_name', '').strip()
-        if nurse_name:
-            return redirect(url_for('staff_dashboard_for_nurse', nurse_name=nurse_name))
+        staff_name = request.form.get('staff_name', '').strip()
+        if staff_name:
+            return redirect(url_for('staff_dashboard_for_nurse', staff_name=staff_name))
         else:
             flash("Please enter your name.", "danger")
     return render_template('staff_portal.html')
 
-@app.route('/staff/dashboard/<nurse_name>')
-def staff_dashboard_for_nurse(nurse_name):
+@app.route('/staff/dashboard/<staff_name>')
+def staff_dashboard_for_nurse(staff_name):
     today = date.today()
     # Find this nurse's rooms for today
     rooms_for_nurse = []
@@ -673,12 +673,12 @@ def staff_dashboard_for_nurse(nurse_name):
         with engine.connect() as connection:
             rows = connection.execute(text("""
                 SELECT room_number FROM assignments
-                WHERE assignment_date = :d AND nurse_name = :n
+                WHERE assignment_date = :d AND staff_name = :n
                 ORDER BY room_number;
-            """), {"d": today, "n": nurse_name}).fetchall()
+            """), {"d": today, "n": staff_name}).fetchall()
             rooms_for_nurse = [r[0] for r in rows]
     except Exception as e:
-        print(f"ERROR fetching rooms for nurse {nurse_name}: {e}")
+        print(f"ERROR fetching rooms for nurse {staff_name}: {e}")
 
     # Get active requests limited to these rooms
     active_requests = []
@@ -706,7 +706,7 @@ def staff_dashboard_for_nurse(nurse_name):
     return render_template("dashboard.html",
                            active_requests=active_requests,
                            nurse_view=True,
-                           nurse_name=nurse_name)
+                           staff_name=staff_name)
 
 # --- SocketIO Event Handlers ---
 @socketio.on('join')
@@ -768,4 +768,5 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
