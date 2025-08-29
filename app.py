@@ -560,7 +560,8 @@ def assignments():
             print("Assignments saved successfully.")
         except Exception as e:
             print(f"ERROR saving assignments: {e}")
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('assignments'))
+
 
     current_assignments = {}
     try:
@@ -575,7 +576,8 @@ def assignments():
         print(f"ERROR fetching assignments: {e}")
 
     return render_template('assignments.html',
-                           rooms=ALL_ROOMS, nurses=all_nurses, assignments=current_assignments)
+                       all_rooms=ALL_ROOMS, all_nurses=all_nurses, current_assignments=current_assignments)
+
 
 # --- Auth for Manager (unchanged) ---
 @app.route('/login', methods=['GET', 'POST'])
@@ -766,3 +768,4 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
