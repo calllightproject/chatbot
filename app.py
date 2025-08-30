@@ -528,16 +528,19 @@ def analytics():
     )
 
 # --- Assignments ---
+# --- Assignments (nurses per room + CNA front/back via zones) ---
 @app.route('/assignments', methods=['GET', 'POST'])
 def assignments():
     today = date.today()
 
-    # Load nurses
+    # ---- Load nurses (for dropdowns) ----
     all_nurses = []
     try:
         with engine.connect() as connection:
-            result = connection.execute(text("SELECT name FROM staff WHERE role = 'nurse' ORDER BY name;"))
-            all_nurses = [row[0] for row in result]
+            rows = connection.execute(
+                text("SELECT name FROM staff WHERE role = 'nurse' ORDER BY name;")
+            ).fetchall()
+            all_nurses = [r[0] for r in rows]
     except Exception as e:
         print(f"ERROR fetching nurses: {e}")
 
@@ -545,7 +548,8 @@ def assignments():
         try:
             with engine.connect() as connection:
                 with connection.begin():
-                    # Save nurse-by-room assignments
+
+                    # ---- Save nurse-by-room assignments ----
                     for room_number in ALL_ROOMS:
                         staff_name = request.form.get(f'nurse_for_room_{room_number}')
                         if staff_name and staff_name != 'unassigned':
@@ -561,58 +565,78 @@ def assignments():
                                 WHERE assignment_date = :date AND room_number = :room;
                             """), {"date": today, "room": room_number})
 
-                    # Save today's CNA coverage (front/back)
+                    # ---- Save CNA coverage as zone rows (front/back) ----
                     cna_front_form = request.form.get('cna_front', 'unassigned')
                     cna_back_form  = request.form.get('cna_back',  'unassigned')
+
                     cna_front_db = None if cna_front_form == 'unassigned' else cna_front_form
                     cna_back_db  = None if cna_back_form  == 'unassigned' else cna_back_form
 
-                    connection.execute(text("""
-                        INSERT INTO cna_coverage (assignment_date, front_cna, back_cna)
-                        VALUES (:date, :front, :back)
-                        ON CONFLICT (assignment_date)
-                        DO UPDATE SET front_cna = EXCLUDED.front_cna,
-                                      back_cna  = EXCLUDED.back_cna;
-                    """), {"date": today, "front": cna_front_db, "back": cna_back_db})
+                    for zone, name in [('front', cna_front_db), ('back', cna_back_db)]:
+                        connection.execute(text("""
+                            INSERT INTO cna_coverage (assignment_date, zone, cna_name)
+                            VALUES (:date, :zone, :name)
+                            ON CONFLICT (assignment_date, zone)
+                            DO UPDATE SET cna_name = EXCLUDED.cna_name;
+                        """), {"date": today, "zone": zone, "name": name})
 
             print("Assignments saved successfully.")
         except Exception as e:
             print(f"ERROR saving assignments: {e}")
         return redirect(url_for('assignments'))
 
-    # Load CNAs (match case to your DB: 'cna' vs 'CNA')
+    # ---- Load CNAs (for dropdowns) ----
     all_cnas = []
     try:
         with engine.connect() as connection:
-            result = connection.execute(text("SELECT name FROM staff WHERE role = 'cna' ORDER BY name;"))
-            all_cnas = [row[0] for row in result]
+            rows = connection.execute(
+                text("SELECT name FROM staff WHERE role = 'cna' ORDER BY name;")
+            ).fetchall()
+            all_cnas = [r[0] for r in rows]
     except Exception as e:
         print(f"ERROR fetching CNAs: {e}")
 
-    # Read back today's assignments to preselect values
+    # ---- Read back today's nurse assignments to preselect ----
     current_assignments = {}
     try:
         with engine.connect() as connection:
-            result = connection.execute(text("""
+            rows = connection.execute(text("""
                 SELECT room_number, staff_name
                 FROM assignments
                 WHERE assignment_date = :date;
-            """), {"date": today})
-            for row in result:
-                current_assignments[row.room_number] = row.staff_name
+            """), {"date": today}).fetchall()
+            for r in rows:
+                current_assignments[r.room_number] = r.staff_name
     except Exception as e:
         print(f"ERROR fetching assignments: {e}")
 
-    # Default CNA preselects (we'll keep 'unassigned' for now)
+    # ---- Read back today's CNA coverage (zones -> front/back) ----
+    cna_front_val = 'unassigned'
+    cna_back_val  = 'unassigned'
+    try:
+        with engine.connect() as connection:
+            rows = connection.execute(text("""
+                SELECT zone, cna_name
+                FROM cna_coverage
+                WHERE assignment_date = :date;
+            """), {"date": today}).fetchall()
+            zmap = {(r[0] or '').lower(): r[1] for r in rows}  # e.g., {'front': 'Alice', 'back': 'Bob'}
+            cna_front_val = zmap.get('front') or 'unassigned'
+            cna_back_val  = zmap.get('back')  or 'unassigned'
+    except Exception as e:
+        print(f"INFO fetching CNA coverage: {e}")
+
+    # ---- Render page ----
     return render_template(
         'assignments.html',
         all_rooms=ALL_ROOMS,
         all_nurses=all_nurses,
         current_assignments=current_assignments,
         all_cnas=all_cnas,
-        cna_front='unassigned',
-        cna_back='unassigned'
+        cna_front=cna_front_val,
+        cna_back=cna_back_val
     )
+
 
 
 # --- Auth for Manager (unchanged) ---
@@ -804,6 +828,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
