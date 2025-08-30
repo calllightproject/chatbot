@@ -533,31 +533,40 @@ def assignments():
     today = date.today()
     all_nurses = []
     try:
-        with engine.connect() as connection:
-            result = connection.execute(text("SELECT name FROM staff WHERE role = 'nurse' ORDER BY name;"))
-            all_nurses = [row[0] for row in result]
-    except Exception as e:
-        print(f"ERROR fetching nurses: {e}")
+                with engine.connect() as connection:
+            with connection.begin():
+                for room_number in ALL_ROOMS:
+                    staff_name = request.form.get(f'nurse_for_room_{room_number}')
+                    if staff_name and staff_name != 'unassigned':
+                        connection.execute(text("""
+                            INSERT INTO assignments (assignment_date, room_number, staff_name)
+                            VALUES (:date, :room, :nurse)
+                            ON CONFLICT (assignment_date, room_number)
+                            DO UPDATE SET staff_name = EXCLUDED.staff_name;
+                        """), {"date": today, "room": room_number, "nurse": staff_name})
+                    else:
+                        connection.execute(text("""
+                            DELETE FROM assignments
+                            WHERE assignment_date = :date AND room_number = :room;
+                        """), {"date": today, "room": room_number})
 
-    if request.method == 'POST':
-        try:
-            with engine.connect() as connection:
-                with connection.begin():
-                    for room_number in ALL_ROOMS:
-                        staff_name = request.form.get(f'nurse_for_room_{room_number}')
-                        if staff_name and staff_name != 'unassigned':
-                            connection.execute(text("""
-                                INSERT INTO assignments (assignment_date, room_number, staff_name)
-                                VALUES (:date, :room, :nurse)
-                                ON CONFLICT (assignment_date, room_number)
-                                DO UPDATE SET staff_name = EXCLUDED.staff_name;
-                            """), {"date": today, "room": room_number, "nurse": staff_name})
-                        else:
-                            connection.execute(text("""
-                                DELETE FROM assignments
-                                WHERE assignment_date = :date AND room_number = :room;
-                            """), {"date": today, "room": room_number})
+                # --- Save today’s CNA coverage ---
+                cna_front_form = request.form.get('cna_front', 'unassigned')
+                cna_back_form  = request.form.get('cna_back',  'unassigned')
+
+                cna_front_db = None if cna_front_form == 'unassigned' else cna_front_form
+                cna_back_db  = None if cna_back_form  == 'unassigned' else cna_back_form
+
+                connection.execute(text("""
+                    INSERT INTO cna_coverage (assignment_date, front_cna, back_cna)
+                    VALUES (:date, :front, :back)
+                    ON CONFLICT (assignment_date)
+                    DO UPDATE SET front_cna = EXCLUDED.front_cna,
+                                  back_cna  = EXCLUDED.back_cna;
+                """), {"date": today, "front": cna_front_db, "back": cna_back_db})
+
             print("Assignments saved successfully.")
+
         except Exception as e:
             print(f"ERROR saving assignments: {e}")
         return redirect(url_for('assignments'))
@@ -782,6 +791,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
