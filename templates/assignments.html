@@ -27,8 +27,28 @@
       <h1 class="text-3xl font-bold text-gray-900">Staff Assignments</h1>
     </header>
 
-    <!-- Assignments form -->
+    <!-- Shift selector (GET) -->
+    <form method="GET" action="{{ url_for('assignments') }}" class="mb-6">
+      <label class="mr-2 font-medium text-gray-700">Shift:</label>
+      <select name="shift" class="border rounded px-2 py-1" onchange="this.form.submit()">
+        <option value="day"   {% if shift == 'day' %}selected{% endif %}>Day</option>
+        <option value="night" {% if shift == 'night' %}selected{% endif %}>Night</option>
+      </select>
+    </form>
+
+    <!-- Assignments form (POST). One FORM only. -->
     <form method="POST" action="{{ url_for('assignments') }}">
+
+      <!-- carry the current shift into POST -->
+      <input type="hidden" name="shift" value="{{ shift }}">
+
+      <!-- TOP Save button -->
+      <div class="mb-4">
+        <button type="submit"
+          class="w-full sm:w-auto px-6 py-3 rounded-md shadow-sm text-sm font-medium button-primary transition-colors">
+          Save All Assignments
+        </button>
+      </div>
 
       <!-- CNA Coverage -->
       <section class="mb-8">
@@ -40,8 +60,7 @@
             <label for="cna_front" class="block text-sm font-medium text-gray-700 mb-2">Front CNA</label>
             <select
               name="cna_front" id="cna_front"
-              class="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            >
+              class="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
               <option value="unassigned" {% if cna_front == 'unassigned' %}selected{% endif %}>Unassigned</option>
               {% for cna in all_cnas %}
                 <option value="{{ cna }}" {% if cna_front == cna %}selected{% endif %}>{{ cna }}</option>
@@ -54,8 +73,7 @@
             <label for="cna_back" class="block text-sm font-medium text-gray-700 mb-2">Back CNA</label>
             <select
               name="cna_back" id="cna_back"
-              class="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            >
+              class="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
               <option value="unassigned" {% if cna_back == 'unassigned' %}selected{% endif %}>Unassigned</option>
               {% for cna in all_cnas %}
                 <option value="{{ cna }}" {% if cna_back == cna %}selected{% endif %}>{{ cna }}</option>
@@ -69,23 +87,20 @@
       <section class="mb-10">
         <h2 class="text-xl font-semibold text-gray-700 mb-4">Nurse by Room</h2>
 
-        <!-- 1 column on small screens; 2 columns on md+ -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           {% for room in all_rooms %}
             <div class="border rounded-lg p-4">
               <label class="block text-sm font-medium text-gray-700 mb-2" for="room_{{ room }}">Room {{ room }}</label>
               <select
                 name="nurse_for_room_{{ room }}" id="room_{{ room }}"
-                class="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              >
+                class="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
                 <option value="unassigned"
-                  {% if not current_assignments.get(room) or current_assignments.get(room) == 'unassigned' %}selected{% endif %}
-                >Unassigned</option>
-
+                  {% if not current_assignments.get(room) or current_assignments.get(room) == 'unassigned' %}selected{% endif %}>
+                  Unassigned
+                </option>
                 {% for nurse in all_nurses %}
                   <option value="{{ nurse }}"
-                    {% if current_assignments.get(room) == nurse %}selected{% endif %}
-                  >{{ nurse }}</option>
+                    {% if current_assignments.get(room) == nurse %}selected{% endif %}>{{ nurse }}</option>
                 {% endfor %}
               </select>
             </div>
@@ -93,7 +108,7 @@
         </div>
       </section>
 
-      <!-- Save button -->
+      <!-- BOTTOM Save button -->
       <div>
         <button type="submit"
           class="w-full sm:w-auto px-6 py-3 rounded-md shadow-sm text-sm font-medium button-primary transition-colors">
