@@ -533,7 +533,7 @@ def assignments():
     today = date.today()
     all_nurses = []
     try:
-                with engine.connect() as connection:
+        with engine.connect() as connection:
             with connection.begin():
                 for room_number in ALL_ROOMS:
                     staff_name = request.form.get(f'nurse_for_room_{room_number}')
@@ -791,6 +791,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
