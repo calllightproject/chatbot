@@ -561,7 +561,14 @@ def assignments():
         except Exception as e:
             print(f"ERROR saving assignments: {e}")
         return redirect(url_for('assignments'))
-
+    # Load CNAs (make sure the role string matches your DB exactly: 'cna' or 'CNA')
+    all_cnas = []
+    try:
+        with engine.connect() as connection:
+            result = connection.execute(text("SELECT name FROM staff WHERE role = 'cna' ORDER BY name;"))
+            all_cnas = [row[0] for row in result]
+    except Exception as e:
+        print(f"ERROR fetching CNAs: {e}")
 
     current_assignments = {}
     try:
@@ -575,8 +582,15 @@ def assignments():
     except Exception as e:
         print(f"ERROR fetching assignments: {e}")
 
-    return render_template('assignments.html',
-                       all_rooms=ALL_ROOMS, all_nurses=all_nurses, current_assignments=current_assignments)
+    return render_template(
+    'assignments.html',
+    all_rooms=ALL_ROOMS,
+    all_nurses=all_nurses,
+    current_assignments=current_assignments,
+    all_cnas=all_cnas,
+    cna_front='unassigned',
+    cna_back='unassigned'
+)
 
 
 # --- Auth for Manager (unchanged) ---
@@ -768,5 +782,6 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
