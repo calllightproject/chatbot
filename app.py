@@ -704,12 +704,15 @@ def manager_dashboard():
                     if action == 'add_staff':
                         name = request.form.get('name')
                         role = request.form.get('role')
+                        preferred_shift = request.form.get('preferred_shift', 'day')
                         if name and role:
                             connection.execute(text("""
-                                INSERT INTO staff (name, role) VALUES (:name, :role)
-                                ON CONFLICT (name) DO NOTHING;
-                            """), {"name": name, "role": role})
-                            log_to_audit_trail("Staff Added", f"Added staff member: {name} ({role})")
+                                INSERT INTO staff (name, role, preferred_shift)
+                                VALUES (:name, :role, :preferred_shift)
+                                ON CONFLICT (name) DO UPDATE
+                                SET role = EXCLUDED.role,
+                                preferred_shift = EXCLUDED.preferred_shift;
+                        """), {"name": name, "role": role, "preferred_shift": preferred_shift})
 
                     elif action == 'remove_staff':
                         staff_id = request.form.get('staff_id')
@@ -863,6 +866,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
