@@ -527,125 +527,95 @@ def analytics():
         multi_baby_values=multi_baby_values
     )
 
-# --- Assignments (nurses per room + CNA front/back via zones) ---
-# --- Assignments (nurses per room + CNA front/back via zones, with shift) ---
-# --- Assignments (nurses per room + CNA front/back via zones, with shift) ---
-@app.route('/assignments', methods=['GET', 'POST'])
-def assignments():
-    today = date.today()
+# ---- Determine which shift we're editing for this request ----
+# (GET uses querystring ?shift=day|night, POST carries a hidden input named 'shift')
+shift = request.args.get('shift', 'day') if request.method == 'GET' else request.form.get('shift', 'day')
 
-    # ---- Determine which shift is active (default = day) ----
-    shift = request.args.get('shift', 'day')  # for GET (toggle dropdown)
-    if request.method == 'POST':
-        shift = request.form.get('shift', 'day')  # for POST (form submission)
+# ---- Load nurses grouped by preferred_shift for this shift ----
+preferred_nurses = []
+other_nurses = []
+try:
+    with engine.connect() as connection:
+        rows = connection.execute(text("""
+            SELECT name, COALESCE(preferred_shift, 'day') AS ps
+            FROM staff
+            WHERE role = 'nurse'
+            ORDER BY name;
+        """)).fetchall()
+        for name, ps in rows:
+            (preferred_nurses if ps == shift else other_nurses).append(name)
+except Exception as e:
+    print(f"ERROR fetching nurses: {e}")
 
-    # ---- Load nurses (for dropdowns) ----
-    all_nurses = []
+# ---- Handle saves ----
+if request.method == 'POST':
     try:
         with engine.connect() as connection:
-            rows = connection.execute(
-                text("SELECT name FROM staff WHERE role = 'nurse' ORDER BY name;")
-            ).fetchall()
-            all_nurses = [r[0] for r in rows]
-    except Exception as e:
-        print(f"ERROR fetching nurses: {e}")
+            with connection.begin():
 
-    if request.method == 'POST':
-        try:
-            with engine.connect() as connection:
-                with connection.begin():
-
-                    # ---- Save nurse-by-room assignments ----
-                    for room_number in ALL_ROOMS:
-                        staff_name = request.form.get(f'nurse_for_room_{room_number}')
-                        if staff_name and staff_name != 'unassigned':
-                            connection.execute(text("""
-                                INSERT INTO assignments (assignment_date, room_number, staff_name, shift)
-                                VALUES (:date, :room, :nurse, :shift)
-                                ON CONFLICT (assignment_date, room_number, shift)
-                                DO UPDATE SET staff_name = EXCLUDED.staff_name;
-                            """), {
-                                "date": today,
-                                "room": room_number,
-                                "nurse": staff_name,
-                                "shift": shift
-                            })
-                        else:
-                            connection.execute(text("""
-                                DELETE FROM assignments
-                                WHERE assignment_date = :date 
-                                  AND room_number = :room 
-                                  AND shift = :shift;
-                            """), {
-                                "date": today,
-                                "room": room_number,
-                                "shift": shift
-                            })
-
-                    # ---- Save CNA coverage as zone rows (front/back) ----
-                    cna_front_form = request.form.get('cna_front', 'unassigned')
-                    cna_back_form  = request.form.get('cna_back',  'unassigned')
-
-                    cna_front_db = None if cna_front_form == 'unassigned' else cna_front_form
-                    cna_back_db  = None if cna_back_form  == 'unassigned' else cna_back_form
-
-                    for zone, name in [('front', cna_front_db), ('back', cna_back_db)]:
+                # ---- Save nurse-by-room assignments (shift-aware) ----
+                for room_number in ALL_ROOMS:
+                    staff_name = request.form.get(f'nurse_for_room_{room_number}')
+                    if staff_name and staff_name != 'unassigned':
                         connection.execute(text("""
-                            INSERT INTO cna_coverage (assignment_date, zone, cna_name, shift)
-                            VALUES (:date, :zone, :name, :shift)
-                            ON CONFLICT (assignment_date, zone, shift)
-                            DO UPDATE SET cna_name = EXCLUDED.cna_name;
+                            INSERT INTO assignments (assignment_date, room_number, staff_name, shift)
+                            VALUES (:date, :room, :nurse, :shift)
+                            ON CONFLICT (assignment_date, room_number, shift)
+                            DO UPDATE SET staff_name = EXCLUDED.staff_name;
                         """), {
                             "date": today,
-                            "zone": zone,
-                            "name": name,
+                            "room": room_number,
+                            "nurse": staff_name,
+                            "shift": shift
+                        })
+                    else:
+                        connection.execute(text("""
+                            DELETE FROM assignments
+                            WHERE assignment_date = :date
+                              AND room_number     = :room
+                              AND shift           = :shift;
+                        """), {
+                            "date": today,
+                            "room": room_number,
                             "shift": shift
                         })
 
-            print("Assignments saved successfully.")
-        except Exception as e:
-            print(f"ERROR saving assignments: {e}")
-        return redirect(url_for('assignments', shift=shift))
+                # ---- Save CNA coverage as zone rows (front/back), also shift-aware ----
+                cna_front_form = request.form.get('cna_front', 'unassigned')
+                cna_back_form  = request.form.get('cna_back',  'unassigned')
 
-    # ---- Load current assignments for this shift ----
-    current_assignments = {}
-    cna_front = 'unassigned'
-    cna_back = 'unassigned'
+                cna_front_db = None if cna_front_form == 'unassigned' else cna_front_form
+                cna_back_db  = None if cna_back_form  == 'unassigned' else cna_back_form
 
-    try:
-        with engine.connect() as connection:
-            # Nurses
-            rows = connection.execute(text("""
-                SELECT room_number, staff_name 
-                FROM assignments
-                WHERE assignment_date = :date AND shift = :shift;
-            """), {"date": today, "shift": shift}).fetchall()
-            current_assignments = {r[0]: r[1] for r in rows}
+                for zone, name in [('front', cna_front_db), ('back', cna_back_db)]:
+                    connection.execute(text("""
+                        INSERT INTO cna_coverage (assignment_date, zone, cna_name, shift)
+                        VALUES (:date, :zone, :name, :shift)
+                        ON CONFLICT (assignment_date, zone, shift)
+                        DO UPDATE SET cna_name = EXCLUDED.cna_name;
+                    """), {
+                        "date": today,
+                        "zone": zone,
+                        "name": name,
+                        "shift": shift
+                    })
 
-            # CNAs
-            rows = connection.execute(text("""
-                SELECT zone, cna_name 
-                FROM cna_coverage
-                WHERE assignment_date = :date AND shift = :shift;
-            """), {"date": today, "shift": shift}).fetchall()
-            for r in rows:
-                if r[0] == 'front':
-                    cna_front = r[1] if r[1] else 'unassigned'
-                elif r[0] == 'back':
-                    cna_back = r[1] if r[1] else 'unassigned'
+        print("Assignments saved successfully.")
     except Exception as e:
-        print(f"ERROR fetching assignments: {e}")
-
-    return render_template(
-        'assignments.html',
-        all_rooms=ALL_ROOMS,
-        all_nurses=all_nurses,
-        current_assignments=current_assignments,
-        all_cnas=[],  # you already load CNA list elsewhere
-        cna_front=cna_front,
-        cna_back=cna_back,
-        shift=shift
-    )
+        print(f"ERROR saving assignments: {e}")
+    # Stay on the same shift after save
+    return redirect(url_for('assignments', shift=shift))
+return render_template(
+    'assignments.html',
+    all_rooms=ALL_ROOMS,
+    preferred_nurses=preferred_nurses,
+    other_nurses=other_nurses,
+    current_assignments=current_assignments,
+    all_cnas=all_cnas,
+    cna_front=cna_front_val,
+    cna_back=cna_back_val,
+    shift=shift
+)
 
 
 
@@ -838,6 +808,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
