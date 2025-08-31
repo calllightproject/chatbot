@@ -36,10 +36,10 @@
       </select>
     </form>
 
-    <!-- Assignments form (POST). One FORM only. -->
+    <!-- Assignments form (single POST form for everything) -->
     <form method="POST" action="{{ url_for('assignments') }}">
 
-      <!-- carry the current shift into POST -->
+      <!-- carry the currently selected shift into POST -->
       <input type="hidden" name="shift" value="{{ shift }}">
 
       <!-- TOP Save button -->
@@ -50,7 +50,7 @@
         </button>
       </div>
 
-      <!-- CNA Coverage -->
+      <!-- CNA Coverage (shift-aware via hidden input) -->
       <section class="mb-8">
         <h2 class="text-xl font-semibold text-gray-700 mb-4">CNA Coverage</h2>
 
@@ -81,9 +81,13 @@
             </select>
           </div>
         </div>
+
+        <p class="text-xs text-gray-500 mt-2">
+          These CNA selections are saved for the <span class="font-semibold">{{ shift|capitalize }}</span> shift.
+        </p>
       </section>
 
-      <!-- Nurse by Room -->
+      <!-- Nurse by Room (shift-aware via hidden input) -->
       <section class="mb-10">
         <h2 class="text-xl font-semibold text-gray-700 mb-4">Nurse by Room</h2>
 
@@ -106,6 +110,10 @@
             </div>
           {% endfor %}
         </div>
+
+        <p class="text-xs text-gray-500 mt-2">
+          Rooms are saved for the <span class="font-semibold">{{ shift|capitalize }}</span> shift.
+        </p>
       </section>
 
       <!-- BOTTOM Save button -->
