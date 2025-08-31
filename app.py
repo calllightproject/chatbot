@@ -528,7 +528,7 @@ def analytics():
     )
 
 # --- Assignments (nurses per room + CNA front/back via zones) ---
-# --- Assignments (nurses per room + CNA front/back via zones) ---
+# --- Assignments (nurses per room + CNA front/back via zones, with shift) ---
 @app.route('/assignments', methods=['GET', 'POST'])
 def assignments():
     today = date.today()
@@ -568,7 +568,9 @@ def assignments():
                         else:
                             connection.execute(text("""
                                 DELETE FROM assignments
-                                WHERE assignment_date = :date AND room_number = :room AND shift = :shift;
+                                WHERE assignment_date = :date 
+                                  AND room_number = :room 
+                                  AND shift = :shift;
                             """), {
                                 "date": today,
                                 "room": room_number,
@@ -844,6 +846,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
