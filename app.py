@@ -529,9 +529,15 @@ def analytics():
 
 # --- Assignments (nurses per room + CNA front/back via zones) ---
 # --- Assignments (nurses per room + CNA front/back via zones, with shift) ---
+# --- Assignments (nurses per room + CNA front/back via zones, with shift) ---
 @app.route('/assignments', methods=['GET', 'POST'])
 def assignments():
     today = date.today()
+
+    # ---- Determine which shift is active (default = day) ----
+    shift = request.args.get('shift', 'day')  # for GET (toggle dropdown)
+    if request.method == 'POST':
+        shift = request.form.get('shift', 'day')  # for POST (form submission)
 
     # ---- Load nurses (for dropdowns) ----
     all_nurses = []
@@ -550,7 +556,6 @@ def assignments():
                 with connection.begin():
 
                     # ---- Save nurse-by-room assignments ----
-                    shift = request.form.get('shift', 'day')  # read shift toggle (day/night)
                     for room_number in ALL_ROOMS:
                         staff_name = request.form.get(f'nurse_for_room_{room_number}')
                         if staff_name and staff_name != 'unassigned':
@@ -600,59 +605,46 @@ def assignments():
             print("Assignments saved successfully.")
         except Exception as e:
             print(f"ERROR saving assignments: {e}")
-        return redirect(url_for('assignments'))
+        return redirect(url_for('assignments', shift=shift))
 
-
-    # ---- Load CNAs (for dropdowns) ----
-    all_cnas = []
-    try:
-        with engine.connect() as connection:
-            rows = connection.execute(
-                text("SELECT name FROM staff WHERE role = 'cna' ORDER BY name;")
-            ).fetchall()
-            all_cnas = [r[0] for r in rows]
-    except Exception as e:
-        print(f"ERROR fetching CNAs: {e}")
-
-    # ---- Read back today's nurse assignments to preselect ----
+    # ---- Load current assignments for this shift ----
     current_assignments = {}
+    cna_front = 'unassigned'
+    cna_back = 'unassigned'
+
     try:
         with engine.connect() as connection:
+            # Nurses
             rows = connection.execute(text("""
-                SELECT room_number, staff_name
+                SELECT room_number, staff_name 
                 FROM assignments
-                WHERE assignment_date = :date;
-            """), {"date": today}).fetchall()
+                WHERE assignment_date = :date AND shift = :shift;
+            """), {"date": today, "shift": shift}).fetchall()
+            current_assignments = {r[0]: r[1] for r in rows}
+
+            # CNAs
+            rows = connection.execute(text("""
+                SELECT zone, cna_name 
+                FROM cna_coverage
+                WHERE assignment_date = :date AND shift = :shift;
+            """), {"date": today, "shift": shift}).fetchall()
             for r in rows:
-                current_assignments[r.room_number] = r.staff_name
+                if r[0] == 'front':
+                    cna_front = r[1] if r[1] else 'unassigned'
+                elif r[0] == 'back':
+                    cna_back = r[1] if r[1] else 'unassigned'
     except Exception as e:
         print(f"ERROR fetching assignments: {e}")
 
-    # ---- Read back today's CNA coverage (zones -> front/back) ----
-    cna_front_val = 'unassigned'
-    cna_back_val  = 'unassigned'
-    try:
-        with engine.connect() as connection:
-            rows = connection.execute(text("""
-                SELECT zone, cna_name
-                FROM cna_coverage
-                WHERE assignment_date = :date;
-            """), {"date": today}).fetchall()
-            zmap = {(r[0] or '').lower(): r[1] for r in rows}  # e.g., {'front': 'Alice', 'back': 'Bob'}
-            cna_front_val = zmap.get('front') or 'unassigned'
-            cna_back_val  = zmap.get('back')  or 'unassigned'
-    except Exception as e:
-        print(f"INFO fetching CNA coverage: {e}")
-
-    # ---- Render page ----
     return render_template(
         'assignments.html',
         all_rooms=ALL_ROOMS,
         all_nurses=all_nurses,
         current_assignments=current_assignments,
-        all_cnas=all_cnas,
-        cna_front=cna_front_val,
-        cna_back=cna_back_val
+        all_cnas=[],  # you already load CNA list elsewhere
+        cna_front=cna_front,
+        cna_back=cna_back,
+        shift=shift
     )
 
 
@@ -846,6 +838,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
