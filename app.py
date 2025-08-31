@@ -527,96 +527,150 @@ def analytics():
         multi_baby_values=multi_baby_values
     )
 
-# ---- Determine which shift we're editing for this request ----
-# (GET uses querystring ?shift=day|night, POST carries a hidden input named 'shift')
-shift = request.args.get('shift', 'day') if request.method == 'GET' else request.form.get('shift', 'day')
+# --- Assignments (shift-aware) ---
+@app.route('/assignments', methods=['GET', 'POST'])
+def assignments():
+    today = date.today()
 
-# ---- Load nurses grouped by preferred_shift for this shift ----
-preferred_nurses = []
-other_nurses = []
-try:
-    with engine.connect() as connection:
-        rows = connection.execute(text("""
-            SELECT name, COALESCE(preferred_shift, 'day') AS ps
-            FROM staff
-            WHERE role = 'nurse'
-            ORDER BY name;
-        """)).fetchall()
-        for name, ps in rows:
-            (preferred_nurses if ps == shift else other_nurses).append(name)
-except Exception as e:
-    print(f"ERROR fetching nurses: {e}")
+    # Which shift are we editing/viewing? (GET: querystring, POST: hidden input)
+    shift = request.args.get('shift', 'day') if request.method == 'GET' else request.form.get('shift', 'day')
 
-# ---- Handle saves ----
-if request.method == 'POST':
+    # ----------------------------
+    # SAVE (on POST)
+    # ----------------------------
+    if request.method == 'POST':
+        try:
+            with engine.connect() as connection:
+                with connection.begin():
+                    # Save nurse-by-room (shift-aware)
+                    for room_number in ALL_ROOMS:
+                        staff_name = request.form.get(f'nurse_for_room_{room_number}')
+                        if staff_name and staff_name != 'unassigned':
+                            connection.execute(text("""
+                                INSERT INTO assignments (assignment_date, room_number, staff_name, shift)
+                                VALUES (:date, :room, :nurse, :shift)
+                                ON CONFLICT (assignment_date, room_number, shift)
+                                DO UPDATE SET staff_name = EXCLUDED.staff_name;
+                            """), {
+                                "date": today,
+                                "room": room_number,
+                                "nurse": staff_name,
+                                "shift": shift,
+                            })
+                        else:
+                            connection.execute(text("""
+                                DELETE FROM assignments
+                                WHERE assignment_date = :date
+                                  AND room_number     = :room
+                                  AND shift           = :shift;
+                            """), {
+                                "date": today,
+                                "room": room_number,
+                                "shift": shift,
+                            })
+
+                    # Save CNA coverage as zone rows (front/back) for this shift
+                    cna_front_form = request.form.get('cna_front', 'unassigned')
+                    cna_back_form  = request.form.get('cna_back',  'unassigned')
+
+                    cna_front_db = None if cna_front_form == 'unassigned' else cna_front_form
+                    cna_back_db  = None if cna_back_form  == 'unassigned' else cna_back_form
+
+                    for zone, name in [('front', cna_front_db), ('back', cna_back_db)]:
+                        connection.execute(text("""
+                            INSERT INTO cna_coverage (assignment_date, zone, cna_name, shift)
+                            VALUES (:date, :zone, :name, :shift)
+                            ON CONFLICT (assignment_date, zone, shift)
+                            DO UPDATE SET cna_name = EXCLUDED.cna_name;
+                        """), {
+                            "date": today,
+                            "zone": zone,
+                            "name": name,
+                            "shift": shift,
+                        })
+
+            print("Assignments saved successfully.")
+        except Exception as e:
+            print(f"ERROR saving assignments: {e}")
+
+        # Stay on the same shift after save
+        return redirect(url_for('assignments', shift=shift))
+
+    # ----------------------------
+    # LOAD data (for GET render)
+    # ----------------------------
+
+    # Load nurses grouped by preferred_shift for this shift
+    preferred_nurses, other_nurses = [], []
     try:
         with engine.connect() as connection:
-            with connection.begin():
-
-                # ---- Save nurse-by-room assignments (shift-aware) ----
-                for room_number in ALL_ROOMS:
-                    staff_name = request.form.get(f'nurse_for_room_{room_number}')
-                    if staff_name and staff_name != 'unassigned':
-                        connection.execute(text("""
-                            INSERT INTO assignments (assignment_date, room_number, staff_name, shift)
-                            VALUES (:date, :room, :nurse, :shift)
-                            ON CONFLICT (assignment_date, room_number, shift)
-                            DO UPDATE SET staff_name = EXCLUDED.staff_name;
-                        """), {
-                            "date": today,
-                            "room": room_number,
-                            "nurse": staff_name,
-                            "shift": shift
-                        })
-                    else:
-                        connection.execute(text("""
-                            DELETE FROM assignments
-                            WHERE assignment_date = :date
-                              AND room_number     = :room
-                              AND shift           = :shift;
-                        """), {
-                            "date": today,
-                            "room": room_number,
-                            "shift": shift
-                        })
-
-                # ---- Save CNA coverage as zone rows (front/back), also shift-aware ----
-                cna_front_form = request.form.get('cna_front', 'unassigned')
-                cna_back_form  = request.form.get('cna_back',  'unassigned')
-
-                cna_front_db = None if cna_front_form == 'unassigned' else cna_front_form
-                cna_back_db  = None if cna_back_form  == 'unassigned' else cna_back_form
-
-                for zone, name in [('front', cna_front_db), ('back', cna_back_db)]:
-                    connection.execute(text("""
-                        INSERT INTO cna_coverage (assignment_date, zone, cna_name, shift)
-                        VALUES (:date, :zone, :name, :shift)
-                        ON CONFLICT (assignment_date, zone, shift)
-                        DO UPDATE SET cna_name = EXCLUDED.cna_name;
-                    """), {
-                        "date": today,
-                        "zone": zone,
-                        "name": name,
-                        "shift": shift
-                    })
-
-        print("Assignments saved successfully.")
+            rows = connection.execute(text("""
+                SELECT name, COALESCE(preferred_shift, 'day') AS ps
+                FROM staff
+                WHERE role = 'nurse'
+                ORDER BY name;
+            """)).fetchall()
+            for name, ps in rows:
+                (preferred_nurses if ps == shift else other_nurses).append(name)
     except Exception as e:
-        print(f"ERROR saving assignments: {e}")
-    # Stay on the same shift after save
-    return redirect(url_for('assignments', shift=shift))
-return render_template(
-    'assignments.html',
-    all_rooms=ALL_ROOMS,
-    preferred_nurses=preferred_nurses,
-    other_nurses=other_nurses,
-    current_assignments=current_assignments,
-    all_cnas=all_cnas,
-    cna_front=cna_front_val,
-    cna_back=cna_back_val,
-    shift=shift
-)
+        print(f"ERROR fetching nurses: {e}")
 
+    # Load CNAs
+    all_cnas = []
+    try:
+        with engine.connect() as connection:
+            rows = connection.execute(text("""
+                SELECT name FROM staff
+                WHERE role = 'cna'
+                ORDER BY name;
+            """)).fetchall()
+            all_cnas = [r[0] for r in rows]
+    except Exception as e:
+        print(f"ERROR fetching CNAs: {e}")
+
+    # Load today's nurse assignments for the selected shift
+    current_assignments = {}
+    try:
+        with engine.connect() as connection:
+            rows = connection.execute(text("""
+                SELECT room_number, staff_name
+                FROM assignments
+                WHERE assignment_date = :date
+                  AND shift = :shift;
+            """), {"date": today, "shift": shift}).fetchall()
+            for r in rows:
+                current_assignments[r.room_number] = r.staff_name
+    except Exception as e:
+        print(f"ERROR fetching assignments: {e}")
+
+    # Load today's CNA coverage for the selected shift
+    cna_front_val, cna_back_val = 'unassigned', 'unassigned'
+    try:
+        with engine.connect() as connection:
+            rows = connection.execute(text("""
+                SELECT zone, cna_name
+                FROM cna_coverage
+                WHERE assignment_date = :date
+                  AND shift = :shift;
+            """), {"date": today, "shift": shift}).fetchall()
+            zmap = {(r[0] or '').lower(): r[1] for r in rows}
+            cna_front_val = zmap.get('front') or 'unassigned'
+            cna_back_val  = zmap.get('back')  or 'unassigned'
+    except Exception as e:
+        print(f"INFO fetching CNA coverage: {e}")
+
+    # Render
+    return render_template(
+        'assignments.html',
+        all_rooms=ALL_ROOMS,
+        preferred_nurses=preferred_nurses,
+        other_nurses=other_nurses,
+        current_assignments=current_assignments,
+        all_cnas=all_cnas,
+        cna_front=cna_front_val,
+        cna_back=cna_back_val,
+        shift=shift,
+    )
 
 
 # --- Auth for Manager (unchanged) ---
@@ -808,6 +862,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
