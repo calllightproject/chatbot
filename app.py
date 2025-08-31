@@ -673,6 +673,7 @@ def assignments():
     )
 
 
+
 # --- Auth for Manager (unchanged) ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -862,6 +863,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
