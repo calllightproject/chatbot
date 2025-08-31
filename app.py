@@ -527,7 +527,7 @@ def analytics():
         multi_baby_values=multi_baby_values
     )
 
-# --- Assignments ---
+# --- Assignments (nurses per room + CNA front/back via zones) ---
 # --- Assignments (nurses per room + CNA front/back via zones) ---
 @app.route('/assignments', methods=['GET', 'POST'])
 def assignments():
@@ -550,20 +550,30 @@ def assignments():
                 with connection.begin():
 
                     # ---- Save nurse-by-room assignments ----
+                    shift = request.form.get('shift', 'day')  # read shift toggle (day/night)
                     for room_number in ALL_ROOMS:
                         staff_name = request.form.get(f'nurse_for_room_{room_number}')
                         if staff_name and staff_name != 'unassigned':
                             connection.execute(text("""
-                                INSERT INTO assignments (assignment_date, room_number, staff_name)
-                                VALUES (:date, :room, :nurse)
-                                ON CONFLICT (assignment_date, room_number)
+                                INSERT INTO assignments (assignment_date, room_number, staff_name, shift)
+                                VALUES (:date, :room, :nurse, :shift)
+                                ON CONFLICT (assignment_date, room_number, shift)
                                 DO UPDATE SET staff_name = EXCLUDED.staff_name;
-                            """), {"date": today, "room": room_number, "nurse": staff_name})
+                            """), {
+                                "date": today,
+                                "room": room_number,
+                                "nurse": staff_name,
+                                "shift": shift
+                            })
                         else:
                             connection.execute(text("""
                                 DELETE FROM assignments
-                                WHERE assignment_date = :date AND room_number = :room;
-                            """), {"date": today, "room": room_number})
+                                WHERE assignment_date = :date AND room_number = :room AND shift = :shift;
+                            """), {
+                                "date": today,
+                                "room": room_number,
+                                "shift": shift
+                            })
 
                     # ---- Save CNA coverage as zone rows (front/back) ----
                     cna_front_form = request.form.get('cna_front', 'unassigned')
@@ -574,16 +584,22 @@ def assignments():
 
                     for zone, name in [('front', cna_front_db), ('back', cna_back_db)]:
                         connection.execute(text("""
-                            INSERT INTO cna_coverage (assignment_date, zone, cna_name)
-                            VALUES (:date, :zone, :name)
-                            ON CONFLICT (assignment_date, zone)
+                            INSERT INTO cna_coverage (assignment_date, zone, cna_name, shift)
+                            VALUES (:date, :zone, :name, :shift)
+                            ON CONFLICT (assignment_date, zone, shift)
                             DO UPDATE SET cna_name = EXCLUDED.cna_name;
-                        """), {"date": today, "zone": zone, "name": name})
+                        """), {
+                            "date": today,
+                            "zone": zone,
+                            "name": name,
+                            "shift": shift
+                        })
 
             print("Assignments saved successfully.")
         except Exception as e:
             print(f"ERROR saving assignments: {e}")
         return redirect(url_for('assignments'))
+
 
     # ---- Load CNAs (for dropdowns) ----
     all_cnas = []
@@ -828,6 +844,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
