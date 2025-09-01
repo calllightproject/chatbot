@@ -527,7 +527,7 @@ def analytics():
         multi_baby_values=multi_baby_values
     )
 
-# --- Assignments (shift-aware; CNA zones; grouped nurse list) ---
+# --- Assignments (shift-aware; CNA zones; preferred nurse grouping) ---
 @app.route('/assignments', methods=['GET', 'POST'])
 def assignments():
     today = date.today()
@@ -536,41 +536,40 @@ def assignments():
     shift = request.args.get('shift', 'day') if request.method == 'GET' else request.form.get('shift', 'day')
 
     # ---------- Load nurses, grouped by preferred_shift ----------
-nurses_by_shift = {'day': [], 'night': [], 'unspecified': []}
-all_nurses = []                 # keep if other parts still use it
-preferred_nurses = []           # what the template shows first
-other_nurses = []               # the rest
+    nurses_by_shift = {'day': [], 'night': [], 'unspecified': []}
+    all_nurses = []                 # keep if other parts still use it
+    preferred_nurses = []           # what the template shows first
+    other_nurses = []               # the rest
 
-try:
-    with engine.connect() as connection:
-        rows = connection.execute(text("""
-            SELECT name, COALESCE(preferred_shift, 'unspecified') AS pref
-            FROM staff
-            WHERE role = 'nurse'
-            ORDER BY pref, name;
-        """)).fetchall()
+    try:
+        with engine.connect() as connection:
+            rows = connection.execute(text("""
+                SELECT name, COALESCE(preferred_shift, 'unspecified') AS pref
+                FROM staff
+                WHERE role = 'nurse'
+                ORDER BY pref, name;
+            """)).fetchall()
 
-        for name, pref in rows:
-            all_nurses.append(name)
-            pref = (pref or 'unspecified').lower()
-            if pref in ('day', 'night', 'unspecified'):
-                nurses_by_shift[pref].append(name)
-            else:
-                nurses_by_shift['unspecified'].append(name)
+            for name, pref in rows:
+                all_nurses.append(name)
+                pref = (pref or 'unspecified').lower()
+                if pref in ('day', 'night', 'unspecified'):
+                    nurses_by_shift[pref].append(name)
+                else:
+                    nurses_by_shift['unspecified'].append(name)
 
-    # Build the two lists the template expects, based on the selected shift
-    if shift == 'day':
-        preferred_nurses = nurses_by_shift.get('day', [])
-        other_nurses = nurses_by_shift.get('night', []) + nurses_by_shift.get('unspecified', [])
-    else:  # shift == 'night'
-        preferred_nurses = nurses_by_shift.get('night', [])
-        other_nurses = nurses_by_shift.get('day', []) + nurses_by_shift.get('unspecified', [])
+        # Build the two lists the template expects, based on the selected shift
+        if shift == 'day':
+            preferred_nurses = nurses_by_shift.get('day', [])
+            other_nurses = nurses_by_shift.get('night', []) + nurses_by_shift.get('unspecified', [])
+        else:  # shift == 'night'
+            preferred_nurses = nurses_by_shift.get('night', [])
+            other_nurses = nurses_by_shift.get('day', []) + nurses_by_shift.get('unspecified', [])
 
-except Exception as e:
-    print(f"ERROR fetching nurses: {e}")
-    preferred_nurses = []
-    other_nurses = []
-
+    except Exception as e:
+        print(f"ERROR fetching nurses: {e}")
+        preferred_nurses = []
+        other_nurses = []
 
     # ---------- Handle save ----------
     if request.method == 'POST':
@@ -656,19 +655,20 @@ except Exception as e:
     except Exception as e:
         print(f"INFO fetching CNA coverage: {e}")
 
+    # ---------- Render ----------
     return render_template(
-    'assignments.html',
-    all_rooms=ALL_ROOMS,
-    all_nurses=all_nurses,
-    nurses_by_shift=nurses_by_shift,  # for grouped dropdowns
-    current_assignments=current_assignments,
-    all_cnas=all_cnas,
-    cna_front=cna_front_val,
-    cna_back=cna_back_val,
-    shift=shift,
-    preferred_nurses=preferred_nurses,
-    other_nurses=other_nurses
-)
+        'assignments.html',
+        all_rooms=ALL_ROOMS,
+        all_nurses=all_nurses,
+        nurses_by_shift=nurses_by_shift,   # optional
+        preferred_nurses=preferred_nurses, # used by template
+        other_nurses=other_nurses,         # used by template
+        current_assignments=current_assignments,
+        all_cnas=all_cnas,
+        cna_front=cna_front_val,
+        cna_back=cna_back_val,
+        shift=shift
+    )
 
 
 
@@ -865,6 +865,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
