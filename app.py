@@ -559,12 +559,15 @@ def assignments():
                     nurses_by_shift['unspecified'].append(name)
 
         # Build the two lists the template expects, based on the selected shift
+        # Build the lists the template uses.
+          # Change here to HIDE opposite-shift nurses:
         if shift == 'day':
             preferred_nurses = nurses_by_shift.get('day', [])
-            other_nurses = nurses_by_shift.get('night', []) + nurses_by_shift.get('unspecified', [])
+            other_nurses = []  # hide night/unspecified from the dropdown
         else:  # shift == 'night'
             preferred_nurses = nurses_by_shift.get('night', [])
-            other_nurses = nurses_by_shift.get('day', []) + nurses_by_shift.get('unspecified', [])
+            other_nurses = []  # hide day/unspecified from the dropdown
+
 
     except Exception as e:
         print(f"ERROR fetching nurses: {e}")
@@ -865,6 +868,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
