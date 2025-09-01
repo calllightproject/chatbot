@@ -539,7 +539,7 @@ def assignments():
     nurses_by_shift = {'day': [], 'night': [], 'unspecified': []}
     all_nurses = []                 # keep if other parts still use it
     preferred_nurses = []           # what the template shows first
-    other_nurses = []               # the rest
+    other_nurses = []               # the rest (we'll hide for now)
 
     try:
         with engine.connect() as connection:
@@ -550,24 +550,37 @@ def assignments():
                 ORDER BY pref, name;
             """)).fetchall()
 
-            for name, pref in rows:
-                all_nurses.append(name)
-                pref = (pref or 'unspecified').lower()
-                if pref in ('day', 'night', 'unspecified'):
-                    nurses_by_shift[pref].append(name)
-                else:
-                    nurses_by_shift['unspecified'].append(name)
+        for name, pref in rows:
+            # ignore any placeholder rows accidentally named "unassigned"
+            if name and name.strip().lower() == 'unassigned':
+                continue
+            all_nurses.append(name)
+            pref = (pref or 'unspecified').lower()
+            if pref in ('day', 'night', 'unspecified'):
+                nurses_by_shift[pref].append(name)
+            else:
+                nurses_by_shift['unspecified'].append(name)
 
-        # Build the two lists the template expects, based on the selected shift
-        # Build the lists the template uses.
-          # Change here to HIDE opposite-shift nurses:
-        if shift == 'day':
-            preferred_nurses = nurses_by_shift.get('day', [])
-            other_nurses = []  # hide night/unspecified from the dropdown
-        else:  # shift == 'night'
-            preferred_nurses = nurses_by_shift.get('night', [])
-            other_nurses = []  # hide day/unspecified from the dropdown
+        # Build lists for the template, HIDE opposite-shift, with a safe fallback
+        selected = 'day' if shift == 'day' else 'night'
+        preferred_nurses = list(nurses_by_shift.get(selected, []))
 
+        # If nothing matches (data mismatch), fall back so dropdown isn't empty
+        if not preferred_nurses:
+            preferred_nurses = (
+                nurses_by_shift.get('unspecified', []) +
+                nurses_by_shift.get('day', []) +
+                nurses_by_shift.get('night', [])
+            )
+
+        other_nurses = []  # hiding opposite shift for now
+
+        # Optional debug
+        print(f"[assignments] shift={shift} "
+              f"counts: day={len(nurses_by_shift['day'])} "
+              f"night={len(nurses_by_shift['night'])} "
+              f"unspec={len(nurses_by_shift['unspecified'])} "
+              f"preferred_shown={len(preferred_nurses)}")
 
     except Exception as e:
         print(f"ERROR fetching nurses: {e}")
@@ -624,7 +637,7 @@ def assignments():
             rows = connection.execute(
                 text("SELECT name FROM staff WHERE role = 'cna' ORDER BY name;")
             ).fetchall()
-            all_cnas = [r[0] for r in rows]
+            all_cnas = [r[0] for r in rows if r[0] and r[0].strip().lower() != 'unassigned']
     except Exception as e:
         print(f"ERROR fetching CNAs: {e}")
 
@@ -665,13 +678,14 @@ def assignments():
         all_nurses=all_nurses,
         nurses_by_shift=nurses_by_shift,   # optional
         preferred_nurses=preferred_nurses, # used by template
-        other_nurses=other_nurses,         # used by template
+        other_nurses=other_nurses,         # used by template (empty while hiding opposite)
         current_assignments=current_assignments,
         all_cnas=all_cnas,
         cna_front=cna_front_val,
         cna_back=cna_back_val,
         shift=shift
     )
+
 
 
 
@@ -868,6 +882,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
