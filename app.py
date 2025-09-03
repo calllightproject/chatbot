@@ -528,6 +528,7 @@ def analytics():
     )
 
 # --- Assignments (shift-aware; CNA zones; preferred nurse grouping) ---
+# --- Assignments (shift-aware; CNA zones; preferred nurse grouping) ---
 @app.route('/assignments', methods=['GET', 'POST'])
 def assignments():
     today = date.today()
@@ -536,19 +537,19 @@ def assignments():
     shift = request.args.get('shift', 'day') if request.method == 'GET' else request.form.get('shift', 'day')
 
     # ---------- Load nurses, grouped by preferred_shift (strict) ----------
-nurses_by_shift = {'day': [], 'night': [], 'unspecified': []}
-all_nurses = []
-preferred_nurses = []
-other_nurses = []
+    nurses_by_shift = {'day': [], 'night': [], 'unspecified': []}
+    all_nurses = []
+    preferred_nurses = []
+    other_nurses = []
 
-try:
-    with engine.connect() as connection:
-        rows = connection.execute(text("""
-            SELECT name, COALESCE(TRIM(preferred_shift), 'unspecified') AS pref
-            FROM staff
-            WHERE role = 'nurse'
-            ORDER BY pref, name;
-        """)).fetchall()
+    try:
+        with engine.connect() as connection:
+            rows = connection.execute(text("""
+                SELECT name, COALESCE(TRIM(preferred_shift), 'unspecified') AS pref
+                FROM staff
+                WHERE role = 'nurse'
+                ORDER BY pref, name;
+            """)).fetchall()
 
         for name, pref in rows:
             if not name or name.strip().lower() == 'unassigned':
@@ -560,24 +561,21 @@ try:
             else:
                 nurses_by_shift['unspecified'].append(name)
 
-# ✅ STRICT filtering goes *outside* the try/with
-selected = 'day' if shift == 'day' else 'night'
-preferred_nurses = list(nurses_by_shift.get(selected, []))
-other_nurses = list(nurses_by_shift.get('unspecified', []))  # or []
+    except Exception as e:
+        print(f"ERROR fetching nurses: {e}")
+        # keep empty lists if fetch failed
 
-# ✅ debug print also here
-print(f"[Assignments] shift={shift} counts: "
-      f"day={len(nurses_by_shift['day'])}, "
-      f"night={len(nurses_by_shift['night'])}, "
-      f"unspec={len(nurses_by_shift['unspecified'])}, "
-      f"preferred={len(preferred_nurses)}, other={len(other_nurses)}")
+    # ---- STRICT filtering happens *after* the try/except (very important) ----
+    selected = 'day' if shift == 'day' else 'night'
+    preferred_nurses = list(nurses_by_shift.get(selected, []))              # only selected shift
+    other_nurses = list(nurses_by_shift.get('unspecified', []))            # keep unspecified; set [] to hide
 
-except Exception as e:
-    print(f"ERROR fetching nurses: {e}")
-    preferred_nurses = []
-    other_nurses = []
-
-
+    # Optional debug
+    print(f"[assignments] shift={shift} "
+          f"counts: day={len(nurses_by_shift['day'])}, "
+          f"night={len(nurses_by_shift['night'])}, "
+          f"unspec={len(nurses_by_shift['unspecified'])}, "
+          f"preferred={len(preferred_nurses)}, other={len(other_nurses)}")
 
     # ---------- Handle save ----------
     if request.method == 'POST':
@@ -619,6 +617,7 @@ except Exception as e:
             print(f"Assignments saved successfully for shift={shift}.")
         except Exception as e:
             print(f"ERROR saving assignments: {e}")
+
         # Preserve selected shift after save
         return redirect(url_for('assignments', shift=shift))
 
@@ -670,7 +669,7 @@ except Exception as e:
         all_nurses=all_nurses,
         nurses_by_shift=nurses_by_shift,   # optional
         preferred_nurses=preferred_nurses, # used by template
-        other_nurses=other_nurses,         # used by template (empty while hiding opposite)
+        other_nurses=other_nurses,         # used by template
         current_assignments=current_assignments,
         all_cnas=all_cnas,
         cna_front=cna_front_val,
@@ -874,6 +873,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
