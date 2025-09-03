@@ -550,30 +550,33 @@ try:
             ORDER BY pref, name;
         """)).fetchall()
 
-    for name, pref in rows:
-        if not name or name.strip().lower() == 'unassigned':
-            continue
-        all_nurses.append(name)
-        key = (pref or 'unspecified').strip().lower()
-        if key in ('day', 'night', 'unspecified'):
-            nurses_by_shift[key].append(name)
-        else:
-            nurses_by_shift['unspecified'].append(name)
+        for name, pref in rows:
+            if not name or name.strip().lower() == 'unassigned':
+                continue
+            all_nurses.append(name)
+            key = (pref or 'unspecified').strip().lower()
+            if key in ('day', 'night', 'unspecified'):
+                nurses_by_shift[key].append(name)
+            else:
+                nurses_by_shift['unspecified'].append(name)
 
-    # STRICT filtering: show only the selected shift; optionally show 'unspecified'
+# ✅ STRICT filtering goes *outside* the try/with
 selected = 'day' if shift == 'day' else 'night'
 preferred_nurses = list(nurses_by_shift.get(selected, []))
-other_nurses = list(nurses_by_shift.get('unspecified', []))  # set to [] if you want none
+other_nurses = list(nurses_by_shift.get('unspecified', []))  # or []
 
-    # Debug to verify grouping
-    print(f"[assignments] shift={shift} counts: day={len(nurses_by_shift['day'])}, "
-          f"night={len(nurses_by_shift['night'])}, unspec={len(nurses_by_shift['unspecified'])}, "
-          f"preferred={len(preferred_nurses)}, other={len(other_nurses)}")
+# ✅ debug print also here
+print(f"[Assignments] shift={shift} counts: "
+      f"day={len(nurses_by_shift['day'])}, "
+      f"night={len(nurses_by_shift['night'])}, "
+      f"unspec={len(nurses_by_shift['unspecified'])}, "
+      f"preferred={len(preferred_nurses)}, other={len(other_nurses)}")
 
 except Exception as e:
     print(f"ERROR fetching nurses: {e}")
     preferred_nurses = []
     other_nurses = []
+
 
 
     # ---------- Handle save ----------
@@ -871,6 +874,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
