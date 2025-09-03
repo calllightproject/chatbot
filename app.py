@@ -535,57 +535,46 @@ def assignments():
     # Which shift are we viewing/saving?
     shift = request.args.get('shift', 'day') if request.method == 'GET' else request.form.get('shift', 'day')
 
-    # ---------- Load nurses, grouped by preferred_shift ----------
-    nurses_by_shift = {'day': [], 'night': [], 'unspecified': []}
-    all_nurses = []                 # keep if other parts still use it
-    preferred_nurses = []           # what the template shows first
-    other_nurses = []               # the rest (we'll hide for now)
+    # ---------- Load nurses, grouped by preferred_shift (strict) ----------
+nurses_by_shift = {'day': [], 'night': [], 'unspecified': []}
+all_nurses = []
+preferred_nurses = []
+other_nurses = []
 
-    try:
-        with engine.connect() as connection:
-            rows = connection.execute(text("""
-                SELECT name, COALESCE(preferred_shift, 'unspecified') AS pref
-                FROM staff
-                WHERE role = 'nurse'
-                ORDER BY pref, name;
-            """)).fetchall()
+try:
+    with engine.connect() as connection:
+        rows = connection.execute(text("""
+            SELECT name, COALESCE(TRIM(preferred_shift), 'unspecified') AS pref
+            FROM staff
+            WHERE role = 'nurse'
+            ORDER BY pref, name;
+        """)).fetchall()
 
-        for name, pref in rows:
-            # ignore any placeholder rows accidentally named "unassigned"
-            if name and name.strip().lower() == 'unassigned':
-                continue
-            all_nurses.append(name)
-            pref = (pref or 'unspecified').lower()
-            if pref in ('day', 'night', 'unspecified'):
-                nurses_by_shift[pref].append(name)
-            else:
-                nurses_by_shift['unspecified'].append(name)
+    for name, pref in rows:
+        if not name or name.strip().lower() == 'unassigned':
+            continue
+        all_nurses.append(name)
+        key = (pref or 'unspecified').strip().lower()
+        if key in ('day', 'night', 'unspecified'):
+            nurses_by_shift[key].append(name)
+        else:
+            nurses_by_shift['unspecified'].append(name)
 
-        # Build lists for the template, HIDE opposite-shift, with a safe fallback
-        selected = 'day' if shift == 'day' else 'night'
-        preferred_nurses = list(nurses_by_shift.get(selected, []))
+    # STRICT filtering: show only the selected shift; optionally show 'unspecified'
+selected = 'day' if shift == 'day' else 'night'
+preferred_nurses = list(nurses_by_shift.get(selected, []))
+other_nurses = list(nurses_by_shift.get('unspecified', []))  # set to [] if you want none
 
-        # If nothing matches (data mismatch), fall back so dropdown isn't empty
-        if not preferred_nurses:
-            preferred_nurses = (
-                nurses_by_shift.get('unspecified', []) +
-                nurses_by_shift.get('day', []) +
-                nurses_by_shift.get('night', [])
-            )
+    # Debug to verify grouping
+    print(f"[assignments] shift={shift} counts: day={len(nurses_by_shift['day'])}, "
+          f"night={len(nurses_by_shift['night'])}, unspec={len(nurses_by_shift['unspecified'])}, "
+          f"preferred={len(preferred_nurses)}, other={len(other_nurses)}")
 
-        other_nurses = []  # hiding opposite shift for now
+except Exception as e:
+    print(f"ERROR fetching nurses: {e}")
+    preferred_nurses = []
+    other_nurses = []
 
-        # Optional debug
-        print(f"[assignments] shift={shift} "
-              f"counts: day={len(nurses_by_shift['day'])} "
-              f"night={len(nurses_by_shift['night'])} "
-              f"unspec={len(nurses_by_shift['unspecified'])} "
-              f"preferred_shown={len(preferred_nurses)}")
-
-    except Exception as e:
-        print(f"ERROR fetching nurses: {e}")
-        preferred_nurses = []
-        other_nurses = []
 
     # ---------- Handle save ----------
     if request.method == 'POST':
@@ -882,6 +871,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
