@@ -538,55 +538,47 @@ def assignments():
         shift = 'day'
 
     # ---------- Load nurses for this shift (STRICT via SQL) ----------
-    preferred_nurses: list[str] = []
-    other_nurses: list[str] = []
-    all_nurses: list[str] = []    # keep if any legacy code/templates still read it
+    # ---------- Load nurses for this shift (tolerant + strict when possible) ----------
+preferred_nurses = []
+other_nurses = []
+all_nurses = []
 
-    try:
-        with engine.connect() as connection:
-            # Exactly the selected shift
-            preferred_rows = connection.execute(text("""
-                SELECT name
-                FROM staff
-                WHERE role = 'nurse'
-                  AND LOWER(TRIM(preferred_shift)) = :shift
-                  AND name IS NOT NULL
-                  AND LOWER(TRIM(name)) <> 'unassigned'
-                ORDER BY name;
-            """), {"shift": shift}).fetchall()
+try:
+    with engine.connect() as connection:
+        # All nurses (case-insensitive role), exclude any placeholder "unassigned"
+        all_rows = connection.execute(text("""
+            SELECT name,
+                   LOWER(TRIM(COALESCE(preferred_shift, ''))) AS pref
+            FROM staff
+            WHERE LOWER(role) = 'nurse'
+              AND name IS NOT NULL
+              AND LOWER(TRIM(name)) <> 'unassigned'
+            ORDER BY name;
+        """)).fetchall()
 
-            # Only unspecified (NULL or empty) — no opposite shift
-            other_rows = connection.execute(text("""
-                SELECT name
-                FROM staff
-                WHERE role = 'nurse'
-                  AND (preferred_shift IS NULL OR TRIM(preferred_shift) = '')
-                  AND name IS NOT NULL
-                  AND LOWER(TRIM(name)) <> 'unassigned'
-                ORDER BY name;
-            """)).fetchall()
+    # Partition in Python to be robust to typos/NULLs
+    for name, pref in all_rows:
+        all_nurses.append(name)
+        if pref == shift:              # exact match to 'day' or 'night'
+            preferred_nurses.append(name)
+        elif pref in ('', None):       # unspecified
+            other_nurses.append(name)
+        else:
+            # pref is some other value (e.g., 'days', 'DAY ', 'float')
+            # treat as unspecified so they still show up
+            other_nurses.append(name)
 
-            # Optional: full list if you still pass it through
-            all_rows = connection.execute(text("""
-                SELECT name
-                FROM staff
-                WHERE role = 'nurse'
-                  AND name IS NOT NULL
-                  AND LOWER(TRIM(name)) <> 'unassigned'
-                ORDER BY name;
-            """)).fetchall()
+    # Final safeguard: if both lists are empty (bad/missing data), show everyone under "Other"
+    if not preferred_nurses and not other_nurses:
+        other_nurses = list(all_nurses)
 
-        preferred_nurses = [r[0] for r in preferred_rows]
-        other_nurses     = [r[0] for r in other_rows]
-        all_nurses       = [r[0] for r in all_rows]
+    print(f"[assignments] shift={shift} preferred={len(preferred_nurses)} other={len(other_nurses)} total={len(all_nurses)}")
 
-        print(f"[assignments] shift={shift} preferred={len(preferred_nurses)} other(unspecified)={len(other_nurses)}")
-
-    except Exception as e:
-        print(f"ERROR fetching nurses: {e}")
-        preferred_nurses = []
-        other_nurses = []
-        all_nurses = []
+except Exception as e:
+    print(f"ERROR fetching nurses: {e}")
+    preferred_nurses = []
+    other_nurses = []
+    all_nurses = []
 
     # ---------- Handle save ----------
     if request.method == 'POST':
@@ -889,6 +881,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
