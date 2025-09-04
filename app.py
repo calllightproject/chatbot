@@ -849,25 +849,6 @@ def staff_dashboard_for_nurse(staff_name):
                            staff_name=staff_name)
 
 
-@app.route("/debug/staff_counts")
-def debug_staff_counts():
-    try:
-        with engine.connect() as conn:
-            rows = conn.execute(text("""
-                SELECT role,
-                       COALESCE(LOWER(TRIM(preferred_shift)),'null') AS preferred_shift,
-                       COUNT(*) AS cnt
-                FROM staff
-                GROUP BY role, COALESCE(LOWER(TRIM(preferred_shift)),'null')
-                ORDER BY role, preferred_shift;
-            """)).fetchall()
-        html = ["<h2>staff counts</h2><ul>"]
-        for r in rows:
-            html.append(f"<li>{r.role} — {r.preferred_shift} — {r.cnt}</li>")
-        html.append("</ul>")
-        return "".join(html)
-    except Exception as e:
-        return f"<pre>ERROR: {e}</pre>", 500
 
 
 # --- SocketIO Event Handlers ---
@@ -930,6 +911,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
