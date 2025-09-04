@@ -704,43 +704,77 @@ def manager_dashboard():
         return redirect(url_for('login'))
 
     if request.method == 'POST':
-        action = request.form.get('action')
+        action = (request.form.get('action') or '').strip()
         try:
             with engine.connect() as connection:
                 with connection.begin():
                     if action == 'add_staff':
-                        name = request.form.get('name')
-                        role = request.form.get('role')
-                        preferred_shift = request.form.get('preferred_shift', 'day')
-                        if name and role:
+                        # Read & normalize inputs
+                        name = (request.form.get('name') or '').strip()
+                        role = (request.form.get('role') or 'nurse').strip().lower()
+                        if role not in ('nurse', 'cna'):
+                            role = 'nurse'
+
+                        # '', 'unspecified', None => store as NULL
+                        pref_raw = (request.form.get('preferred_shift') or '').strip().lower()
+                        if pref_raw in ('day', 'night'):
+                            preferred_shift = pref_raw
+                        else:
+                            preferred_shift = None  # will store NULL
+
+                        if name:
+                            # Upsert on name so edits are easy from the UI
                             connection.execute(text("""
                                 INSERT INTO staff (name, role, preferred_shift)
                                 VALUES (:name, :role, :preferred_shift)
                                 ON CONFLICT (name) DO UPDATE
                                 SET role = EXCLUDED.role,
-                                preferred_shift = EXCLUDED.preferred_shift;
-                        """), {"name": name, "role": role, "preferred_shift": preferred_shift})
+                                    preferred_shift = EXCLUDED.preferred_shift;
+                            """), {
+                                "name": name,
+                                "role": role,
+                                "preferred_shift": preferred_shift
+                            })
+
+                            log_to_audit_trail(
+                                "Staff Added",
+                                f"Added/updated staff: {name} ({role}, pref_shift={preferred_shift or 'unspecified'})"
+                            )
 
                     elif action == 'remove_staff':
                         staff_id = request.form.get('staff_id')
                         if staff_id:
-                            staff_member = connection.execute(text(
-                                "SELECT name, role FROM staff WHERE id = :id;"
-                            ), {"id": staff_id}).first()
+                            staff_member = connection.execute(
+                                text("SELECT name, role FROM staff WHERE id = :id;"),
+                                {"id": staff_id}
+                            ).first()
+
+                            connection.execute(
+                                text("DELETE FROM staff WHERE id = :id;"),
+                                {"id": staff_id}
+                            )
+
                             if staff_member:
-                                connection.execute(text("DELETE FROM staff WHERE id = :id;"), {"id": staff_id})
-                                log_to_audit_trail("Staff Removed", f"Removed staff member: {staff_member.name} ({staff_member.role})")
+                                log_to_audit_trail(
+                                    "Staff Removed",
+                                    f"Removed staff member: {staff_member.name} ({staff_member.role})"
+                                )
+
         except Exception as e:
             print(f"ERROR updating staff: {e}")
 
         return redirect(url_for('manager_dashboard'))
 
+    # ----- GET: fetch staff + recent audit log -----
     staff_list = []
     audit_log = []
     try:
         with engine.connect() as connection:
-            staff_result = connection.execute(text("SELECT id, name, role FROM staff ORDER BY name;"))
+            staff_result = connection.execute(
+                text("SELECT id, name, role, preferred_shift FROM staff ORDER BY name;")
+            )
             staff_list = staff_result.fetchall()
+
             audit_result = connection.execute(text("""
                 SELECT timestamp, event_type, details
                 FROM audit_log
@@ -752,6 +786,7 @@ def manager_dashboard():
         print(f"ERROR fetching manager dashboard data: {e}")
 
     return render_template('manager_dashboard.html', staff=staff_list, audit_log=audit_log)
+
 
 # --- Staff Portal (PIN + nurse-specific dashboard) ---
 @app.route('/staff-portal', methods=['GET', 'POST'])
@@ -873,6 +908,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
