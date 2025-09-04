@@ -526,53 +526,57 @@ def analytics():
         multi_baby_labels=multi_baby_labels,
         multi_baby_values=multi_baby_values
     )
-# --- Assignments (strict nurse filtering by shift; CNA zones) ---
+# --- Assignments (shift-aware; CNA zones; strict nurse filtering) ---
 @app.route('/assignments', methods=['GET', 'POST'])
 def assignments():
     today = date.today()
 
-    # Which shift are we viewing/saving?
-    shift = request.args.get('shift', 'day') if request.method == 'GET' else request.form.get('shift', 'day')
-    shift = (shift or 'day').strip().lower()
+    # Normalize the shift to lowercase and default to 'day'
+    if request.method == 'GET':
+        shift = (request.args.get('shift') or 'day').lower()
+    else:
+        shift = (request.form.get('shift') or 'day').lower()
     if shift not in ('day', 'night'):
         shift = 'day'
 
-    # ---------- Load nurses STRICTLY for this shift ----------
-    preferred_nurses = []   # only exact-match to current shift
-    other_nurses = []       # keep param (empty) to avoid template breakage, if referenced
-    all_nurses = []         # optional legacy param
+    # ---------- Load nurses, grouped by preferred_shift (strict) ----------
+    nurses_by_shift = {'day': [], 'night': [], 'unspecified': []}
+    preferred_nurses = []
+    other_nurses = []
+    all_nurses = []  # not used by template, but harmless to keep
 
     try:
         with engine.connect() as connection:
-            # Only nurses with preferred_shift == current shift
-            pref_rows = connection.execute(text("""
-                SELECT name
+            rows = connection.execute(text("""
+                SELECT
+                    name,
+                    LOWER(TRIM(COALESCE(preferred_shift, 'unspecified'))) AS pref
                 FROM staff
-                WHERE LOWER(role) = 'nurse'
-                  AND LOWER(TRIM(COALESCE(preferred_shift, ''))) = :shift
-                  AND name IS NOT NULL
-                  AND LOWER(TRIM(name)) <> 'unassigned'
-                ORDER BY name;
-            """), {"shift": shift}).fetchall()
-
-            # (Optional) full list, in case other parts of the app still use it
-            all_rows = connection.execute(text("""
-                SELECT name
-                FROM staff
-                WHERE LOWER(role) = 'nurse'
-                  AND name IS NOT NULL
-                  AND LOWER(TRIM(name)) <> 'unassigned'
+                WHERE role = 'nurse'
                 ORDER BY name;
             """)).fetchall()
 
-        preferred_nurses = [r[0] for r in pref_rows]
-        all_nurses = [r[0] for r in all_rows]
+        for name, pref in rows:
+            if not name or name.strip().lower() == 'unassigned':
+                continue
+            all_nurses.append(name)
+            if pref not in ('day', 'night'):
+                pref = 'unspecified'
+            nurses_by_shift[pref].append(name)
 
-        print(f"[assignments] shift={shift} preferred={len(preferred_nurses)} total_nurses={len(all_nurses)}")
+        # Strict filtering: only the selected shift; optionally include 'unspecified'
+        preferred_nurses = sorted(nurses_by_shift.get(shift, []))
+        other_nurses = sorted(nurses_by_shift.get('unspecified', []))  # keep or set [] to hide
+
+        print(f"[assignments] shift={shift} -> day={len(nurses_by_shift['day'])}, "
+              f"night={len(nurses_by_shift['night'])}, "
+              f"unspec={len(nurses_by_shift['unspecified'])}; "
+              f"preferred={len(preferred_nurses)}, other={len(other_nurses)}")
 
     except Exception as e:
         print(f"ERROR fetching nurses: {e}")
-        preferred_nurses, other_nurses, all_nurses = [], [], []
+        preferred_nurses = []
+        other_nurses = []
 
     # ---------- Handle save ----------
     if request.method == 'POST':
@@ -622,15 +626,10 @@ def assignments():
     all_cnas = []
     try:
         with engine.connect() as connection:
-            rows = connection.execute(text("""
-                SELECT name
-                FROM staff
-                WHERE LOWER(role) = 'cna'
-                  AND name IS NOT NULL
-                  AND LOWER(TRIM(name)) <> 'unassigned'
-                ORDER BY name;
-            """)).fetchall()
-            all_cnas = [r[0] for r in rows]
+            rows = connection.execute(
+                text("SELECT name FROM staff WHERE role = 'cna' ORDER BY name;")
+            ).fetchall()
+            all_cnas = [r[0] for r in rows if r[0] and r[0].strip().lower() != 'unassigned']
     except Exception as e:
         print(f"ERROR fetching CNAs: {e}")
 
@@ -668,9 +667,9 @@ def assignments():
     return render_template(
         'assignments.html',
         all_rooms=ALL_ROOMS,
-        preferred_nurses=preferred_nurses,   # used by template
-        other_nurses=other_nurses,           # kept empty; safe if template references it
-        all_nurses=all_nurses,               # optional/legacy
+        # only these two are used by the template for nurse dropdowns:
+        preferred_nurses=preferred_nurses,
+        other_nurses=other_nurses,
         current_assignments=current_assignments,
         all_cnas=all_cnas,
         cna_front=cna_front_val,
@@ -874,6 +873,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
