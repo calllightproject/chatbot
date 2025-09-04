@@ -526,7 +526,7 @@ def analytics():
         multi_baby_labels=multi_baby_labels,
         multi_baby_values=multi_baby_values
     )
-# --- Assignments (shift-aware; strict nurse filtering; CNA zones) ---
+# --- Assignments (strict nurse filtering by shift; CNA zones) ---
 @app.route('/assignments', methods=['GET', 'POST'])
 def assignments():
     today = date.today()
@@ -537,16 +537,27 @@ def assignments():
     if shift not in ('day', 'night'):
         shift = 'day'
 
-    # ---------- Load nurses (strict filtering) ----------
-    preferred_nurses = []
-    other_nurses = []
-    all_nurses = []
+    # ---------- Load nurses STRICTLY for this shift ----------
+    preferred_nurses = []   # only exact-match to current shift
+    other_nurses = []       # keep param (empty) to avoid template breakage, if referenced
+    all_nurses = []         # optional legacy param
 
     try:
         with engine.connect() as connection:
+            # Only nurses with preferred_shift == current shift
+            pref_rows = connection.execute(text("""
+                SELECT name
+                FROM staff
+                WHERE LOWER(role) = 'nurse'
+                  AND LOWER(TRIM(COALESCE(preferred_shift, ''))) = :shift
+                  AND name IS NOT NULL
+                  AND LOWER(TRIM(name)) <> 'unassigned'
+                ORDER BY name;
+            """), {"shift": shift}).fetchall()
+
+            # (Optional) full list, in case other parts of the app still use it
             all_rows = connection.execute(text("""
-                SELECT name,
-                       LOWER(TRIM(COALESCE(preferred_shift, ''))) AS pref
+                SELECT name
                 FROM staff
                 WHERE LOWER(role) = 'nurse'
                   AND name IS NOT NULL
@@ -554,21 +565,10 @@ def assignments():
                 ORDER BY name;
             """)).fetchall()
 
-        for name, pref in all_rows:
-            all_nurses.append(name)
-            if pref == shift:                  # exact match to current shift
-                preferred_nurses.append(name)
-            elif pref in ('', None):           # unspecified
-                other_nurses.append(name)
-            else:
-                # treat invalid/mistyped shifts as unspecified
-                other_nurses.append(name)
+        preferred_nurses = [r[0] for r in pref_rows]
+        all_nurses = [r[0] for r in all_rows]
 
-        # Fallback: if lists are empty, show all as "Other"
-        if not preferred_nurses and not other_nurses:
-            other_nurses = list(all_nurses)
-
-        print(f"[assignments] shift={shift} preferred={len(preferred_nurses)} other={len(other_nurses)} total={len(all_nurses)}")
+        print(f"[assignments] shift={shift} preferred={len(preferred_nurses)} total_nurses={len(all_nurses)}")
 
     except Exception as e:
         print(f"ERROR fetching nurses: {e}")
@@ -579,7 +579,7 @@ def assignments():
         try:
             with engine.connect() as connection:
                 with connection.begin():
-                    # Save nurse-by-room
+                    # Save nurse-by-room (shift-aware)
                     for room_number in ALL_ROOMS:
                         staff_name = request.form.get(f'nurse_for_room_{room_number}')
                         if staff_name and staff_name != 'unassigned':
@@ -597,7 +597,7 @@ def assignments():
                                   AND room_number = :room;
                             """), {"date": today, "shift": shift, "room": room_number})
 
-                    # Save CNA coverage
+                    # Save CNA coverage as zone rows (front/back), shift-aware
                     cna_front_form = request.form.get('cna_front', 'unassigned')
                     cna_back_form  = request.form.get('cna_back',  'unassigned')
                     cna_front_db = None if cna_front_form == 'unassigned' else cna_front_form
@@ -615,16 +615,17 @@ def assignments():
         except Exception as e:
             print(f"ERROR saving assignments: {e}")
 
+        # Preserve selected shift after save
         return redirect(url_for('assignments', shift=shift))
 
-    # ---------- Load CNAs ----------
+    # ---------- Load CNAs for dropdown ----------
     all_cnas = []
     try:
         with engine.connect() as connection:
             rows = connection.execute(text("""
                 SELECT name
                 FROM staff
-                WHERE role = 'cna'
+                WHERE LOWER(role) = 'cna'
                   AND name IS NOT NULL
                   AND LOWER(TRIM(name)) <> 'unassigned'
                 ORDER BY name;
@@ -633,7 +634,7 @@ def assignments():
     except Exception as e:
         print(f"ERROR fetching CNAs: {e}")
 
-    # ---------- Current nurse assignments ----------
+    # ---------- Read back today's nurse assignments for this shift ----------
     current_assignments = {}
     try:
         with engine.connect() as connection:
@@ -647,7 +648,7 @@ def assignments():
     except Exception as e:
         print(f"ERROR fetching assignments: {e}")
 
-    # ---------- Current CNA coverage ----------
+    # ---------- Read back today's CNA coverage for this shift ----------
     cna_front_val = 'unassigned'
     cna_back_val  = 'unassigned'
     try:
@@ -667,9 +668,9 @@ def assignments():
     return render_template(
         'assignments.html',
         all_rooms=ALL_ROOMS,
-        preferred_nurses=preferred_nurses,
-        other_nurses=other_nurses,
-        all_nurses=all_nurses,
+        preferred_nurses=preferred_nurses,   # used by template
+        other_nurses=other_nurses,           # kept empty; safe if template references it
+        all_nurses=all_nurses,               # optional/legacy
         current_assignments=current_assignments,
         all_cnas=all_cnas,
         cna_front=cna_front_val,
@@ -873,6 +874,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
