@@ -214,6 +214,44 @@ def to_english_label(text: str, lang: str) -> str:
         return ZH_TO_EN.get(text, f"[ZH] {text}")
     return text
 
+def migrate_schema():
+    try:
+        with engine.connect() as connection:
+            with connection.begin():
+                # staff.preferred_shift
+                connection.execute(text("""
+                    ALTER TABLE staff
+                    ADD COLUMN IF NOT EXISTS preferred_shift VARCHAR(10);
+                """))
+
+                # assignments.shift
+                connection.execute(text("""
+                    ALTER TABLE assignments
+                    ADD COLUMN IF NOT EXISTS shift VARCHAR(10);
+                """))
+
+                # unique index for (date, shift, room)
+                connection.execute(text("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS assignments_unique_triplet
+                    ON assignments (assignment_date, shift, room_number);
+                """))
+
+                # cna_coverage table
+                connection.execute(text("""
+                    CREATE TABLE IF NOT EXISTS cna_coverage (
+                        id SERIAL PRIMARY KEY,
+                        assignment_date DATE NOT NULL,
+                        shift VARCHAR(10),
+                        zone VARCHAR(20) NOT NULL,
+                        cna_name VARCHAR(255),
+                        UNIQUE (assignment_date, shift, zone)
+                    );
+                """))
+        print("Schema migration OK.")
+    except Exception as e:
+        print(f"Schema migration error: {e}")
+
+
 # --- Smart Routing Logic ---
 def route_note_intelligently(note_text):
     NURSE_KEYWORDS = ['pain', 'medication', 'bleeding', 'nausea', 'dizzy', 'sick', 'iv', 'pump', 'staples', 'incision']
@@ -952,6 +990,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
