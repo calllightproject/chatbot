@@ -848,7 +848,7 @@ def staff_dashboard_for_nurse(staff_name):
         except Exception as e:
             print(f"ERROR fetching nurse dashboard requests: {e}")
 
-    return render_template("dashboard.html",
+    return render_template("dashboard.html"),
                            active_requests=active_requests,
                            nurse_view=True,
                            staff_name=staff_name
@@ -917,6 +917,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
