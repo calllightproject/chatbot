@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>
-    {% if nurse_context|default(false) %}
-      My Rooms — {{ nurse_name|default('') }}
+    {% if nurse_view|default(false) %}
+      Nurse Dashboard — {{ staff_name|default('') }}
     {% else %}
       Real-Time Request Dashboard
     {% endif %}
@@ -46,9 +46,17 @@
       font-size: 1.5rem;
     }
     .subline {
-      margin: 0 0 8px 0;
+      margin: 6px 0 0 0;
       font-size: 0.95rem;
       color: #555;
+    }
+    .chip {
+      padding: 6px 10px;
+      border-radius: 9999px;
+      background: #eef2f7;
+      border: 1px solid #d7dde6;
+      font-size: 0.85rem;
+      color: #334155;
     }
     .nav-actions {
       display: flex;
@@ -70,20 +78,38 @@
     }
     .link-btn:hover { background: #093582; }
 
-    .chips {
+    .toolbar {
       display: flex;
-      gap: 6px;
+      gap: 10px;
+      align-items: center;
       flex-wrap: wrap;
-      margin: 6px 0 16px 0;
+      margin: 10px 0 14px 0;
     }
-    .chip {
+    .chip-btn {
       padding: 6px 10px;
       border-radius: 9999px;
-      background: #eef2f7;
       border: 1px solid #d7dde6;
+      text-decoration: none;
       font-size: 0.85rem;
       color: #334155;
+      background: #eef2f7;
     }
+    .chip-btn.active {
+      background: var(--core-blue);
+      color: #fff;
+      border-color: var(--core-blue);
+    }
+    .toggle-btn, .refresh-btn {
+      padding: 8px 12px;
+      border-radius: 6px;
+      text-decoration: none;
+      border: 1px solid #d7dde6;
+      background: #ffffff;
+      color: #334155;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+    .toggle-btn:hover, .refresh-btn:hover { background: #f7f7f7; }
 
     #requests-list { list-style: none; padding: 0; margin: 0; }
     .request-item {
@@ -132,37 +158,61 @@
     <div class="header">
       <div>
         <h1>
-          {% if nurse_context|default(false) %}
-            My Rooms — {{ nurse_name|default('') }}
+          {% if nurse_view|default(false) %}
+            Nurse Dashboard — {{ staff_name|default('') }}
           {% else %}
             Real-Time Request Dashboard
           {% endif %}
         </h1>
-
-        {% if nurse_context|default(false) %}
-          {% set my_rooms = nurse_rooms|default([]) %}
-          {% if my_rooms and my_rooms|length > 0 %}
-            <p class="subline">Assigned rooms today:</p>
-            <div class="chips">
-              {% for r in my_rooms %}
+        {% if nurse_view|default(false) %}
+          <p class="subline">
+            Viewing: <strong>{{ 'My Rooms' if scope=='mine' else 'All Requests' }}</strong> — Shift:
+            <strong>{{ shift|capitalize }}</strong>
+          </p>
+          {% if rooms_for_nurse|default([]) %}
+            <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">
+              {% for r in rooms_for_nurse %}
                 <span class="chip">{{ r }}</span>
               {% endfor %}
             </div>
-          {% else %}
-            <p class="subline">No rooms assigned yet for today.</p>
           {% endif %}
         {% endif %}
       </div>
 
       <div class="nav-actions">
-        {% if nurse_context|default(false) %}
-          <a class="link-btn" href="{{ url_for('dashboard') }}">View All Requests</a>
+        {% if nurse_view|default(false) %}
+          <a class="link-btn" href="{{ url_for('assignments') }}">Assignments</a>
+          <a class="link-btn" href="{{ url_for('dashboard') }}">Manager View</a>
+          <button id="refreshBtn" class="refresh-btn" type="button">Refresh</button>
         {% else %}
-          <a class="link-btn" href="{{ url_for('staff_portal') }}">View My Rooms</a>
-          <a class="link-btn" href="{{ url_for('analytics') }}">View Analytics</a>
+          <a class="link-btn" href="{{ url_for('staff_portal') }}">Staff Portal</a>
+          <a class="link-btn" href="{{ url_for('analytics') }}">Analytics</a>
+          <button id="refreshBtn" class="refresh-btn" type="button">Refresh</button>
         {% endif %}
       </div>
     </div>
+
+    {% if nurse_view|default(false) %}
+      <div class="toolbar">
+        <div>
+          <span class="chip-btn {{ 'active' if shift=='day' else '' }}">
+            <a href="{{ day_url }}" class="{{ 'active' if shift=='day' else '' }}" style="text-decoration:none; color:inherit;">Day</a>
+          </span>
+          <span class="chip-btn {{ 'active' if shift=='night' else '' }}">
+            <a href="{{ night_url }}" class="{{ 'active' if shift=='night' else '' }}" style="text-decoration:none; color:inherit;">Night</a>
+          </span>
+        </div>
+        <a href="{{ toggle_url }}" class="toggle-btn">
+          {{ 'View All Requests' if scope=='mine' else 'View My Rooms Only' }}
+        </a>
+      </div>
+
+      {% if scope == 'mine' and (not active_requests or active_requests|length == 0) %}
+        <div class="mb-4" style="padding:10px;border-radius:6px;background:#f7f7f7;color:#333;">
+          No active requests from your assigned rooms for the {{ shift|capitalize }} shift today.
+        </div>
+      {% endif %}
+    {% endif %}
 
     <ul id="requests-list">
       {% for request in active_requests|default([]) %}
@@ -199,6 +249,79 @@
   <script type="text/javascript">
     var socket = io();
 
+    // Build a cache key unique to the view (so Day/Mine vs Night/All don't clash)
+    const nurseView   = {{ 'true' if nurse_view else 'false' }};
+    const staffName   = "{{ staff_name|default('') }}";
+    const shiftVal    = "{{ shift|default('') }}";
+    const scopeVal    = "{{ scope|default('all') }}";
+    const cacheKey    = nurseView ? `reqcache:${staffName}:${shiftVal}:${scopeVal}` : 'reqcache:manager';
+
+    // ---- persistence helpers
+    function saveToCache(requests) {
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), items: requests || [] }));
+      } catch (e) {}
+    }
+    function loadFromCache() {
+      try {
+        const raw = localStorage.getItem(cacheKey);
+        if (!raw) return [];
+        const obj = JSON.parse(raw);
+        return Array.isArray(obj.items) ? obj.items : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    // ---- UI helpers
+    function renderRequests(list) {
+      const ul = document.getElementById('requests-list');
+      if (!ul) return;
+
+      ul.innerHTML = '';
+      if (!list || list.length === 0) {
+        const li = document.createElement('li');
+        li.className = 'request-item';
+        li.style.justifyContent = 'center';
+        li.innerHTML = '<p>No active requests.</p>';
+        ul.appendChild(li);
+        return;
+      }
+
+      list.forEach(data => {
+        const li = document.createElement('li');
+        li.className = 'request-item ' + (data.role || '');
+        li.id = data.id || '';
+        li.dataset.id = data.id || '';
+        li.dataset.room = data.room || '';
+        li.dataset.request = data.request || '';
+        li.dataset.role = data.role || '';
+        li.dataset.timestamp = data.timestamp || '';
+
+        let deferBtn = '';
+        if ((data.role || '').toLowerCase() === 'cna') {
+          deferBtn = '<button class="defer-btn">Defer to Nurse</button>';
+        }
+
+        li.innerHTML = `
+          <p>${(data.request || '')}</p>
+          <div class="meta">
+            <span>Room: ${(data.room || '')}</span>
+            <span class="role-span">For: ${(data.role || '').toUpperCase()}</span>
+            <span class="timestamp"></span>
+          </div>
+          <button class="ack-button">Acknowledge</button>
+          <button class="omw-button">On my way</button>
+          <button class="asap-button">Be there ASAP</button>
+          ${deferBtn}
+          <button class="complete-btn">Complete</button>
+        `;
+        ul.appendChild(li);
+      });
+
+      updateAllTimersAndColors();
+    }
+
     let audioContext;
     function playNotificationSound() {
       try {
@@ -216,9 +339,7 @@
         gain.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.5);
         osc.start(audioContext.currentTime);
         osc.stop(audioContext.currentTime + 0.5);
-      } catch (e) {
-        // ignore audio errors (e.g., autoplay restrictions)
-      }
+      } catch (e) { /* ignore */ }
     }
 
     function updateAllTimersAndColors() {
@@ -243,104 +364,129 @@
     }
 
     function addRequestToDashboard(data) {
-      const list = document.getElementById('requests-list');
-      if (!list || !data || !data.id) return;
-      if (document.getElementById(data.id)) return;
+      // Merge new item into current list, then re-render and save
+      const current = getCurrentList();
+      if (current.find(x => x.id === data.id)) return; // already present
 
-      const li = document.createElement('li');
-      li.id = data.id;
-      li.className = 'request-item ' + (data.role || '');
-      li.dataset.id = data.id || '';
-      li.dataset.room = data.room || '';
-      li.dataset.request = data.request || '';
-      li.dataset.role = data.role || '';
-      li.dataset.timestamp = data.timestamp || '';
+      current.unshift({
+        id: data.id, room: data.room, request: data.request,
+        role: data.role, timestamp: data.timestamp
+      });
+      saveToCache(current);
+      renderRequests(current);
+      playNotificationSound();
+    }
 
-      let deferBtn = '';
-      if (data.role === 'cna') {
-        deferBtn = '<button class="defer-btn">Defer to Nurse</button>';
+    function removeRequestFromDashboard(id) {
+      const current = getCurrentList().filter(x => x.id !== id);
+      saveToCache(current);
+      renderRequests(current);
+    }
+
+    function getCurrentList() {
+      const ul = document.getElementById('requests-list');
+      // If UL is empty (first load), use cache
+      if (!ul || ul.children.length === 0) return loadFromCache();
+      // Otherwise rebuild from DOM (authoritative with latest timestamps)
+      const items = Array.from(document.querySelectorAll('#requests-list .request-item[id]'));
+      return items.map(el => ({
+        id: el.dataset.id,
+        room: el.dataset.room,
+        request: el.dataset.request,
+        role: el.dataset.role,
+        timestamp: el.dataset.timestamp
+      }));
+    }
+
+    async function fetchAndSync() {
+      // Hit the API; for nurse view include staff_name, shift, scope
+      const params = new URLSearchParams();
+      if (nurseView) {
+        params.set('staff_name', staffName);
+        params.set('shift', shiftVal || 'day');
+        params.set('scope', scopeVal || 'mine');
       }
+      const url = '/api/active_requests' + (params.toString() ? `?${params.toString()}` : '');
 
-      li.innerHTML = `
-        <p>${(data.request || '')}</p>
-        <div class="meta">
-          <span>Room: ${(data.room || '')}</span>
-          <span class="role-span">For: ${(data.role || '').toUpperCase()}</span>
-          <span class="timestamp"></span>
-        </div>
-        <button class="ack-button">Acknowledge</button>
-        <button class="omw-button">On my way</button>
-        <button class="asap-button">Be there ASAP</button>
-        ${deferBtn}
-        <button class="complete-btn">Complete</button>
-      `;
-      list.prepend(li);
-      updateAllTimersAndColors();
+      try {
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) throw new Error('bad response');
+        const payload = await res.json();
+        const list = payload.active_requests || [];
+        saveToCache(list);
+        renderRequests(list);
+      } catch (e) {
+        // If API fails, at least show the cached items
+        renderRequests(loadFromCache());
+      }
     }
 
     // --- Socket events ---
     socket.on('new_request', function(data) {
       addRequestToDashboard(data);
-      playNotificationSound();
     });
 
     socket.on('request_updated', function(data) {
-      const item = document.getElementById(data.id || '');
-      if (item) {
-        item.classList.remove('cna');
-        item.classList.add('nurse');
-        const roleSpan = item.querySelector('.role-span');
-        if (roleSpan) roleSpan.textContent = 'For: NURSE';
-        const deferBtn = item.querySelector('.defer-btn');
-        if (deferBtn) deferBtn.remove();
-        updateAllTimersAndColors(); // keep original timestamp
-      }
+      // Change role in-place, keep original timestamp
+      const current = getCurrentList();
+      const item = current.find(x => x.id === (data.id || ''));
+      if (item) item.role = 'nurse';
+      saveToCache(current);
+      renderRequests(current);
     });
 
     socket.on('remove_request', function(data) {
-      const el = document.getElementById(data.id || '');
-      if (el) {
-        el.style.opacity = '0';
-        setTimeout(() => el.remove(), 500);
-      }
+      removeRequestFromDashboard(data.id || '');
     });
 
-    // --- Click handlers ---
+    // --- Click handlers & init ---
     document.addEventListener('DOMContentLoaded', function() {
       const list = document.getElementById('requests-list');
-      if (!list) return;
+      const refreshBtn = document.getElementById('refreshBtn');
 
-      list.addEventListener('click', function(e) {
-        const btn = e.target;
-        if (btn.tagName !== 'BUTTON') return;
-
-        const item = btn.closest('.request-item');
-        if (!item) return;
-
-        const requestId = item.dataset.id || '';
-        const room = item.dataset.room || '';
-
-        if (btn.classList.contains('ack-button')) {
-          btn.disabled = true;
-          socket.emit('acknowledge_request', { room: room, message: "✅ Your request was received and will be addressed shortly." });
-        } else if (btn.classList.contains('omw-button')) {
-          btn.disabled = true;
-          const ack = item.querySelector('.ack-button'); if (ack) ack.disabled = true;
-          socket.emit('acknowledge_request', { room: room, message: "✅ A team member is on their way." });
-        } else if (btn.classList.contains('asap-button')) {
-          btn.disabled = true;
-          const ack = item.querySelector('.ack-button'); if (ack) ack.disabled = true;
-          const omw = item.querySelector('.omw-button'); if (omw) omw.disabled = true;
-          socket.emit('acknowledge_request', { room: room, message: "A team member is with another patient and will be with you as soon as possible." });
-        } else if (btn.classList.contains('defer-btn')) {
-          socket.emit('defer_request', { id: requestId });
-        } else if (btn.classList.contains('complete-btn')) {
-          socket.emit('complete_request', { request_id: requestId });
-        }
-      });
-
-      updateAllTimersAndColors();
+      // 1) Hydrate instantly from cache so nothing disappears on reload
+      renderRequests(loadFromCache());
+      // 2) Then sync from server to get the truth
+      fetchAndSync();
+      // 3) Keep timers updating
       setInterval(updateAllTimersAndColors, 60000);
+
+      if (list) {
+        list.addEventListener('click', function(e) {
+          const btn = e.target;
+          if (btn.tagName !== 'BUTTON') return;
+
+          const item = btn.closest('.request-item');
+          if (!item) return;
+
+          const requestId = item.dataset.id || '';
+          const room = item.dataset.room || '';
+
+          if (btn.classList.contains('ack-button')) {
+            btn.disabled = true;
+            socket.emit('acknowledge_request', { room: room, message: "✅ Your request was received and will be addressed shortly." });
+          } else if (btn.classList.contains('omw-button')) {
+            btn.disabled = true;
+            const ack = item.querySelector('.ack-button'); if (ack) ack.disabled = true;
+            socket.emit('acknowledge_request', { room: room, message: "✅ A team member is on their way." });
+          } else if (btn.classList.contains('asap-button')) {
+            btn.disabled = true;
+            const ack = item.querySelector('.ack-button'); if (ack) ack.disabled = true;
+            const omw = item.querySelector('.omw-button'); if (omw) omw.disabled = true;
+            socket.emit('acknowledge_request', { room: room, message: "A team member is with another patient and will be with you as soon as possible." });
+          } else if (btn.classList.contains('defer-btn')) {
+            socket.emit('defer_request', { id: requestId });
+          } else if (btn.classList.contains('complete-btn')) {
+            socket.emit('complete_request', { request_id: requestId });
+          }
+        });
+      }
+
+      if (refreshBtn) {
+        refreshBtn.addEventListener('click', function() {
+          fetchAndSync();
+        });
+      }
     });
   </script>
 </body>
