@@ -584,41 +584,47 @@ def assignments():
     all_nurses = []  # not used by template, but harmless to keep
 
     try:
-        with engine.connect() as connection:
-            rows = connection.execute(text("""
-                SELECT
-                    name,
-                    CASE
-                      WHEN preferred_shift IS NULL OR TRIM(preferred_shift) = '' THEN 'unspecified'
-                      ELSE LOWER(TRIM(BOTH '''' FROM preferred_shift))
-                    END AS pref
-                FROM staff
-                WHERE LOWER(role) = 'nurse'
-                ORDER BY name;
-            """)).fetchall()
+    with engine.connect() as connection:
+        rows = connection.execute(text("""
+            SELECT
+                name,
+                CASE
+                  WHEN preferred_shift IS NULL OR TRIM(preferred_shift) = '' THEN 'unspecified'
+                  ELSE LOWER(TRIM(BOTH '''' FROM preferred_shift))
+                END AS pref
+            FROM staff
+            WHERE LOWER(role) = 'nurse'
+            ORDER BY name;
+        """)).fetchall()
 
+    for name, pref in rows:
+        if not name or name.strip().lower() == 'unassigned':
+            continue
+        all_nurses.append(name)
+        if pref not in ('day', 'night'):
+            pref = 'unspecified'
+        nurses_by_shift[pref].append(name)
 
-        for name, pref in rows:
-            if not name or name.strip().lower() == 'unassigned':
-                continue
-            all_nurses.append(name)
-            if pref not in ('day', 'night'):
-                pref = 'unspecified'
-            nurses_by_shift[pref].append(name)
+    # Strict filtering: only the selected shift; plus 'unspecified'
+    preferred_nurses = sorted(nurses_by_shift.get(shift, []))
+    other_nurses = sorted(nurses_by_shift.get('unspecified', []))  # keep or set [] to hide
 
-        # Strict filtering: only the selected shift; optionally include 'unspecified'
-        preferred_nurses = sorted(nurses_by_shift.get(shift, []))
-        other_nurses = sorted(nurses_by_shift.get('unspecified', []))  # keep or set [] to hide
+    # Opposite-shift bucket so pickups can be assigned without switching pages
+    opp = 'night' if shift == 'day' else 'day'
+    opposite_nurses = sorted(nurses_by_shift.get(opp, []))
 
-        print(f"[assignments] shift={shift} -> day={len(nurses_by_shift['day'])}, "
-              f"night={len(nurses_by_shift['night'])}, "
-              f"unspec={len(nurses_by_shift['unspecified'])}; "
-              f"preferred={len(preferred_nurses)}, other={len(other_nurses)}")
+    print(f"[assignments] shift={shift} -> day={len(nurses_by_shift['day'])}, "
+          f"night={len(nurses_by_shift['night'])}, "
+          f"unspec={len(nurses_by_shift['unspecified'])}; "
+          f"preferred={len(preferred_nurses)}, other={len(other_nurses)}, "
+          f"opposite={len(opposite_nurses)}")
 
-    except Exception as e:
-        print(f"ERROR fetching nurses: {e}")
-        preferred_nurses = []
-        other_nurses = []
+except Exception as e:
+    print(f"ERROR fetching nurses: {e}")
+    preferred_nurses = []
+    other_nurses = []
+    opposite_nurses = []
+
 
     # ---------- Handle save ----------
     if request.method == 'POST':
@@ -712,15 +718,13 @@ def assignments():
         # only these two are used by the template for nurse dropdowns:
         preferred_nurses=preferred_nurses,
         other_nurses=other_nurses,
+        opposite_nurses=opposite_nurses,
         current_assignments=current_assignments,
         all_cnas=all_cnas,
         cna_front=cna_front_val,
         cna_back=cna_back_val,
         shift=shift
     )
-
-
-
 
 
 # --- Auth for Manager (unchanged) ---
@@ -994,6 +998,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
