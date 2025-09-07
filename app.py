@@ -14,6 +14,7 @@ from flask import Flask, render_template, request, session, redirect, url_for, f
 from flask_socketio import SocketIO, join_room
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import ProgrammingError
+from flask import jsonify
 
 # --- App Configuration ---
 app = Flask(__name__, template_folder='templates')
@@ -929,19 +930,100 @@ def staff_dashboard_for_nurse(staff_name):
                         staff_name=staff_name, shift='day', scope=scope)
     night_url = url_for('staff_dashboard_for_nurse',
                         staff_name=staff_name, shift='night', scope=scope)
+    from flask import jsonify
+
 
     return render_template(
         "dashboard.html",
         active_requests=active_requests,
         nurse_view=True,
         staff_name=staff_name,
-        scope=scope,
-        shift=shift,
-        toggle_url=toggle_url,
-        day_url=day_url,
-        night_url=night_url,
         rooms_for_nurse=rooms_for_nurse,
+        shift="day",   # or detect real shift
+        scope="mine",
+        day_url=url_for('staff_dashboard_for_nurse', staff_name=staff_name) + "?shift=day",
+        night_url=url_for('staff_dashboard_for_nurse', staff_name=staff_name) + "?shift=night",
+        toggle_url=url_for('staff_dashboard_for_nurse', staff_name=staff_name) + "?scope=all"
     )
+from flask import jsonify
+
+@app.route('/api/active_requests')
+def api_active_requests():
+    """JSON: returns active requests for manager or for a nurse's scope."""
+    today = date.today()
+    staff_name = (request.args.get('staff_name') or '').strip()
+    shift = (request.args.get('shift') or '').strip().lower()
+    scope = (request.args.get('scope') or '').strip().lower()
+
+    # Defaults: manager view shows all
+    if shift not in ('day', 'night'):
+        shift = None  # ignore shift unless staff_name provided
+    if scope not in ('mine', 'all'):
+        scope = 'all'
+
+    active_requests = []
+
+    try:
+        with engine.connect() as connection:
+            if staff_name:
+                # Nurse view
+                # 1) rooms for nurse (today + shift)
+                rooms_for_nurse = []
+                if shift:
+                    rrows = connection.execute(text("""
+                        SELECT room_number
+                        FROM assignments
+                        WHERE assignment_date = :d
+                          AND shift = :s
+                          AND staff_name = :n
+                        ORDER BY room_number;
+                    """), {"d": today, "s": shift, "n": staff_name}).fetchall()
+                    rooms_for_nurse = [r[0] for r in rrows]
+
+                if scope == 'mine':
+                    # Only my rooms
+                    if rooms_for_nurse:
+                        res = connection.execute(text("""
+                            SELECT request_id, room, user_input, category as role, timestamp
+                            FROM requests
+                            WHERE completion_timestamp IS NULL
+                              AND room = ANY(:room_list)
+                            ORDER BY timestamp DESC;
+                        """), {"room_list": rooms_for_nurse})
+                    else:
+                        res = []
+                else:
+                    # 'all' for nurse view
+                    res = connection.execute(text("""
+                        SELECT request_id, room, user_input, category as role, timestamp
+                        FROM requests
+                        WHERE completion_timestamp IS NULL
+                        ORDER BY timestamp DESC;
+                    """))
+            else:
+                # Manager view: all active
+                res = connection.execute(text("""
+                    SELECT request_id, room, user_input, category as role, timestamp
+                    FROM requests
+                    WHERE completion_timestamp IS NULL
+                    ORDER BY timestamp DESC;
+                """))
+
+            for row in res:
+                active_requests.append({
+                    "id": row.request_id,
+                    "room": row.room,
+                    "request": row.user_input,
+                    "role": row.role,
+                    "timestamp": row.timestamp.isoformat() if row.timestamp else None
+                })
+
+    except Exception as e:
+        print(f"/api/active_requests error: {e}")
+        return jsonify({"error": "fetch_failed"}), 500
+
+    return jsonify({"active_requests": active_requests})
+
 
 
 # --- SocketIO Event Handlers ---
@@ -1004,6 +1086,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
