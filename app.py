@@ -581,56 +581,53 @@ def assignments():
     nurses_by_shift = {'day': [], 'night': [], 'unspecified': []}
     preferred_nurses = []
     other_nurses = []
+    opposite_nurses = []  # ensure defined for template even on exceptions
     all_nurses = []  # not used by template, but harmless to keep
 
     # --- Load nurses and build buckets (preferred/unspecified/opposite) ---
-opposite_nurses = []  # make sure it's defined even if we hit the except
+    try:
+        with engine.connect() as connection:
+            rows = connection.execute(text("""
+                SELECT
+                    name,
+                    CASE
+                      WHEN preferred_shift IS NULL OR TRIM(preferred_shift) = '' THEN 'unspecified'
+                      ELSE LOWER(TRIM(BOTH '''' FROM preferred_shift))
+                    END AS pref
+                FROM staff
+                WHERE LOWER(role) = 'nurse'
+                ORDER BY name;
+            """)).fetchall()
 
-try:
-    with engine.connect() as connection:
-        rows = connection.execute(text("""
-            SELECT
-                name,
-                CASE
-                  WHEN preferred_shift IS NULL OR TRIM(preferred_shift) = '' THEN 'unspecified'
-                  ELSE LOWER(TRIM(BOTH '''' FROM preferred_shift))
-                END AS pref
-            FROM staff
-            WHERE LOWER(role) = 'nurse'
-            ORDER BY name;
-        """)).fetchall()
+        for name, pref in rows:
+            if not name or name.strip().lower() == 'unassigned':
+                continue
+            all_nurses.append(name)
+            if pref not in ('day', 'night'):
+                pref = 'unspecified'
+            nurses_by_shift[pref].append(name)
 
-    for name, pref in rows:
-        if not name or name.strip().lower() == 'unassigned':
-            continue
-        all_nurses.append(name)
-        if pref not in ('day', 'night'):
-            pref = 'unspecified'
-        nurses_by_shift[pref].append(name)
+        # Lists for the currently selected shift
+        preferred_nurses = sorted(nurses_by_shift.get(shift, []))
+        other_nurses = sorted(nurses_by_shift.get('unspecified', []))
 
-    # Lists for the currently selected shift
-    preferred_nurses  = sorted(nurses_by_shift.get(shift, []))
-    other_nurses      = sorted(nurses_by_shift.get('unspecified', []))
+        # Opposite-shift bucket so you can assign pickups without switching pages
+        opp = 'night' if shift == 'day' else 'day'
+        opposite_nurses = sorted(nurses_by_shift.get(opp, []))
 
-    # Opposite-shift bucket so you can assign pickups without switching pages
-    opp = 'night' if shift == 'day' else 'day'
-    opposite_nurses = sorted(nurses_by_shift.get(opp, []))
+        print(f"[assignments] shift={shift} -> "
+              f"day={len(nurses_by_shift['day'])}, "
+              f"night={len(nurses_by_shift['night'])}, "
+              f"unspec={len(nurses_by_shift['unspecified'])}; "
+              f"preferred={len(preferred_nurses)}, "
+              f"other={len(other_nurses)}, "
+              f"opposite={len(opposite_nurses)}")
 
-    print(f"[assignments] shift={shift} -> "
-          f"day={len(nurses_by_shift['day'])}, "
-          f"night={len(nurses_by_shift['night'])}, "
-          f"unspec={len(nurses_by_shift['unspecified'])}; "
-          f"preferred={len(preferred_nurses)}, "
-          f"other={len(other_nurses)}, "
-          f"opposite={len(opposite_nurses)}")
-
-except Exception as e:
-    print(f"ERROR fetching nurses: {e}")
-    preferred_nurses = []
-    other_nurses = []
-    opposite_nurses = []
-
-
+    except Exception as e:
+        print(f"ERROR fetching nurses: {e}")
+        preferred_nurses = []
+        other_nurses = []
+        opposite_nurses = []
 
     # ---------- Handle save ----------
     if request.method == 'POST':
@@ -681,7 +678,7 @@ except Exception as e:
     try:
         with engine.connect() as connection:
             rows = connection.execute(
-                text("SELECT name FROM staff WHERE role = 'cna' ORDER BY name;")
+                text("SELECT name FROM staff WHERE LOWER(role) = 'cna' ORDER BY name;")
             ).fetchall()
             all_cnas = [r[0] for r in rows if r[0] and r[0].strip().lower() != 'unassigned']
     except Exception as e:
@@ -721,7 +718,6 @@ except Exception as e:
     return render_template(
         'assignments.html',
         all_rooms=ALL_ROOMS,
-        # only these two are used by the template for nurse dropdowns:
         preferred_nurses=preferred_nurses,
         other_nurses=other_nurses,
         opposite_nurses=opposite_nurses,
@@ -731,6 +727,7 @@ except Exception as e:
         cna_back=cna_back_val,
         shift=shift
     )
+
 
 
 # --- Auth for Manager (unchanged) ---
@@ -1004,6 +1001,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
