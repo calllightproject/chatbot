@@ -856,46 +856,92 @@ def staff_portal():
 @app.route('/staff/dashboard/<staff_name>')
 def staff_dashboard_for_nurse(staff_name):
     today = date.today()
-    # Find this nurse's rooms for today
+
+    # Which shift is the nurse viewing? (default day)
+    shift = (request.args.get('shift') or 'day').strip().lower()
+    if shift not in ('day', 'night'):
+        shift = 'day'
+
+    # Which scope? 'mine' (default) or 'all'
+    scope = (request.args.get('scope') or 'mine').strip().lower()
+    if scope not in ('mine', 'all'):
+        scope = 'mine'
+
+    # 1) Find the nurse's rooms for TODAY + SHIFT
     rooms_for_nurse = []
     try:
         with engine.connect() as connection:
             rows = connection.execute(text("""
-                SELECT room_number FROM assignments
-                WHERE assignment_date = :d AND staff_name = :n
+                SELECT room_number
+                FROM assignments
+                WHERE assignment_date = :d
+                  AND shift = :s
+                  AND staff_name = :n
                 ORDER BY room_number;
-            """), {"d": today, "n": staff_name}).fetchall()
+            """), {"d": today, "s": shift, "n": staff_name}).fetchall()
             rooms_for_nurse = [r[0] for r in rows]
     except Exception as e:
         print(f"ERROR fetching rooms for nurse {staff_name}: {e}")
 
-    # Get active requests limited to these rooms
+    # 2) Active requests
     active_requests = []
-    if rooms_for_nurse:
-        try:
-            with engine.connect() as connection:
-                result = connection.execute(text(f"""
+    try:
+        with engine.connect() as connection:
+            if scope == 'all':
+                # Show everything so nurse can help others
+                result = connection.execute(text("""
                     SELECT request_id, room, user_input, category as role, timestamp
                     FROM requests
                     WHERE completion_timestamp IS NULL
-                      AND room = ANY(:room_list)
                     ORDER BY timestamp DESC;
-                """), {"room_list": rooms_for_nurse})
-                for row in result:
-                    active_requests.append({
-                        'id': row.request_id,
-                        'room': row.room,
-                        'request': row.user_input,
-                        'role': row.role,
-                        'timestamp': row.timestamp.isoformat()
-                    })
-        except Exception as e:
-            print(f"ERROR fetching nurse dashboard requests: {e}")
+                """))
+            else:
+                # Only my rooms
+                if rooms_for_nurse:
+                    result = connection.execute(text("""
+                        SELECT request_id, room, user_input, category as role, timestamp
+                        FROM requests
+                        WHERE completion_timestamp IS NULL
+                          AND room = ANY(:room_list)
+                        ORDER BY timestamp DESC;
+                    """), {"room_list": rooms_for_nurse})
+                else:
+                    result = []  # nothing assigned
 
-    return render_template("dashboard.html",
-                           active_requests=active_requests,
-                           nurse_view=True,
-                           staff_name=staff_name)
+            for row in result:
+                active_requests.append({
+                    'id': row.request_id,
+                    'room': row.room,
+                    'request': row.user_input,
+                    'role': row.role,
+                    'timestamp': row.timestamp.isoformat()
+                })
+    except Exception as e:
+        print(f"ERROR fetching nurse dashboard requests: {e}")
+
+    # Build toggle URL for the button
+    next_scope = 'all' if scope == 'mine' else 'mine'
+    toggle_url = url_for('staff_dashboard_for_nurse',
+                         staff_name=staff_name, shift=shift, scope=next_scope)
+
+    # Shift switcher URLs
+    day_url   = url_for('staff_dashboard_for_nurse',
+                        staff_name=staff_name, shift='day', scope=scope)
+    night_url = url_for('staff_dashboard_for_nurse',
+                        staff_name=staff_name, shift='night', scope=scope)
+
+    return render_template(
+        "dashboard.html",
+        active_requests=active_requests,
+        nurse_view=True,
+        staff_name=staff_name,
+        scope=scope,
+        shift=shift,
+        toggle_url=toggle_url,
+        day_url=day_url,
+        night_url=night_url
+    )
+
 
 @app.route("/debug/staff_dump")
 def debug_staff_dump():
@@ -916,29 +962,6 @@ def debug_staff_dump():
         return {"count": len(rows), "rows": [dict(r) for r in rows]}
     except Exception as e:
         return {"error": str(e)}, 500
-
-@app.route("/debug/shift_counts")
-def debug_shift_counts():
-    try:
-        with engine.connect() as connection:
-            rows = connection.execute(text("""
-                SELECT
-                  COALESCE(LOWER(TRIM(role)),'<null>') AS role,
-                  CASE
-                    WHEN preferred_shift IS NULL OR TRIM(preferred_shift) = '' THEN '<unspecified>'
-                    ELSE LOWER(TRIM(preferred_shift))
-                  END AS preferred_shift,
-                  COUNT(*) AS c
-                FROM staff
-                GROUP BY 1,2
-                ORDER BY 1,2;
-            """)).mappings().all()
-        return {"buckets": [dict(r) for r in rows]}
-    except Exception as e:
-        return {"error": str(e)}, 500
-
-
-
 
 
 # --- SocketIO Event Handlers ---
@@ -1001,6 +1024,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
