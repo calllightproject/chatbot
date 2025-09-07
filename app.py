@@ -939,29 +939,9 @@ def staff_dashboard_for_nurse(staff_name):
         shift=shift,
         toggle_url=toggle_url,
         day_url=day_url,
-        night_url=night_url
+        night_url=night_url,
+        rooms_for_nurse=rooms_for_nurse,
     )
-
-
-@app.route("/debug/staff_dump")
-def debug_staff_dump():
-    try:
-        with engine.connect() as connection:
-            rows = connection.execute(text("""
-                SELECT
-                  id,
-                  name,
-                  LOWER(TRIM(role)) AS role,
-                  CASE
-                    WHEN preferred_shift IS NULL OR TRIM(preferred_shift) = '' THEN NULL
-                    ELSE LOWER(TRIM(preferred_shift))
-                  END AS preferred_shift
-                FROM staff
-                ORDER BY role, name;
-            """)).mappings().all()
-        return {"count": len(rows), "rows": [dict(r) for r in rows]}
-    except Exception as e:
-        return {"error": str(e)}, 500
 
 
 # --- SocketIO Event Handlers ---
@@ -1024,6 +1004,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
