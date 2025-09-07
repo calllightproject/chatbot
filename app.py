@@ -847,37 +847,47 @@ def staff_dashboard_for_nurse(staff_name):
                            active_requests=active_requests,
                            nurse_view=True,
                            staff_name=staff_name)
+
 @app.route("/debug/staff_dump")
 def debug_staff_dump():
-    from sqlalchemy import text
-    rows = db.session.execute(text("""
-        SELECT
-          id, name, LOWER(TRIM(role)) AS role,
-          CASE
-            WHEN preferred_shift IS NULL OR TRIM(preferred_shift) = '' THEN NULL
-            ELSE LOWER(TRIM(preferred_shift))
-          END AS preferred_shift
-        FROM staff
-        ORDER BY role, name;
-    """)).mappings().all()
-    return {"count": len(rows), "rows": [dict(r) for r in rows]}
+    try:
+        with engine.connect() as connection:
+            rows = connection.execute(text("""
+                SELECT
+                  id,
+                  name,
+                  LOWER(TRIM(role)) AS role,
+                  CASE
+                    WHEN preferred_shift IS NULL OR TRIM(preferred_shift) = '' THEN NULL
+                    ELSE LOWER(TRIM(preferred_shift))
+                  END AS preferred_shift
+                FROM staff
+                ORDER BY role, name;
+            """)).mappings().all()
+        return {"count": len(rows), "rows": [dict(r) for r in rows]}
+    except Exception as e:
+        return {"error": str(e)}, 500
 
 @app.route("/debug/shift_counts")
 def debug_shift_counts():
-    from sqlalchemy import text
-    rows = db.session.execute(text("""
-        SELECT
-          COALESCE(LOWER(TRIM(role)),'<null>') AS role,
-          CASE
-            WHEN preferred_shift IS NULL OR TRIM(preferred_shift) = '' THEN '<unspecified>'
-            ELSE LOWER(TRIM(preferred_shift))
-          END AS preferred_shift,
-          COUNT(*) AS c
-        FROM staff
-        GROUP BY 1,2
-        ORDER BY 1,2;
-    """)).mappings().all()
-    return {"buckets": [dict(r) for r in rows]}
+    try:
+        with engine.connect() as connection:
+            rows = connection.execute(text("""
+                SELECT
+                  COALESCE(LOWER(TRIM(role)),'<null>') AS role,
+                  CASE
+                    WHEN preferred_shift IS NULL OR TRIM(preferred_shift) = '' THEN '<unspecified>'
+                    ELSE LOWER(TRIM(preferred_shift))
+                  END AS preferred_shift,
+                  COUNT(*) AS c
+                FROM staff
+                GROUP BY 1,2
+                ORDER BY 1,2;
+            """)).mappings().all()
+        return {"buckets": [dict(r) for r in rows]}
+    except Exception as e:
+        return {"error": str(e)}, 500
+
 
 
 
@@ -942,6 +952,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
