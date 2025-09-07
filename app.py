@@ -71,6 +71,67 @@ def setup_database():
                 """))
                 print("CREATE TABLE statements complete.")
 
+# --- BEGIN: schema fix for assignments + cna_coverage (runs safely every boot) ---
+# 1) Ensure 'shift' column exists on assignments
+                try:
+                    connection.execute(text("ALTER TABLE assignments ADD COLUMN IF NOT EXISTS shift VARCHAR(10) NOT NULL DEFAULT 'day';"))
+    # Drop the default so app always sets it explicitly
+                    connection.execute(text("ALTER TABLE assignments ALTER COLUMN shift DROP DEFAULT;"))
+                except Exception as _e:
+                    pass  # safe to ignore if already correct
+
+# 2) Drop any old UNIQUE (assignment_date, room_number) and add the correct unique (assignment_date, shift, room_number)
+                try:
+                    connection.execute(text("""
+                    DO $$
+                    DECLARE
+                        cons_name text;
+                    BEGIN
+                      -- find any UNIQUE constraint that only covers (assignment_date, room_number)
+                      SELECT tc.constraint_name INTO cons_name
+                      FROM information_schema.table_constraints tc
+                      JOIN information_schema.constraint_column_usage ccu
+                        ON tc.constraint_name = ccu.constraint_name
+                      WHERE tc.table_name = 'assignments'
+                        AND tc.constraint_type = 'UNIQUE'
+                        AND ccu.column_name IN ('assignment_date','room_number')
+                      LIMIT 1;
+
+                      IF cons_name IS NOT NULL THEN
+                        EXECUTE format('ALTER TABLE assignments DROP CONSTRAINT %I', cons_name);
+                      END IF;
+                    END$$;
+                    """))
+                except Exception as _e:
+                    pass
+
+# add the correct unique if missing
+                try:
+                    connection.execute(text("""
+                        ALTER TABLE assignments
+                        ADD CONSTRAINT assignments_uniq_date_shift_room
+                        UNIQUE (assignment_date, shift, room_number);
+                    """))
+                except Exception as _e:
+    # already exists
+                    pass
+
+# 3) Ensure cna_coverage table exists (your code writes to it)
+                try:
+                    connection.execute(text("""
+                        CREATE TABLE IF NOT EXISTS cna_coverage (
+                        id SERIAL PRIMARY KEY,
+                        assignment_date DATE NOT NULL,
+                        shift VARCHAR(10) NOT NULL,
+                        zone VARCHAR(20) NOT NULL,   -- 'front'/'back'
+                        cna_name VARCHAR(255),
+                        UNIQUE (assignment_date, shift, zone)
+                    );
+                """))
+                except Exception as _e:
+                    pass
+# --- END: schema fix ---
+
                 count = connection.execute(text("SELECT COUNT(id) FROM staff;")).scalar()
                 if count == 0:
                     print("Staff table is empty. Populating with initial staff...")
@@ -1086,6 +1147,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
