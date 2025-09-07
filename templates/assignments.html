@@ -94,21 +94,12 @@
       <section class="mb-10">
         <h2 class="text-xl font-semibold text-gray-700 mb-4">Nurse by Room</h2>
 
-        {% if preferred_nurses|length == 0 %}
-          <div class="mb-4 p-3 rounded bg-yellow-50 text-yellow-800 text-sm">
-            No nurses are tagged as <strong>{{ shift }}</strong> shift yet.  
-            Add <code>preferred_shift = '{{ shift }}'</code> for the appropriate nurses in the <em>staff</em> table,
-            or switch shifts above.
-          </div>
-        {% endif %}
-
         <!-- 1 column on small screens; 2 on md+ -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           {% for room in all_rooms %}
             <div class="border rounded-lg p-4">
               <label class="block text-sm font-medium text-gray-700 mb-2" for="room_{{ room }}">Room {{ room }}</label>
 
-              <!-- Strict list: ONLY nurses whose preferred_shift matches the selected shift -->
               <select
                 name="nurse_for_room_{{ room }}" id="room_{{ room }}"
                 class="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
@@ -129,6 +120,29 @@
                     {% endfor %}
                   </optgroup>
                 {% endif %}
+
+                {% if other_nurses and other_nurses|length > 0 %}
+                  <optgroup label="Unspecified">
+                    {% for nurse in other_nurses %}
+                      <option value="{{ nurse }}"
+                        {% if current_assignments.get(room) == nurse %}selected{% endif %}>
+                        {{ nurse }} (Unspecified)
+                      </option>
+                    {% endfor %}
+                  </optgroup>
+                {% endif %}
+
+                {% if opposite_nurses and opposite_nurses|length > 0 %}
+                  <optgroup label="Opposite shift (Pickup)">
+                    {% for nurse in opposite_nurses %}
+                      <option value="{{ nurse }}"
+                        {% if current_assignments.get(room) == nurse %}selected{% endif %}>
+                        {{ nurse }} ({{ 'Night' if shift == 'day' else 'Day' }})
+                      </option>
+                    {% endfor %}
+                  </optgroup>
+                {% endif %}
+
               </select>
             </div>
           {% endfor %}
