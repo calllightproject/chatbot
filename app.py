@@ -588,11 +588,15 @@ def assignments():
             rows = connection.execute(text("""
                 SELECT
                     name,
-                    LOWER(TRIM(COALESCE(preferred_shift, 'unspecified'))) AS pref
+                    CASE
+                      WHEN preferred_shift IS NULL OR TRIM(preferred_shift) = '' THEN 'unspecified'
+                      ELSE LOWER(TRIM(BOTH '''' FROM preferred_shift))
+                    END AS pref
                 FROM staff
-                WHERE role = 'nurse'
+                WHERE LOWER(role) = 'nurse'
                 ORDER BY name;
             """)).fetchall()
+
 
         for name, pref in rows:
             if not name or name.strip().lower() == 'unassigned':
@@ -990,6 +994,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
