@@ -1086,6 +1086,29 @@ def api_active_requests():
     return jsonify({"active_requests": active_requests})
 
 
+from flask import jsonify
+
+@app.route("/debug/assignments_today")
+def debug_assignments_today():
+    """Quick snapshot of today's assignments for BOTH shifts."""
+    from datetime import date
+    rows = []
+    try:
+        with engine.connect() as connection:
+            res = connection.execute(text("""
+                SELECT assignment_date, shift, room_number, staff_name
+                FROM assignments
+                WHERE assignment_date = :d
+                ORDER BY shift, room_number;
+            """), {"d": date.today()}).fetchall()
+            rows = [dict(assignment_date=str(r[0]),
+                         shift=r[1],
+                         room=r[2],
+                         staff=r[3]) for r in res]
+    except Exception as e:
+        return jsonify({"error": f"query_failed: {e.__class__.__name__}: {e}"}), 500
+    return jsonify({"count": len(rows), "rows": rows})
+
 
 # --- SocketIO Event Handlers ---
 @socketio.on('join')
@@ -1147,6 +1170,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
