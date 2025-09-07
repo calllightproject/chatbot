@@ -848,6 +848,59 @@ def staff_dashboard_for_nurse(staff_name):
                            nurse_view=True,
                            staff_name=staff_name)
 
+@app.route("/debug/nurses_for_shift")
+def debug_nurses_for_shift():
+    # Which shift are we testing?
+    shift = (request.args.get("shift") or "day").strip().lower()
+    if shift not in ("day", "night"):
+        shift = "day"
+
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(text("""
+                SELECT
+                    name,
+                    LOWER(TRIM(COALESCE(preferred_shift,''))) AS pref
+                FROM staff
+                WHERE LOWER(role) = 'nurse'
+                ORDER BY name;
+            """)).fetchall()
+    except Exception as e:
+        return f"<pre>DB ERROR: {e}</pre>", 500
+
+    buckets = {"day": [], "night": [], "unspecified": []}
+    for name, pref in rows:
+        key = pref if pref in ("day", "night") else "unspecified"
+        buckets[key].append(name)
+
+    # What the assignments page SHOULD show for this shift:
+    preferred = buckets[shift]
+    other     = buckets["unspecified"]  # we’re not showing opposite-shift here on purpose
+
+    # Simple HTML output
+    html = []
+    html.append(f"<h2>Nurses for shift = {shift}</h2>")
+    html.append("<h3>Preferred (should appear in dropdown):</h3><ul>")
+    for n in preferred:
+        html.append(f"<li>{n}</li>")
+    if not preferred:
+        html.append("<li><em>(none found)</em></li>")
+    html.append("</ul>")
+
+    html.append("<h3>Other (unspecified; optional to show):</h3><ul>")
+    for n in other:
+        html.append(f"<li>{n}</li>")
+    if not other:
+        html.append("<li><em>(none found)</em></li>")
+    html.append("</ul>")
+
+    # Summary
+    html.append("<hr>")
+    html.append("<p><strong>Summary</strong></p>")
+    html.append(f"<p>day={len(buckets['day'])}, night={len(buckets['night'])}, unspecified={len(buckets['unspecified'])}</p>")
+    return "".join(html)
+
+
 
 
 
@@ -911,6 +964,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
