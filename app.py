@@ -583,7 +583,10 @@ def assignments():
     other_nurses = []
     all_nurses = []  # not used by template, but harmless to keep
 
-    try:
+    # --- Load nurses and build buckets (preferred/unspecified/opposite) ---
+opposite_nurses = []  # make sure it's defined even if we hit the except
+
+try:
     with engine.connect() as connection:
         rows = connection.execute(text("""
             SELECT
@@ -605,18 +608,20 @@ def assignments():
             pref = 'unspecified'
         nurses_by_shift[pref].append(name)
 
-    # Strict filtering: only the selected shift; plus 'unspecified'
-    preferred_nurses = sorted(nurses_by_shift.get(shift, []))
-    other_nurses = sorted(nurses_by_shift.get('unspecified', []))  # keep or set [] to hide
+    # Lists for the currently selected shift
+    preferred_nurses  = sorted(nurses_by_shift.get(shift, []))
+    other_nurses      = sorted(nurses_by_shift.get('unspecified', []))
 
-    # Opposite-shift bucket so pickups can be assigned without switching pages
+    # Opposite-shift bucket so you can assign pickups without switching pages
     opp = 'night' if shift == 'day' else 'day'
     opposite_nurses = sorted(nurses_by_shift.get(opp, []))
 
-    print(f"[assignments] shift={shift} -> day={len(nurses_by_shift['day'])}, "
+    print(f"[assignments] shift={shift} -> "
+          f"day={len(nurses_by_shift['day'])}, "
           f"night={len(nurses_by_shift['night'])}, "
           f"unspec={len(nurses_by_shift['unspecified'])}; "
-          f"preferred={len(preferred_nurses)}, other={len(other_nurses)}, "
+          f"preferred={len(preferred_nurses)}, "
+          f"other={len(other_nurses)}, "
           f"opposite={len(opposite_nurses)}")
 
 except Exception as e:
@@ -624,6 +629,7 @@ except Exception as e:
     preferred_nurses = []
     other_nurses = []
     opposite_nurses = []
+
 
 
     # ---------- Handle save ----------
@@ -998,6 +1004,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
