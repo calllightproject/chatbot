@@ -631,7 +631,7 @@ def analytics():
 def assignments():
     today = date.today()
 
-    # Normalize the shift to lowercase and default to 'day'
+    # Normalize the shift (default day)
     if request.method == 'GET':
         shift = (request.args.get('shift') or 'day').lower()
     else:
@@ -639,13 +639,9 @@ def assignments():
     if shift not in ('day', 'night'):
         shift = 'day'
 
-    # ---------- Load nurses, grouped by preferred_shift ----------
+    # ---------- Load nurses grouped by preferred_shift ----------
     nurses_by_shift = {'day': [], 'night': [], 'unspecified': []}
-    preferred_nurses = []
-    other_nurses = []
-    opposite_nurses = []  # ensure defined for template even on exceptions
-    all_nurses = []
-
+    preferred_nurses, other_nurses, opposite_nurses = [], [], []
     try:
         with engine.connect() as connection:
             rows = connection.execute(text("""
@@ -663,43 +659,20 @@ def assignments():
         for name, pref in rows:
             if not name or name.strip().lower() == 'unassigned':
                 continue
-            all_nurses.append(name)
             if pref not in ('day', 'night'):
                 pref = 'unspecified'
             nurses_by_shift[pref].append(name)
 
         preferred_nurses = sorted(nurses_by_shift.get(shift, []))
         other_nurses = sorted(nurses_by_shift.get('unspecified', []))
-
-        # Opposite-shift bucket so you can assign pickups without switching pages
         opp = 'night' if shift == 'day' else 'day'
         opposite_nurses = sorted(nurses_by_shift.get(opp, []))
+    except Exception:
+        preferred_nurses, other_nurses, opposite_nurses = [], [], []
 
-        print(f"[assignments] shift={shift} -> "
-              f"day={len(nurses_by_shift['day'])}, "
-              f"night={len(nurses_by_shift['night'])}, "
-              f"unspec={len(nurses_by_shift['unspecified'])}; "
-              f"preferred={len(preferred_nurses)}, "
-              f"other={len(other_nurses)}, "
-              f"opposite={len(opposite_nurses)}")
-    except Exception as e:
-        print(f"ERROR fetching nurses: {e}")
-        preferred_nurses = []
-        other_nurses = []
-        opposite_nurses = []
-
-    # ---------- Handle save ----------
+    # ---------- Save (POST) ----------
     if request.method == 'POST':
-        # DEBUG: what did the form send?
-        try:
-            print("[assignments][POST] shift param:", shift)
-            room_keys = [k for k in request.form.keys() if k.startswith('nurse_for_room_')]
-            print(f"[assignments][POST] nurse fields present: {len(room_keys)} (sample: {room_keys[:5]})")
-            print("[assignments][POST] example 231 value:", request.form.get('nurse_for_room_231'))
-        except Exception as _e:
-            print("[assignments][POST] debug print failed:", _e)
-
-        # 1) Save nurse-by-room in its own transaction
+        # 1) Save nurse-by-room (own transaction)
         try:
             with engine.connect() as connection:
                 with connection.begin():
@@ -719,11 +692,10 @@ def assignments():
                                   AND shift = :shift
                                   AND room_number = :room;
                             """), {"date": today, "shift": shift, "room": room_number})
-            print(f"Nurse room assignments saved for shift={shift}.")
         except Exception as e:
             print(f"ERROR saving nurse assignments: {e}")
 
-        # 2) Save CNA coverage in a separate transaction (DELETE then INSERT; no ON CONFLICT)
+        # 2) Save CNA coverage (separate transaction; DELETE→INSERT)
         try:
             cna_front_form = request.form.get('cna_front', 'unassigned')
             cna_back_form  = request.form.get('cna_back',  'unassigned')
@@ -737,26 +709,26 @@ def assignments():
                             DELETE FROM cna_coverage
                             WHERE assignment_date = :date AND shift = :shift AND zone = :zone;
                         """), {"date": today, "shift": shift, "zone": zone})
-
                         connection.execute(text("""
                             INSERT INTO cna_coverage (assignment_date, shift, zone, cna_name)
                             VALUES (:date, :shift, :zone, :name);
                         """), {"date": today, "shift": shift, "zone": zone, "name": name})
-            print(f"CNA coverage saved for shift={shift}.")
         except Exception as e:
-            # Do not let CNA errors roll back nurse saves
+            # Don't roll back nurse saves if CNA write fails
             print(f"ERROR saving CNA coverage (ignored): {e}")
 
-        # Preserve selected shift after save
         return redirect(url_for('assignments', shift=shift))
 
     # ---------- Load CNAs for dropdown ----------
     all_cnas = []
     try:
         with engine.connect() as connection:
-            rows = connection.execute(
-                text("SELECT name FROM staff WHERE LOWER(role) = 'cna' ORDER BY name;")
-            ).fetchall()
+            rows = connection.execute(text("""
+                SELECT name
+                FROM staff
+                WHERE LOWER(role) = 'cna'
+                ORDER BY name;
+            """)).fetchall()
             all_cnas = [r[0] for r in rows if r[0] and r[0].strip().lower() != 'unassigned']
     except Exception as e:
         print(f"ERROR fetching CNAs: {e}")
@@ -771,13 +743,12 @@ def assignments():
                 WHERE assignment_date = :date AND shift = :shift;
             """), {"date": today, "shift": shift}).fetchall()
             for r in rows:
-                current_assignments[r.room_number] = r.staff_name
+                current_assignments[r.room_number] = r[1] if isinstance(r, tuple) else r.staff_name
     except Exception as e:
         print(f"ERROR fetching assignments: {e}")
 
     # ---------- Read back today's CNA coverage for this shift ----------
-    cna_front_val = 'unassigned'
-    cna_back_val  = 'unassigned'
+    cna_front_val, cna_back_val = 'unassigned', 'unassigned'
     try:
         with engine.connect() as connection:
             rows = connection.execute(text("""
@@ -804,54 +775,6 @@ def assignments():
         cna_back=cna_back_val,
         shift=shift
     )
-
-
-from flask import jsonify
-
-@app.route("/debug/assignments_test_write")
-def debug_assignments_test_write():
-    """
-    Minimal write test:
-    - Upsert one known row for today, shift='day', room='231', staff='TEST_NURSE'
-    - Read it back and return JSON.
-    """
-    from datetime import date
-    today = date.today()
-    out = {"wrote": False, "row": None, "error": None}
-
-    try:
-        with engine.connect() as connection:
-            with connection.begin():
-                connection.execute(text("""
-                    INSERT INTO assignments (assignment_date, shift, room_number, staff_name)
-                    VALUES (:d, 'day', '231', 'TEST_NURSE')
-                    ON CONFLICT (assignment_date, shift, room_number)
-                    DO UPDATE SET staff_name = EXCLUDED.staff_name;
-                """), {"d": today})
-
-        # Read it back
-        with engine.connect() as connection:
-            r = connection.execute(text("""
-                SELECT assignment_date, shift, room_number, staff_name
-                FROM assignments
-                WHERE assignment_date = :d AND shift = 'day' AND room_number = '231';
-            """), {"d": today}).first()
-
-            if r:
-                out["wrote"] = True
-                out["row"] = {
-                    "assignment_date": str(r[0]),
-                    "shift": r[1],
-                    "room_number": r[2],
-                    "staff_name": r[3],
-                }
-            else:
-                out["wrote"] = False
-
-    except Exception as e:
-        out["error"] = f"{e.__class__.__name__}: {e}"
-
-    return jsonify(out)
 
 
 # --- Auth for Manager (unchanged) ---
@@ -1232,6 +1155,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
