@@ -1015,21 +1015,28 @@ def staff_portal():
             flash("Please enter your name.", "danger")
     return render_template('staff_portal.html')
 
+from datetime import datetime, time, date
+
+def _infer_shift_now():
+    # 07:00–18:59 => 'day', otherwise 'night'
+    now = datetime.now()
+    return 'day' if time(7, 0) <= now.time() < time(19, 0) else 'night'
+
 @app.route('/staff/dashboard/<staff_name>')
 def staff_dashboard_for_nurse(staff_name):
     today = date.today()
 
-    # Which shift is the nurse viewing? (default day)
-    shift = (request.args.get('shift') or 'day').strip().lower()
+    # Shift param or infer from current time
+    shift = (request.args.get('shift') or _infer_shift_now()).strip().lower()
     if shift not in ('day', 'night'):
         shift = 'day'
 
-    # Which scope? 'mine' (default) or 'all'
+    # Scope: 'mine' (default) or 'all'
     scope = (request.args.get('scope') or 'mine').strip().lower()
     if scope not in ('mine', 'all'):
         scope = 'mine'
 
-    # 1) Find the nurse's rooms for TODAY + SHIFT
+    # Rooms assigned to this nurse for TODAY + SHIFT
     rooms_for_nurse = []
     try:
         with engine.connect() as connection:
@@ -1045,30 +1052,30 @@ def staff_dashboard_for_nurse(staff_name):
     except Exception as e:
         print(f"ERROR fetching rooms for nurse {staff_name}: {e}")
 
-    # 2) Active requests
+    # Active requests (mine or all)
     active_requests = []
     try:
         with engine.connect() as connection:
             if scope == 'all':
-                # Show everything so nurse can help others
-                result = connection.execute(text("""
+                q = text("""
                     SELECT request_id, room, user_input, category as role, timestamp
                     FROM requests
                     WHERE completion_timestamp IS NULL
                     ORDER BY timestamp DESC;
-                """))
+                """)
+                result = connection.execute(q)
             else:
-                # Only my rooms
                 if rooms_for_nurse:
-                    result = connection.execute(text("""
+                    q = text("""
                         SELECT request_id, room, user_input, category as role, timestamp
                         FROM requests
                         WHERE completion_timestamp IS NULL
                           AND room = ANY(:room_list)
                         ORDER BY timestamp DESC;
-                    """), {"room_list": rooms_for_nurse})
+                    """)
+                    result = connection.execute(q, {"room_list": rooms_for_nurse})
                 else:
-                    result = []  # nothing assigned
+                    result = []
 
             for row in result:
                 active_requests.append({
@@ -1081,32 +1088,28 @@ def staff_dashboard_for_nurse(staff_name):
     except Exception as e:
         print(f"ERROR fetching nurse dashboard requests: {e}")
 
-    # Build toggle URL for the button
+    # Build toggle/link URLs
     next_scope = 'all' if scope == 'mine' else 'mine'
     toggle_url = url_for('staff_dashboard_for_nurse',
                          staff_name=staff_name, shift=shift, scope=next_scope)
-
-    # Shift switcher URLs
     day_url   = url_for('staff_dashboard_for_nurse',
                         staff_name=staff_name, shift='day', scope=scope)
     night_url = url_for('staff_dashboard_for_nurse',
                         staff_name=staff_name, shift='night', scope=scope)
-    from flask import jsonify
-
 
     return render_template(
         "dashboard.html",
         active_requests=active_requests,
-        nurse_view=True,
-        staff_name=staff_name,
-        rooms_for_nurse=rooms_for_nurse,
-        shift="day",   # or detect real shift
-        scope="mine",
-        day_url=url_for('staff_dashboard_for_nurse', staff_name=staff_name) + "?shift=day",
-        night_url=url_for('staff_dashboard_for_nurse', staff_name=staff_name) + "?shift=night",
-        toggle_url=url_for('staff_dashboard_for_nurse', staff_name=staff_name) + "?scope=all"
+        nurse_context=True,             # template checks this
+        nurse_name=staff_name,
+        nurse_rooms=rooms_for_nurse,    # shown as chips
+        shift=shift,
+        scope=scope,
+        day_url=day_url,
+        night_url=night_url,
+        toggle_url=toggle_url
     )
-from flask import jsonify
+
 
 @app.route('/api/active_requests')
 def api_active_requests():
@@ -1270,6 +1273,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
