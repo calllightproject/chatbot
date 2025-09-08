@@ -21,12 +21,7 @@ app = Flask(__name__, template_folder='templates')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-strong-fallback-secret-key-for-local-development")
 socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*", manage_session=False, ping_timeout=20, ping_interval=10)
 
-# --- Master Data Lists ---
-INITIAL_STAFF = {
-    'Jackie': 'nurse', 'Carol': 'nurse', 'John': 'nurse',
-    'Maria': 'nurse', 'David': 'nurse', 'Susan': 'nurse',
-    'Peter': 'cna', 'Linda': 'cna'
-}
+
 ALL_ROOMS = [str(room) for room in range(231, 261)]
 
 # --- Database Configuration ---
@@ -1293,6 +1288,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
