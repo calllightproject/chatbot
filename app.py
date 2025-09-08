@@ -14,7 +14,7 @@ from flask import Flask, render_template, request, session, redirect, url_for, f
 from flask_socketio import SocketIO, join_room
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import ProgrammingError
-
+from werkzeug.security import generate_password_hash, check_password_hash
 
 # --- App Configuration ---
 app = Flask(__name__, template_folder='templates')
@@ -153,6 +153,13 @@ def setup_database():
                 except Exception:
                     pass
 
+                # ✅ Per-nurse PIN support (hash + timestamp)
+                try:
+                    connection.execute(text("ALTER TABLE staff ADD COLUMN IF NOT EXISTS pin_hash TEXT;"))
+                    connection.execute(text("ALTER TABLE staff ADD COLUMN IF NOT EXISTS pin_set_at TIMESTAMPTZ;"))
+                except Exception:
+                    pass
+
         # Keep this separate: older DBs might lack deferral_timestamp
         try:
             with engine.connect() as connection:
@@ -167,7 +174,6 @@ def setup_database():
         print("Database setup complete. Tables are ready.")
     except Exception as e:
         print(f"CRITICAL ERROR during database setup: {e}")
-
 
 
 setup_database()
@@ -1246,6 +1252,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
