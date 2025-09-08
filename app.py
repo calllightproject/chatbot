@@ -916,10 +916,58 @@ def manager_dashboard():
                                     f"Removed staff member: {staff_member.name} ({staff_member.role})"
                                 )
 
+                    elif action == 'set_pin':
+                        # Set/reset a per-nurse PIN (hashed)
+                        staff_id = request.form.get('staff_id')
+                        new_pin  = (request.form.get('new_pin') or '').strip()
+
+                        if staff_id and new_pin:
+                            try:
+                                pin_hash = generate_password_hash(new_pin)
+                                connection.execute(text("""
+                                    UPDATE staff
+                                    SET pin_hash = :pin_hash,
+                                        pin_set_at = NOW()
+                                    WHERE id = :id;
+                                """), {"pin_hash": pin_hash, "id": staff_id})
+
+                                log_to_audit_trail(
+                                    "PIN Set",
+                                    f"Manager set/reset PIN for staff_id={staff_id}"
+                                )
+                            except Exception as e:
+                                print(f"ERROR setting PIN: {e}")
+
         except Exception as e:
             print(f"ERROR updating staff: {e}")
 
         return redirect(url_for('manager_dashboard'))
+
+    # ----- GET: fetch staff + recent audit log -----
+    staff_list = []
+    audit_log = []
+    try:
+        with engine.connect() as connection:
+            # include pin_set_at so UI can show if a PIN exists
+            staff_result = connection.execute(text("""
+                SELECT id, name, role, preferred_shift, pin_set_at
+                FROM staff
+                ORDER BY name;
+            """))
+            staff_list = staff_result.fetchall()
+
+            audit_result = connection.execute(text("""
+                SELECT timestamp, event_type, details
+                FROM audit_log
+                ORDER BY timestamp DESC
+                LIMIT 50;
+            """))
+            audit_log = audit_result.fetchall()
+    except Exception as e:
+        print(f"ERROR fetching manager dashboard data: {e}")
+
+    return render_template('manager_dashboard.html', staff=staff_list, audit_log=audit_log)
+
 
     # ----- GET: fetch staff + recent audit log -----
     staff_list = []
@@ -1252,6 +1300,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
