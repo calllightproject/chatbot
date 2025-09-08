@@ -791,6 +791,36 @@ def assignments():
     )
 
 
+from flask import jsonify
+
+@app.route("/debug/assignments_schema")
+def debug_assignments_schema():
+    info = {"columns": [], "indexes": []}
+    try:
+        with engine.connect() as connection:
+            # Columns
+            cols = connection.execute(text("""
+                SELECT column_name, data_type, is_nullable
+                FROM information_schema.columns
+                WHERE table_name = 'assignments'
+                ORDER BY ordinal_position;
+            """)).fetchall()
+            info["columns"] = [{"name": c[0], "type": c[1], "nullable": c[2]} for c in cols]
+
+            # Indexes/constraints
+            idx = connection.execute(text("""
+                SELECT indexname, indexdef
+                FROM pg_indexes
+                WHERE tablename = 'assignments'
+                ORDER BY indexname;
+            """)).fetchall()
+            info["indexes"] = [{"name": i[0], "def": i[1]} for i in idx]
+    except Exception as e:
+        return jsonify({"error": f"{e.__class__.__name__}: {e}"}), 500
+
+    return jsonify(info)
+
+
 
 # --- Auth for Manager (unchanged) ---
 @app.route('/login', methods=['GET', 'POST'])
@@ -1170,6 +1200,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
