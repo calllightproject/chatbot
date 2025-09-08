@@ -999,34 +999,55 @@ def manager_dashboard():
     return render_template('manager_dashboard.html', staff=staff_list, audit_log=audit_log)
 
 
-# --- Staff Portal (PIN + nurse-specific dashboard) ---
-@app.route('/staff-portal', methods=['GET', 'POST'])
-def staff_portal():
-    pin_required = os.getenv("STAFF_PORTAL_PIN")
-    if request.method == 'POST':
-        entered_pin = request.form.get('pin', '').strip()
-        if pin_required and entered_pin != pin_required:
-            flash("Invalid PIN.", "danger")
-            return render_template('staff_portal.html')
-        staff_name = request.form.get('staff_name', '').strip()
-        if staff_name:
-            return redirect(url_for('staff_dashboard_for_nurse', staff_name=staff_name))
-        else:
-            flash("Please enter your name.", "danger")
-    return render_template('staff_portal.html')
-
+# --- Staff Portal (pilot PIN) + Own Nurse Dashboard --------------------------
 from datetime import datetime, time, date
 
-def _infer_shift_now():
-    # 07:00–18:59 => 'day', otherwise 'night'
+def _infer_shift_now() -> str:
+    """Return 'day' from 07:00–18:59, else 'night'."""
     now = datetime.now()
     return 'day' if time(7, 0) <= now.time() < time(19, 0) else 'night'
 
+
+@app.route('/staff-portal', methods=['GET', 'POST'])
+def staff_portal():
+    """
+    Pilot login: optional env-wide PIN (STAFF_PORTAL_PIN) + nurse name select.
+    On success, route to that nurse's dashboard (defaults to current shift).
+    """
+    pin_required = os.getenv("STAFF_PORTAL_PIN")
+
+    if request.method == 'POST':
+        entered_pin = (request.form.get('pin') or '').strip()
+        staff_name  = (request.form.get('staff_name') or '').strip()
+
+        # If a PIN is configured, require it (pilot-simple)
+        if pin_required and entered_pin != pin_required:
+            flash("Invalid PIN.", "danger")
+            return render_template('staff_portal.html', prior_name=staff_name)
+
+        if not staff_name:
+            flash("Please enter your name.", "danger")
+            return render_template('staff_portal.html')
+
+        # Default to inferred shift; nurse can switch in the dashboard
+        shift = _infer_shift_now()
+        return redirect(url_for('staff_dashboard_for_nurse', staff_name=staff_name, shift=shift))
+
+    # GET
+    return render_template('staff_portal.html')
+
+
 @app.route('/staff/dashboard/<staff_name>')
 def staff_dashboard_for_nurse(staff_name):
+    """
+    Nurse dashboard:
+      - scope=mine (default): only this nurse's rooms (today+shift)
+      - scope=all: all active requests (to help others)
+      - shift=day|night (defaults based on current time)
+    """
     today = date.today()
 
-    # Shift param or infer from current time
+    # Shift param or inferred
     shift = (request.args.get('shift') or _infer_shift_now()).strip().lower()
     if shift not in ('day', 'night'):
         shift = 'day'
@@ -1083,12 +1104,12 @@ def staff_dashboard_for_nurse(staff_name):
                     'room': row.room,
                     'request': row.user_input,
                     'role': row.role,
-                    'timestamp': row.timestamp.isoformat()
+                    'timestamp': row.timestamp.isoformat() if row.timestamp else None
                 })
     except Exception as e:
         print(f"ERROR fetching nurse dashboard requests: {e}")
 
-    # Build toggle/link URLs
+    # Build toggle/link URLs for the template
     next_scope = 'all' if scope == 'mine' else 'mine'
     toggle_url = url_for('staff_dashboard_for_nurse',
                          staff_name=staff_name, shift=shift, scope=next_scope)
@@ -1100,9 +1121,9 @@ def staff_dashboard_for_nurse(staff_name):
     return render_template(
         "dashboard.html",
         active_requests=active_requests,
-        nurse_context=True,             # template checks this
+        nurse_context=True,          # template uses this to switch headings/links
         nurse_name=staff_name,
-        nurse_rooms=rooms_for_nurse,    # shown as chips
+        nurse_rooms=rooms_for_nurse, # rendered as chips
         shift=shift,
         scope=scope,
         day_url=day_url,
@@ -1189,7 +1210,6 @@ def api_active_requests():
     return jsonify({"active_requests": active_requests})
 
 
-from flask import jsonify
 
 @app.route("/debug/assignments_today")
 def debug_assignments_today():
@@ -1273,6 +1293,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
