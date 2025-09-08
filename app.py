@@ -793,33 +793,50 @@ def assignments():
 
 from flask import jsonify
 
-@app.route("/debug/assignments_schema")
-def debug_assignments_schema():
-    info = {"columns": [], "indexes": []}
+@app.route("/debug/assignments_test_write")
+def debug_assignments_test_write():
+    """
+    Minimal write test:
+    - Upsert one known row for today, shift='day', room='231', staff='TEST_NURSE'
+    - Read it back and return JSON.
+    """
+    from datetime import date
+    today = date.today()
+    out = {"wrote": False, "row": None, "error": None}
+
     try:
         with engine.connect() as connection:
-            # Columns
-            cols = connection.execute(text("""
-                SELECT column_name, data_type, is_nullable
-                FROM information_schema.columns
-                WHERE table_name = 'assignments'
-                ORDER BY ordinal_position;
-            """)).fetchall()
-            info["columns"] = [{"name": c[0], "type": c[1], "nullable": c[2]} for c in cols]
+            with connection.begin():
+                connection.execute(text("""
+                    INSERT INTO assignments (assignment_date, shift, room_number, staff_name)
+                    VALUES (:d, 'day', '231', 'TEST_NURSE')
+                    ON CONFLICT (assignment_date, shift, room_number)
+                    DO UPDATE SET staff_name = EXCLUDED.staff_name;
+                """), {"d": today})
 
-            # Indexes/constraints
-            idx = connection.execute(text("""
-                SELECT indexname, indexdef
-                FROM pg_indexes
-                WHERE tablename = 'assignments'
-                ORDER BY indexname;
-            """)).fetchall()
-            info["indexes"] = [{"name": i[0], "def": i[1]} for i in idx]
+        # Read it back
+        with engine.connect() as connection:
+            r = connection.execute(text("""
+                SELECT assignment_date, shift, room_number, staff_name
+                FROM assignments
+                WHERE assignment_date = :d AND shift = 'day' AND room_number = '231';
+            """), {"d": today}).first()
+
+            if r:
+                out["wrote"] = True
+                out["row"] = {
+                    "assignment_date": str(r[0]),
+                    "shift": r[1],
+                    "room_number": r[2],
+                    "staff_name": r[3],
+                }
+            else:
+                out["wrote"] = False
+
     except Exception as e:
-        return jsonify({"error": f"{e.__class__.__name__}: {e}"}), 500
+        out["error"] = f"{e.__class__.__name__}: {e}"
 
-    return jsonify(info)
-
+    return jsonify(out)
 
 
 # --- Auth for Manager (unchanged) ---
@@ -1200,6 +1217,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
