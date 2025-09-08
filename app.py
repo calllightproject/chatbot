@@ -693,6 +693,15 @@ def assignments():
 
     # ---------- Handle save ----------
     if request.method == 'POST':
+            # DEBUG: what did the form send?
+        try:
+            print("[assignments][POST] shift param:", shift)
+            room_keys = [k for k in request.form.keys() if k.startswith('nurse_for_room_')]
+            print(f"[assignments][POST] nurse fields present: {len(room_keys)} (sample: {room_keys[:5]})")
+            print("[assignments][POST] example 231 value:", request.form.get('nurse_for_room_231'))
+        except Exception as _e:
+            print("[assignments][POST] debug print failed:", _e)
+
         try:
             with engine.connect() as connection:
                 with connection.begin():
@@ -1217,6 +1226,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
