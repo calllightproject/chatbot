@@ -44,9 +44,9 @@ def setup_database():
                     CREATE TABLE IF NOT EXISTS requests (
                         id SERIAL PRIMARY KEY,
                         request_id VARCHAR(255) UNIQUE,
-                        timestamp TIMESTAMP WITH TIME ZONE,
-                        completion_timestamp TIMESTAMP WITH TIME ZONE,
-                        deferral_timestamp TIMESTAMP WITH TIME ZONE,
+                        timestamp TIMESTAMPTZ,
+                        completion_timestamp TIMESTAMPTZ,
+                        deferral_timestamp TIMESTAMPTZ,
                         room VARCHAR(255),
                         user_input TEXT,
                         category VARCHAR(255),
@@ -59,16 +59,17 @@ def setup_database():
                     CREATE TABLE IF NOT EXISTS assignments (
                         id SERIAL PRIMARY KEY,
                         assignment_date DATE NOT NULL,
+                        shift VARCHAR(10) NOT NULL,
                         room_number VARCHAR(255) NOT NULL,
                         staff_name VARCHAR(255) NOT NULL,
-                        UNIQUE (assignment_date, room_number)
+                        UNIQUE (assignment_date, shift, room_number)
                     );
                 """))
 
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS audit_log (
                         id SERIAL PRIMARY KEY,
-                        timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+                        timestamp TIMESTAMPTZ NOT NULL,
                         event_type VARCHAR(255) NOT NULL,
                         details TEXT
                     );
@@ -78,141 +79,95 @@ def setup_database():
                     CREATE TABLE IF NOT EXISTS staff (
                         id SERIAL PRIMARY KEY,
                         name VARCHAR(255) UNIQUE NOT NULL,
-                        role VARCHAR(50) NOT NULL
+                        role VARCHAR(50) NOT NULL,
+                        preferred_shift VARCHAR(10),
+                        languages TEXT
+                    );
+                """))
+
+                # CNA coverage (front/back per shift)
+                connection.execute(text("""
+                    CREATE TABLE IF NOT EXISTS cna_coverage (
+                        id SERIAL PRIMARY KEY,
+                        assignment_date DATE NOT NULL,
+                        shift VARCHAR(10) NOT NULL,
+                        zone VARCHAR(20) NOT NULL,   -- 'front' / 'back'
+                        cna_name VARCHAR(255),
+                        UNIQUE (assignment_date, shift, zone)
+                    );
+                """))
+
+                # Room state: reset marker + future tags (JSONB)
+                connection.execute(text("""
+                    CREATE TABLE IF NOT EXISTS room_state (
+                        id SERIAL PRIMARY KEY,
+                        assignment_date DATE NOT NULL,
+                        shift VARCHAR(10) NOT NULL,
+                        room_number VARCHAR(20) NOT NULL,
+                        reset_at TIMESTAMPTZ,
+                        tags JSONB NOT NULL DEFAULT '[]'::jsonb,
+                        UNIQUE (assignment_date, shift, room_number)
                     );
                 """))
 
                 print("CREATE TABLE statements complete.")
 
-                # --- Schema fix for assignments (shift) + unique index ---
+                # --- Hardening / idempotent fixes ---
+
+                # Ensure 'shift' column exists on assignments (older DBs)
                 try:
                     connection.execute(text("""
                         ALTER TABLE assignments
                         ADD COLUMN IF NOT EXISTS shift VARCHAR(10) NOT NULL DEFAULT 'day';
                     """))
-                    connection.execute(text("""
-                        ALTER TABLE assignments
-                        ALTER COLUMN shift DROP DEFAULT;
-                    """))
+                    connection.execute(text("ALTER TABLE assignments ALTER COLUMN shift DROP DEFAULT;"))
                 except Exception:
                     pass
 
-                # Drop any old UNIQUE that doesn't include shift; ensure correct UNIQUE(date, shift, room)
+                # Ensure correct UNIQUE(date, shift, room) on assignments
                 try:
                     connection.execute(text("""
                         DO $$
-                        DECLARE
-                          cons_name text;
                         BEGIN
-                          SELECT tc.constraint_name INTO cons_name
-                          FROM information_schema.table_constraints tc
-                          JOIN information_schema.constraint_column_usage ccu
-                            ON tc.constraint_name = ccu.constraint_name
-                          WHERE tc.table_name = 'assignments'
-                            AND tc.constraint_type = 'UNIQUE'
-                            AND ccu.column_name IN ('assignment_date','room_number')
-                          LIMIT 1;
-
-                          IF cons_name IS NOT NULL THEN
-                            EXECUTE format('ALTER TABLE assignments DROP CONSTRAINT %I', cons_name);
+                          IF NOT EXISTS (
+                            SELECT 1 FROM pg_indexes
+                            WHERE schemaname = 'public'
+                              AND indexname = 'assignments_uniq_date_shift_room'
+                          ) THEN
+                            ALTER TABLE assignments
+                            ADD CONSTRAINT assignments_uniq_date_shift_room
+                            UNIQUE (assignment_date, shift, room_number);
                           END IF;
                         END$$;
                     """))
                 except Exception:
                     pass
 
+                # Backfill defaults (safe)
                 try:
-                    connection.execute(text("""
-                        ALTER TABLE assignments
-                        ADD CONSTRAINT assignments_uniq_date_shift_room
-                        UNIQUE (assignment_date, shift, room_number);
-                    """))
+                    connection.execute(text("UPDATE room_state SET tags = COALESCE(tags, '[]'::jsonb);"))
+                except Exception:
+                    pass
+                try:
+                    connection.execute(text("UPDATE staff SET languages = COALESCE(languages, '[""en""]');"))
                 except Exception:
                     pass
 
-                # --- CNA coverage table (idempotent) ---
-                try:
-                    connection.execute(text("""
-                        CREATE TABLE IF NOT EXISTS cna_coverage (
-                            id SERIAL PRIMARY KEY,
-                            assignment_date DATE NOT NULL,
-                            shift VARCHAR(10) NOT NULL,
-                            zone VARCHAR(20) NOT NULL,   -- 'front'/'back'
-                            cna_name VARCHAR(255),
-                            UNIQUE (assignment_date, shift, zone)
-                        );
-                    """))
-                except Exception:
-                    pass
-
-                # --- room_state table (reset marker + future tags) ---
-                try:
-                    connection.execute(text("""
-                        CREATE TABLE IF NOT EXISTS room_state (
-                            id SERIAL PRIMARY KEY,
-                            assignment_date DATE NOT NULL,
-                            shift VARCHAR(10) NOT NULL,
-                            room_number VARCHAR(255) NOT NULL,
-                            reset_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                            tags TEXT,  -- JSON string like '[]' or '["spanish_only"]'
-                            UNIQUE (assignment_date, shift, room_number)
-                        );
-                    """))
-                except Exception:
-                    pass
-
-                # Ensure tags has a safe default
-                try:
-                    connection.execute(text("""
-                        UPDATE room_state
-                        SET tags = COALESCE(tags, '[]');
-                    """))
-                except Exception:
-                    pass
-
-                # --- staff.languages (TEXT storing JSON like '["en","es"]') ---
-                try:
-                    connection.execute(text("""
-                        ALTER TABLE staff
-                        ADD COLUMN IF NOT EXISTS languages TEXT;
-                    """))
-                except Exception:
-                    pass
-
-                try:
-                    connection.execute(text("""
-                        UPDATE staff
-                        SET languages = COALESCE(languages, '["en"]');
-                    """))
-                except Exception:
-                    pass
-
-                # Mark Rosie as bilingual
-                try:
-                    connection.execute(text("""
-                        UPDATE staff
-                        SET languages = '["en","es"]'
-                        WHERE name = 'Rosie M.';
-                    """))
-                except Exception:
-                    pass
-
-               
+        # Keep this separate: older DBs might lack deferral_timestamp
         try:
             with engine.connect() as connection:
                 with connection.begin():
                     connection.execute(text("""
                         ALTER TABLE requests
-                        ADD COLUMN deferral_timestamp TIMESTAMP WITH TIME ZONE;
+                        ADD COLUMN IF NOT EXISTS deferral_timestamp TIMESTAMPTZ;
                     """))
-        except ProgrammingError:
-            pass
         except Exception:
             pass
 
         print("Database setup complete. Tables are ready.")
     except Exception as e:
         print(f"CRITICAL ERROR during database setup: {e}")
+
 
 
 setup_database()
@@ -869,10 +824,11 @@ def room_reset():
                 """), {"d": today, "s": shift, "r": room})
 
         return redirect(url_for('assignments', shift=shift))
+
     except Exception as e:
         print(f"ERROR in /room/reset: {e}")
+        # Fall back to whatever shift was posted, defaulting to day
         return redirect(url_for('assignments', shift=(request.form.get('shift') or 'day').lower()))
-
 
 
 # --- Auth for Manager (unchanged) ---
@@ -914,7 +870,7 @@ def manager_dashboard():
                         if pref_raw in ('day', 'night'):
                             preferred_shift = pref_raw
                         else:
-                            preferred_shift = None  # will store NULL
+                            preferred_shift = None  # store NULL
 
                         if name:
                             # Upsert on name so edits are easy from the UI
@@ -982,9 +938,7 @@ def manager_dashboard():
     return render_template('manager_dashboard.html', staff=staff_list, audit_log=audit_log)
 
 
-# --- Staff Portal (pilot PIN) + Own Nurse Dashboard --------------------------
-from datetime import datetime, time, date
-
+# --- Staff Portal (pilot PIN) -----------------------------------------------
 def _infer_shift_now() -> str:
     """Return 'day' from 07:00–18:59, else 'night'."""
     now = datetime.now()
@@ -1014,7 +968,7 @@ def staff_portal():
             shift = _infer_shift_now()
             return redirect(url_for('staff_dashboard_for_nurse', staff_name=staff_name, shift=shift))
 
-    # GET or failed POST → render with nurse names
+    # For GET or failed POST, load nurse names for the dropdown
     nurse_names = []
     try:
         with engine.connect() as connection:
@@ -1028,11 +982,12 @@ def staff_portal():
     except Exception as e:
         print(f"ERROR loading nurse names for staff portal: {e}")
 
-    return render_template('staff_portal.html',
-                           nurse_names=nurse_names,
-                           pin_required=bool(pin_required),
-                           prior_name=prior_name)
-
+    return render_template(
+        'staff_portal.html',
+        nurse_names=nurse_names,
+        pin_required=bool(pin_required),
+        prior_name=prior_name
+    )
 
 
 @app.route('/staff/dashboard/<staff_name>')
@@ -1291,6 +1246,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
