@@ -995,29 +995,44 @@ def _infer_shift_now() -> str:
 def staff_portal():
     """
     Pilot login: optional env-wide PIN (STAFF_PORTAL_PIN) + nurse name select.
-    On success, route to that nurse's dashboard (defaults to current shift).
     """
     pin_required = os.getenv("STAFF_PORTAL_PIN")
+    prior_name = None
 
     if request.method == 'POST':
         entered_pin = (request.form.get('pin') or '').strip()
         staff_name  = (request.form.get('staff_name') or '').strip()
+        prior_name = staff_name
 
         # If a PIN is configured, require it (pilot-simple)
         if pin_required and entered_pin != pin_required:
             flash("Invalid PIN.", "danger")
-            return render_template('staff_portal.html', prior_name=staff_name)
-
-        if not staff_name:
+        elif not staff_name:
             flash("Please enter your name.", "danger")
-            return render_template('staff_portal.html')
+        else:
+            # Success → send to nurse dashboard (shift inferred there)
+            shift = _infer_shift_now()
+            return redirect(url_for('staff_dashboard_for_nurse', staff_name=staff_name, shift=shift))
 
-        # Default to inferred shift; nurse can switch in the dashboard
-        shift = _infer_shift_now()
-        return redirect(url_for('staff_dashboard_for_nurse', staff_name=staff_name, shift=shift))
+    # GET or failed POST → render with nurse names
+    nurse_names = []
+    try:
+        with engine.connect() as connection:
+            rows = connection.execute(text("""
+                SELECT name
+                FROM staff
+                WHERE LOWER(role) = 'nurse'
+                ORDER BY name;
+            """)).fetchall()
+            nurse_names = [r[0] for r in rows if r[0]]
+    except Exception as e:
+        print(f"ERROR loading nurse names for staff portal: {e}")
 
-    # GET
-    return render_template('staff_portal.html')
+    return render_template('staff_portal.html',
+                           nurse_names=nurse_names,
+                           pin_required=bool(pin_required),
+                           prior_name=prior_name)
+
 
 
 @app.route('/staff/dashboard/<staff_name>')
@@ -1276,6 +1291,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
