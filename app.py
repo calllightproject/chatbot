@@ -855,11 +855,9 @@ def assignments():
         shift=shift
     )
 
-from flask import jsonify  # already present in your file; fine to keep
-
 @app.route('/room/reset', methods=['POST'])
 def room_reset():
-    """Mark a room as 'reset' (new patient) for today's selected shift."""
+    """Mark a room as 'reset' (new patient) and clear its nurse assignment for today's selected shift."""
     try:
         today = date.today()
         shift = (request.form.get('shift') or 'day').lower()
@@ -870,7 +868,7 @@ def room_reset():
 
         with engine.connect() as connection:
             with connection.begin():
-                # preserve existing tags if there is a row already; just bump reset_at
+                # 1) Upsert room_state (preserve existing tags, bump reset_at)
                 connection.execute(text("""
                     INSERT INTO room_state (assignment_date, shift, room_number, reset_at, tags)
                     VALUES (:d, :s, :r, NOW(),
@@ -881,12 +879,17 @@ def room_reset():
                     DO UPDATE SET reset_at = EXCLUDED.reset_at;
                 """), {"d": today, "s": shift, "r": room})
 
-        # (Optional future: also clear/mute any room session here if you decide to)
+                # 2) Clear any nurse assignment for this room/shift/date
+                connection.execute(text("""
+                    DELETE FROM assignments
+                    WHERE assignment_date = :d AND shift = :s AND room_number = :r;
+                """), {"d": today, "s": shift, "r": room})
+
         return redirect(url_for('assignments', shift=shift))
     except Exception as e:
         print(f"ERROR in /room/reset: {e}")
-        # Fail safe: go back to assignments page
         return redirect(url_for('assignments', shift=(request.form.get('shift') or 'day').lower()))
+
 
 
 # --- Auth for Manager (unchanged) ---
@@ -1267,6 +1270,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
