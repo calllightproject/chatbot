@@ -187,7 +187,7 @@ def setup_database():
                 except Exception:
                     pass
 
-                # Mark Rosie as bilingual (adjust spelling if needed)
+                # Mark Rosie as bilingual
                 try:
                     connection.execute(text("""
                         UPDATE staff
@@ -197,19 +197,7 @@ def setup_database():
                 except Exception:
                     pass
 
-                # Seed initial staff if empty
-                count = connection.execute(text("SELECT COUNT(id) FROM staff;")).scalar()
-                if count == 0:
-                    print("Staff table is empty. Populating with initial staff...")
-                    for name, role in INITIAL_STAFF.items():
-                        connection.execute(text("""
-                            INSERT INTO staff (name, role)
-                            VALUES (:name, :role)
-                            ON CONFLICT (name) DO NOTHING;
-                        """), {"name": name, "role": role})
-                    print("Initial staff population complete.")
-
-        # Backward-compat guard: safe even if column exists already
+               
         try:
             with engine.connect() as connection:
                 with connection.begin():
@@ -1288,6 +1276,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
