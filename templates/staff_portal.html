@@ -1,35 +1,40 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Staff Portal</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --core-blue:#00205b; --accent-blue:#007eb4;
-      --light-gray:#f5f5f5; --white:#ffffff;
+      --core-blue: #00205b;
+      --accent-blue: #007eb4;
+      --light-gray-background: #f5f5f5;
+      --white: #ffffff;
     }
-    body { font-family:'Inter',sans-serif; background:var(--light-gray); }
-    .btn { background:var(--core-blue); color:#fff; }
-    .btn:hover { background:#093582; }
-    .link { color:var(--accent-blue); }
-    .link:hover { color:var(--core-blue); }
+    body { font-family: 'Inter', sans-serif; background-color: var(--light-gray-background); }
+    .button-primary { background-color: var(--core-blue); color: var(--white); }
+    .button-primary:hover { background-color: #093582; }
+    .link { color: var(--accent-blue); }
+    .link:hover { color: var(--core-blue); }
   </style>
 </head>
-<body class="min-h-screen flex items-center justify-center p-6">
-  <div class="w-full max-w-md bg-white rounded-xl shadow-md p-6">
-    <h1 class="text-2xl font-bold text-gray-800 mb-4">Staff Portal</h1>
-    <p class="text-sm text-gray-600 mb-6">
-      Enter the PIN and select your name to view only your assigned rooms.
-    </p>
+<body class="p-4 sm:p-6 lg:p-8">
+  <div class="container mx-auto max-w-md bg-white p-6 sm:p-8 rounded-xl shadow-md">
+    <header class="mb-6">
+      <h1 class="text-2xl font-bold text-gray-900">Staff Portal</h1>
+      <p class="text-sm text-gray-600 mt-1">Select your name and enter the PIN (if required) to view your dashboard.</p>
+    </header>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
-        <div class="space-y-2 mb-4">
+        <div class="mb-4 space-y-2">
           {% for category, message in messages %}
-            <div class="px-3 py-2 rounded border
-                        {% if category == 'danger' %}bg-red-50 border-red-300 text-red-700{% else %}bg-blue-50 border-blue-300 text-blue-700{% endif %}">
+            <div class="text-sm px-3 py-2 rounded
+                        {% if category == 'danger' %} bg-red-50 text-red-700 border border-red-200
+                        {% elif category == 'success' %} bg-green-50 text-green-700 border border-green-200
+                        {% else %} bg-gray-50 text-gray-700 border border-gray-200 {% endif %}">
               {{ message }}
             </div>
           {% endfor %}
@@ -37,29 +42,46 @@
       {% endif %}
     {% endwith %}
 
-    <form method="POST" action="{{ url_for('staff_portal') }}" class="space-y-4">
+    <form method="POST" action="{{ url_for('staff_portal') }}" class="space-y-5">
+      <!-- Nurse name -->
       <div>
-        <label for="pin" class="block text-sm font-medium text-gray-700">PIN</label>
-        <input id="pin" name="pin" type="password" required
-               class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+        <label for="staff_name" class="block text-sm font-medium text-gray-700 mb-1">Your name</label>
+
+        {% if nurse_names and nurse_names|length > 0 %}
+          <select id="staff_name" name="staff_name"
+                  class="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+            <option value="">Select your name…</option>
+            {% for n in nurse_names %}
+              <option value="{{ n }}" {% if prior_name|default('') == n %}selected{% endif %}>{{ n }}</option>
+            {% endfor %}
+          </select>
+        {% else %}
+          <!-- Fallback text input if no names available -->
+          <input type="text" id="staff_name" name="staff_name" value="{{ prior_name|default('') }}"
+                 placeholder="Type your full name"
+                 class="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"/>
+          <p class="text-xs text-gray-500 mt-1">Tip: add nurses in the Manager Dashboard to enable the dropdown.</p>
+        {% endif %}
       </div>
 
-      <div>
-        <label for="nurse_name" class="block text-sm font-medium text-gray-700">Nurse</label>
-        <select id="nurse_name" name="nurse_name" required
-                class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-          <option value="">Select your name…</option>
-          {% for n in nurses %}
-            <option value="{{ n }}">{{ n }}</option>
-          {% endfor %}
-        </select>
-      </div>
+      <!-- PIN (only shown if portal requires one) -->
+      {% if pin_required %}
+        <div>
+          <label for="pin" class="block text-sm font-medium text-gray-700 mb-1">PIN</label>
+          <input type="password" id="pin" name="pin" inputmode="numeric" autocomplete="off"
+                 class="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"/>
+          <p class="text-xs text-gray-500 mt-1">Ask the charge RN for today’s PIN.</p>
+        </div>
+      {% endif %}
 
-      <button type="submit" class="w-full btn rounded-md py-2 font-medium transition-colors">View My Rooms</button>
+      <button type="submit"
+              class="w-full px-6 py-3 rounded-md shadow-sm text-sm font-medium button-primary transition-colors">
+        Continue
+      </button>
     </form>
 
-    <div class="mt-6 text-center">
-      <a href="{{ url_for('dashboard') }}" class="link">← Back to Full Dashboard</a>
+    <div class="text-center mt-6">
+      <a href="{{ url_for('dashboard') }}" class="link">← Back to Request Dashboard</a>
     </div>
   </div>
 </body>
