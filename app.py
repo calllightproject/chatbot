@@ -43,6 +43,8 @@ def setup_database():
         with engine.connect() as connection:
             with connection.begin():
                 print("Running CREATE TABLE statements...")
+
+                # Core tables
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS requests (
                         id SERIAL PRIMARY KEY,
@@ -57,15 +59,17 @@ def setup_database():
                         is_first_baby BOOLEAN
                     );
                 """))
+
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS assignments (
                         id SERIAL PRIMARY KEY,
                         assignment_date DATE NOT NULL,
                         room_number VARCHAR(255) NOT NULL,
                         staff_name VARCHAR(255) NOT NULL,
-                        UNIQUE(assignment_date, room_number)
+                        UNIQUE (assignment_date, room_number)
                     );
                 """))
+
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS audit_log (
                         id SERIAL PRIMARY KEY,
@@ -74,6 +78,7 @@ def setup_database():
                         details TEXT
                     );
                 """))
+
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS staff (
                         id SERIAL PRIMARY KEY,
@@ -81,24 +86,23 @@ def setup_database():
                         role VARCHAR(50) NOT NULL
                     );
                 """))
+
                 print("CREATE TABLE statements complete.")
 
-                # --- NOT A DEBUG. KEEP: BEGIN: schema fix for assignments + cna_coverage (runs safely every boot) ---
-                # 1) Ensure 'shift' column exists on assignments
+                # --- Schema fix for assignments (shift) + unique index ---
                 try:
                     connection.execute(text("""
                         ALTER TABLE assignments
                         ADD COLUMN IF NOT EXISTS shift VARCHAR(10) NOT NULL DEFAULT 'day';
                     """))
-                    # Drop the default so app always sets it explicitly
                     connection.execute(text("""
                         ALTER TABLE assignments
                         ALTER COLUMN shift DROP DEFAULT;
                     """))
-                except Exception as _e:
-                    pass  # safe to ignore if already correct
+                except Exception:
+                    pass
 
-                # 2) Drop any old UNIQUE (assignment_date, room_number) and add the correct unique (assignment_date, shift, room_number)
+                # Drop any old UNIQUE that doesn't include shift; ensure correct UNIQUE(date, shift, room)
                 try:
                     connection.execute(text("""
                         DO $$
@@ -119,21 +123,19 @@ def setup_database():
                           END IF;
                         END$$;
                     """))
-                except Exception as _e:
+                except Exception:
                     pass
 
-                # add the correct unique if missing
                 try:
                     connection.execute(text("""
                         ALTER TABLE assignments
                         ADD CONSTRAINT assignments_uniq_date_shift_room
                         UNIQUE (assignment_date, shift, room_number);
                     """))
-                except Exception as _e:
-                    # already exists
+                except Exception:
                     pass
 
-                # 3) Ensure cna_coverage table exists
+                # --- CNA coverage table (idempotent) ---
                 try:
                     connection.execute(text("""
                         CREATE TABLE IF NOT EXISTS cna_coverage (
@@ -145,11 +147,35 @@ def setup_database():
                             UNIQUE (assignment_date, shift, zone)
                         );
                     """))
-                except Exception as _e:
+                except Exception:
                     pass
-                # --- END: schema fix ---
 
-                # --- BEGIN: staff languages (safe migration) ---
+                # --- room_state table (reset marker + future tags) ---
+                try:
+                    connection.execute(text("""
+                        CREATE TABLE IF NOT EXISTS room_state (
+                            id SERIAL PRIMARY KEY,
+                            assignment_date DATE NOT NULL,
+                            shift VARCHAR(10) NOT NULL,
+                            room_number VARCHAR(255) NOT NULL,
+                            reset_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                            tags TEXT,  -- JSON string like '[]' or '["spanish_only"]'
+                            UNIQUE (assignment_date, shift, room_number)
+                        );
+                    """))
+                except Exception:
+                    pass
+
+                # Ensure tags has a safe default
+                try:
+                    connection.execute(text("""
+                        UPDATE room_state
+                        SET tags = COALESCE(tags, '[]');
+                    """))
+                except Exception:
+                    pass
+
+                # --- staff.languages (TEXT storing JSON like '["en","es"]') ---
                 try:
                     connection.execute(text("""
                         ALTER TABLE staff
@@ -158,7 +184,6 @@ def setup_database():
                 except Exception:
                     pass
 
-                # Default everyone to ["en"] if NULL
                 try:
                     connection.execute(text("""
                         UPDATE staff
@@ -167,7 +192,7 @@ def setup_database():
                 except Exception:
                     pass
 
-                # Mark Rosie M. as bilingual (adjust name spelling if needed)
+                # Mark Rosie as bilingual (adjust spelling if needed)
                 try:
                     connection.execute(text("""
                         UPDATE staff
@@ -176,33 +201,36 @@ def setup_database():
                     """))
                 except Exception:
                     pass
-                # --- END: staff languages ---
 
-                # Seed initial staff if table empty
+                # Seed initial staff if empty
                 count = connection.execute(text("SELECT COUNT(id) FROM staff;")).scalar()
                 if count == 0:
                     print("Staff table is empty. Populating with initial staff...")
                     for name, role in INITIAL_STAFF.items():
                         connection.execute(text("""
-                            INSERT INTO staff (name, role) VALUES (:name, :role)
+                            INSERT INTO staff (name, role)
+                            VALUES (:name, :role)
                             ON CONFLICT (name) DO NOTHING;
                         """), {"name": name, "role": role})
                     print("Initial staff population complete.")
 
-        # Backward-compat guard (harmless if column already exists above)
-        with engine.connect() as connection:
-            with connection.begin():
-                try:
+        # Backward-compat guard: safe even if column exists already
+        try:
+            with engine.connect() as connection:
+                with connection.begin():
                     connection.execute(text("""
                         ALTER TABLE requests
                         ADD COLUMN deferral_timestamp TIMESTAMP WITH TIME ZONE;
                     """))
-                except ProgrammingError:
-                    pass
+        except ProgrammingError:
+            pass
+        except Exception:
+            pass
 
         print("Database setup complete. Tables are ready.")
     except Exception as e:
         print(f"CRITICAL ERROR during database setup: {e}")
+
 
 setup_database()
 
@@ -827,6 +855,39 @@ def assignments():
         shift=shift
     )
 
+from flask import jsonify  # already present in your file; fine to keep
+
+@app.route('/room/reset', methods=['POST'])
+def room_reset():
+    """Mark a room as 'reset' (new patient) for today's selected shift."""
+    try:
+        today = date.today()
+        shift = (request.form.get('shift') or 'day').lower()
+        room = (request.form.get('room') or '').strip()
+
+        if shift not in ('day', 'night') or not room:
+            return redirect(url_for('assignments', shift=shift or 'day'))
+
+        with engine.connect() as connection:
+            with connection.begin():
+                # preserve existing tags if there is a row already; just bump reset_at
+                connection.execute(text("""
+                    INSERT INTO room_state (assignment_date, shift, room_number, reset_at, tags)
+                    VALUES (:d, :s, :r, NOW(),
+                        COALESCE((SELECT tags FROM room_state
+                                  WHERE assignment_date = :d AND shift = :s AND room_number = :r),
+                                 '[]'))
+                    ON CONFLICT (assignment_date, shift, room_number)
+                    DO UPDATE SET reset_at = EXCLUDED.reset_at;
+                """), {"d": today, "s": shift, "r": room})
+
+        # (Optional future: also clear/mute any room session here if you decide to)
+        return redirect(url_for('assignments', shift=shift))
+    except Exception as e:
+        print(f"ERROR in /room/reset: {e}")
+        # Fail safe: go back to assignments page
+        return redirect(url_for('assignments', shift=(request.form.get('shift') or 'day').lower()))
+
 
 # --- Auth for Manager (unchanged) ---
 @app.route('/login', methods=['GET', 'POST'])
@@ -1206,6 +1267,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
