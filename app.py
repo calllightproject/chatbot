@@ -45,21 +45,33 @@ def setup_database():
                 print("Running CREATE TABLE statements...")
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS requests (
-                        id SERIAL PRIMARY KEY, request_id VARCHAR(255) UNIQUE, timestamp TIMESTAMP WITH TIME ZONE,
-                        completion_timestamp TIMESTAMP WITH TIME ZONE, deferral_timestamp TIMESTAMP WITH TIME ZONE,
-                        room VARCHAR(255), user_input TEXT, category VARCHAR(255), reply TEXT, is_first_baby BOOLEAN
+                        id SERIAL PRIMARY KEY,
+                        request_id VARCHAR(255) UNIQUE,
+                        timestamp TIMESTAMP WITH TIME ZONE,
+                        completion_timestamp TIMESTAMP WITH TIME ZONE,
+                        deferral_timestamp TIMESTAMP WITH TIME ZONE,
+                        room VARCHAR(255),
+                        user_input TEXT,
+                        category VARCHAR(255),
+                        reply TEXT,
+                        is_first_baby BOOLEAN
                     );
                 """))
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS assignments (
-                        id SERIAL PRIMARY KEY, assignment_date DATE NOT NULL, room_number VARCHAR(255) NOT NULL,
-                        staff_name VARCHAR(255) NOT NULL, UNIQUE(assignment_date, room_number)
+                        id SERIAL PRIMARY KEY,
+                        assignment_date DATE NOT NULL,
+                        room_number VARCHAR(255) NOT NULL,
+                        staff_name VARCHAR(255) NOT NULL,
+                        UNIQUE(assignment_date, room_number)
                     );
                 """))
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS audit_log (
-                        id SERIAL PRIMARY KEY, timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
-                        event_type VARCHAR(255) NOT NULL, details TEXT
+                        id SERIAL PRIMARY KEY,
+                        timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+                        event_type VARCHAR(255) NOT NULL,
+                        details TEXT
                     );
                 """))
                 connection.execute(text("""
@@ -71,41 +83,46 @@ def setup_database():
                 """))
                 print("CREATE TABLE statements complete.")
 
-# --- BEGIN: schema fix for assignments + cna_coverage (runs safely every boot) ---
-# 1) Ensure 'shift' column exists on assignments
+                # --- NOT A DEBUG. KEEP: BEGIN: schema fix for assignments + cna_coverage (runs safely every boot) ---
+                # 1) Ensure 'shift' column exists on assignments
                 try:
-                    connection.execute(text("ALTER TABLE assignments ADD COLUMN IF NOT EXISTS shift VARCHAR(10) NOT NULL DEFAULT 'day';"))
-    # Drop the default so app always sets it explicitly
-                    connection.execute(text("ALTER TABLE assignments ALTER COLUMN shift DROP DEFAULT;"))
+                    connection.execute(text("""
+                        ALTER TABLE assignments
+                        ADD COLUMN IF NOT EXISTS shift VARCHAR(10) NOT NULL DEFAULT 'day';
+                    """))
+                    # Drop the default so app always sets it explicitly
+                    connection.execute(text("""
+                        ALTER TABLE assignments
+                        ALTER COLUMN shift DROP DEFAULT;
+                    """))
                 except Exception as _e:
                     pass  # safe to ignore if already correct
 
-# 2) Drop any old UNIQUE (assignment_date, room_number) and add the correct unique (assignment_date, shift, room_number)
+                # 2) Drop any old UNIQUE (assignment_date, room_number) and add the correct unique (assignment_date, shift, room_number)
                 try:
                     connection.execute(text("""
-                    DO $$
-                    DECLARE
-                        cons_name text;
-                    BEGIN
-                      -- find any UNIQUE constraint that only covers (assignment_date, room_number)
-                      SELECT tc.constraint_name INTO cons_name
-                      FROM information_schema.table_constraints tc
-                      JOIN information_schema.constraint_column_usage ccu
-                        ON tc.constraint_name = ccu.constraint_name
-                      WHERE tc.table_name = 'assignments'
-                        AND tc.constraint_type = 'UNIQUE'
-                        AND ccu.column_name IN ('assignment_date','room_number')
-                      LIMIT 1;
+                        DO $$
+                        DECLARE
+                          cons_name text;
+                        BEGIN
+                          SELECT tc.constraint_name INTO cons_name
+                          FROM information_schema.table_constraints tc
+                          JOIN information_schema.constraint_column_usage ccu
+                            ON tc.constraint_name = ccu.constraint_name
+                          WHERE tc.table_name = 'assignments'
+                            AND tc.constraint_type = 'UNIQUE'
+                            AND ccu.column_name IN ('assignment_date','room_number')
+                          LIMIT 1;
 
-                      IF cons_name IS NOT NULL THEN
-                        EXECUTE format('ALTER TABLE assignments DROP CONSTRAINT %I', cons_name);
-                      END IF;
-                    END$$;
+                          IF cons_name IS NOT NULL THEN
+                            EXECUTE format('ALTER TABLE assignments DROP CONSTRAINT %I', cons_name);
+                          END IF;
+                        END$$;
                     """))
                 except Exception as _e:
                     pass
 
-# add the correct unique if missing
+                # add the correct unique if missing
                 try:
                     connection.execute(text("""
                         ALTER TABLE assignments
@@ -113,25 +130,55 @@ def setup_database():
                         UNIQUE (assignment_date, shift, room_number);
                     """))
                 except Exception as _e:
-    # already exists
+                    # already exists
                     pass
 
-# 3) Ensure cna_coverage table exists (your code writes to it)
+                # 3) Ensure cna_coverage table exists
                 try:
                     connection.execute(text("""
                         CREATE TABLE IF NOT EXISTS cna_coverage (
-                        id SERIAL PRIMARY KEY,
-                        assignment_date DATE NOT NULL,
-                        shift VARCHAR(10) NOT NULL,
-                        zone VARCHAR(20) NOT NULL,   -- 'front'/'back'
-                        cna_name VARCHAR(255),
-                        UNIQUE (assignment_date, shift, zone)
-                    );
-                """))
+                            id SERIAL PRIMARY KEY,
+                            assignment_date DATE NOT NULL,
+                            shift VARCHAR(10) NOT NULL,
+                            zone VARCHAR(20) NOT NULL,   -- 'front'/'back'
+                            cna_name VARCHAR(255),
+                            UNIQUE (assignment_date, shift, zone)
+                        );
+                    """))
                 except Exception as _e:
                     pass
-# --- END: schema fix ---
+                # --- END: schema fix ---
 
+                # --- BEGIN: staff languages (safe migration) ---
+                try:
+                    connection.execute(text("""
+                        ALTER TABLE staff
+                        ADD COLUMN IF NOT EXISTS languages TEXT;
+                    """))
+                except Exception:
+                    pass
+
+                # Default everyone to ["en"] if NULL
+                try:
+                    connection.execute(text("""
+                        UPDATE staff
+                        SET languages = COALESCE(languages, '["en"]');
+                    """))
+                except Exception:
+                    pass
+
+                # Mark Rosie M. as bilingual (adjust name spelling if needed)
+                try:
+                    connection.execute(text("""
+                        UPDATE staff
+                        SET languages = '["en","es"]'
+                        WHERE name = 'Rosie M.';
+                    """))
+                except Exception:
+                    pass
+                # --- END: staff languages ---
+
+                # Seed initial staff if table empty
                 count = connection.execute(text("SELECT COUNT(id) FROM staff;")).scalar()
                 if count == 0:
                     print("Staff table is empty. Populating with initial staff...")
@@ -142,10 +189,14 @@ def setup_database():
                         """), {"name": name, "role": role})
                     print("Initial staff population complete.")
 
+        # Backward-compat guard (harmless if column already exists above)
         with engine.connect() as connection:
             with connection.begin():
                 try:
-                    connection.execute(text("ALTER TABLE requests ADD COLUMN deferral_timestamp TIMESTAMP WITH TIME ZONE;"))
+                    connection.execute(text("""
+                        ALTER TABLE requests
+                        ADD COLUMN deferral_timestamp TIMESTAMP WITH TIME ZONE;
+                    """))
                 except ProgrammingError:
                     pass
 
@@ -1155,6 +1206,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
