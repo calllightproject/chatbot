@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>
-    {% if nurse_view|default(false) %}
-      Nurse Dashboard — {{ staff_name|default('') }}
+    {% if nurse_context|default(false) %}
+      My Rooms — {{ nurse_name|default('') }}
     {% else %}
       Real-Time Request Dashboard
     {% endif %}
@@ -17,6 +17,7 @@
       --neutral-gray-text: #303235;
       --light-gray-background: #f5f5f5;
       --white: #ffffff;
+      --border:#e5e7eb;
     }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -25,131 +26,80 @@
       color: var(--neutral-gray-text);
     }
     .dashboard-container {
-      max-width: 900px;
+      max-width: 980px;
       margin: 20px auto;
       background: white;
       padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      border-radius: 12px;
+      border:1px solid var(--border);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.06);
     }
     .header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: start;
       margin-bottom: 12px;
     }
     h1 {
       color: var(--core-blue);
-      margin: 0;
+      margin: 0 0 6px 0;
       font-size: 1.5rem;
     }
     .subline {
-      margin: 6px 0 0 0;
+      margin: 0 0 8px 0;
       font-size: 0.95rem;
       color: #555;
     }
-    .chip {
-      padding: 6px 10px;
-      border-radius: 9999px;
-      background: #eef2f7;
-      border: 1px solid #d7dde6;
-      font-size: 0.85rem;
-      color: #334155;
-    }
-    .nav-actions {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-    .link-btn {
-      display: inline-block;
-      padding: 8px 12px;
-      border-radius: 6px;
-      text-decoration: none;
-      border: 1px solid var(--core-blue);
-      background: var(--core-blue);
-      color: #fff;
-      font-size: 0.9rem;
-      transition: background-color .2s ease;
-      white-space: nowrap;
-    }
-    .link-btn:hover { background: #093582; }
+    .chip-row { display:flex; flex-wrap:wrap; gap:6px; margin: 6px 0 0 0; }
+    .chip { padding:6px 10px; border-radius:9999px; background:#eef2f7; border:1px solid #d7dde6; font-size:.85rem; color:#334155; }
 
-    .toolbar {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      flex-wrap: wrap;
-      margin: 10px 0 14px 0;
+    .actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-self:end; }
+    .link-btn, .btn {
+      display:inline-block; padding:8px 12px; border-radius:8px; text-decoration:none;
+      border:1px solid var(--core-blue); background: var(--core-blue); color:#fff; font-size:.9rem;
+      transition: background-color .2s ease; white-space:nowrap; cursor:pointer;
     }
-    .chip-btn {
-      padding: 6px 10px;
-      border-radius: 9999px;
-      border: 1px solid #d7dde6;
-      text-decoration: none;
-      font-size: 0.85rem;
-      color: #334155;
-      background: #eef2f7;
+    .link-btn:hover, .btn:hover { background:#093582; }
+    .seg {
+      display:inline-flex; border:1px solid var(--border); border-radius:10px; overflow:hidden; background:#fff;
     }
-    .chip-btn.active {
-      background: var(--core-blue);
-      color: #fff;
-      border-color: var(--core-blue);
+    .seg a {
+      padding:8px 10px; text-decoration:none; color:#0f172a; background:#fff;
+      border-right:1px solid var(--border); font-size:.9rem;
     }
-    .toggle-btn, .refresh-btn {
-      padding: 8px 12px;
-      border-radius: 6px;
-      text-decoration: none;
-      border: 1px solid #d7dde6;
-      background: #ffffff;
-      color: #334155;
-      font-size: 0.9rem;
-      cursor: pointer;
-    }
-    .toggle-btn:hover, .refresh-btn:hover { background: #f7f7f7; }
+    .seg a:last-child { border-right:none; }
+    .seg a.active { background:#e6eef8; color:#0b2a6f; font-weight:600; }
 
-    #requests-list { list-style: none; padding: 0; margin: 0; }
+    #requests-list { list-style:none; padding:0; margin:16px 0 0 0; }
     .request-item {
-      display: flex;
-      align-items: center;
-      border: 1px solid #ddd;
-      padding: 15px;
-      margin-bottom: 10px;
-      border-radius: 5px;
-      background-color: #fff;
-      gap: 15px;
-      transition: background-color 0.5s ease, opacity 0.5s ease;
+      display:flex; align-items:center; border:1px solid #ddd; padding:15px; margin-bottom:10px;
+      border-radius:8px; background-color:#fff; gap:15px; transition: background-color .5s ease, opacity .5s ease;
     }
-    .request-item.cna   { border-left: 5px solid var(--accent-blue); }
-    .request-item.nurse { border-left: 5px solid #d43f27; }
+    .request-item.cna   { border-left: 6px solid var(--accent-blue); }
+    .request-item.nurse { border-left: 6px solid #d43f27; }
 
-    .request-item p { margin: 0; font-size: 1.05rem; flex-grow: 1; }
-    .meta { display: flex; gap: 10px; align-items: center; white-space: nowrap; }
-    .role-span { font-size: 0.9rem; color: #555; }
-    .timestamp { font-size: 0.9rem; color: #555; }
+    .request-item p { margin:0; font-size:1.05rem; flex-grow:1; }
+    .meta { display:flex; gap:10px; align-items:center; white-space:nowrap; font-size:.9rem; color:#555; }
+    .role-span { font-size:.9rem; color:#555; }
+    .timestamp { font-size:.9rem; color:#555; }
 
     .request-item button {
-      padding: 8px 12px;
-      border: none;
-      color: white;
-      border-radius: 5px;
-      cursor: pointer;
-      font-size: 14px;
-      transition: opacity 0.3s;
+      padding:8px 12px; border:none; color:white; border-radius:6px; cursor:pointer; font-size:14px; transition:opacity .25s;
     }
-    .ack-button    { background-color: #ffc107; color: #000; }
+    .ack-button    { background-color: #ffc107; color:#000; }
     .omw-button    { background-color: #28a745; }
     .asap-button   { background-color: #6f42c1; }
     .defer-btn     { background-color: #17a2b8; }
     .complete-btn  { background-color: #6c757d; }
-    .request-item button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .request-item button:disabled { opacity:.5; cursor:not-allowed; }
 
-    .status-new    { background-color: #d4edda; }
-    .status-warn   { background-color: #fff3cd; }
-    .status-urgent { background-color: #f8d7da; }
+    .status-new    { background-color: #eefcf1; }
+    .status-warn   { background-color: #fff5dd; }
+    .status-urgent { background-color: #fde8e8; }
+
+    .toolbar { display:flex; align-items:center; gap:10px; margin-top:8px; }
+    .muted { font-size:.85rem; color:#64748b; }
   </style>
 </head>
 <body>
@@ -158,61 +108,52 @@
     <div class="header">
       <div>
         <h1>
-          {% if nurse_view|default(false) %}
-            Nurse Dashboard — {{ staff_name|default('') }}
+          {% if nurse_context|default(false) %}
+            My Rooms — {{ nurse_name|default('') }}
           {% else %}
             Real-Time Request Dashboard
           {% endif %}
         </h1>
-        {% if nurse_view|default(false) %}
-          <p class="subline">
-            Viewing: <strong>{{ 'My Rooms' if scope=='mine' else 'All Requests' }}</strong> — Shift:
-            <strong>{{ shift|capitalize }}</strong>
-          </p>
-          {% if rooms_for_nurse|default([]) %}
-            <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">
-              {% for r in rooms_for_nurse %}
+
+        {% if nurse_context|default(false) %}
+          {% set my_rooms = nurse_rooms|default([]) %}
+          {% if my_rooms and my_rooms|length > 0 %}
+            <div class="subline">Assigned rooms today:</div>
+            <div class="chip-row">
+              {% for r in my_rooms %}
                 <span class="chip">{{ r }}</span>
               {% endfor %}
             </div>
+          {% else %}
+            <div class="subline">No rooms assigned yet for today.</div>
           {% endif %}
         {% endif %}
+
+        <div class="toolbar">
+          {% if nurse_context|default(false) %}
+            <div class="seg" aria-label="Shift">
+              <a href="{{ day_url }}"   class="{% if shift=='day' %}active{% endif %}">Day</a>
+              <a href="{{ night_url }}" class="{% if shift=='night' %}active{% endif %}">Night</a>
+            </div>
+            <div class="seg" aria-label="Scope">
+              <a href="{{ url_for('staff_dashboard_for_nurse', staff_name=nurse_name, shift=shift, scope='mine') }}" class="{% if scope=='mine' %}active{% endif %}">My Rooms</a>
+              <a href="{{ url_for('staff_dashboard_for_nurse', staff_name=nurse_name, shift=shift, scope='all')  }}" class="{% if scope=='all'  %}active{% endif %}">All</a>
+            </div>
+          {% endif %}
+          <button id="manual-refresh" class="btn" type="button">Refresh</button>
+          <span class="muted" id="last-refresh"></span>
+        </div>
       </div>
 
-      <div class="nav-actions">
-        {% if nurse_view|default(false) %}
-          <a class="link-btn" href="{{ url_for('assignments') }}">Assignments</a>
+      <div class="actions">
+        {% if nurse_context|default(false) %}
           <a class="link-btn" href="{{ url_for('dashboard') }}">Manager View</a>
-          <button id="refreshBtn" class="refresh-btn" type="button">Refresh</button>
         {% else %}
-          <a class="link-btn" href="{{ url_for('staff_portal') }}">Staff Portal</a>
-          <a class="link-btn" href="{{ url_for('analytics') }}">Analytics</a>
-          <button id="refreshBtn" class="refresh-btn" type="button">Refresh</button>
+          <a class="link-btn" href="{{ url_for('staff_portal') }}">View My Rooms</a>
+          <a class="link-btn" href="{{ url_for('analytics') }}">View Analytics</a>
         {% endif %}
       </div>
     </div>
-
-    {% if nurse_view|default(false) %}
-      <div class="toolbar">
-        <div>
-          <span class="chip-btn {{ 'active' if shift=='day' else '' }}">
-            <a href="{{ day_url }}" class="{{ 'active' if shift=='day' else '' }}" style="text-decoration:none; color:inherit;">Day</a>
-          </span>
-          <span class="chip-btn {{ 'active' if shift=='night' else '' }}">
-            <a href="{{ night_url }}" class="{{ 'active' if shift=='night' else '' }}" style="text-decoration:none; color:inherit;">Night</a>
-          </span>
-        </div>
-        <a href="{{ toggle_url }}" class="toggle-btn">
-          {{ 'View All Requests' if scope=='mine' else 'View My Rooms Only' }}
-        </a>
-      </div>
-
-      {% if scope == 'mine' and (not active_requests or active_requests|length == 0) %}
-        <div class="mb-4" style="padding:10px;border-radius:6px;background:#f7f7f7;color:#333;">
-          No active requests from your assigned rooms for the {{ shift|capitalize }} shift today.
-        </div>
-      {% endif %}
-    {% endif %}
 
     <ul id="requests-list">
       {% for request in active_requests|default([]) %}
@@ -245,82 +186,18 @@
     </ul>
   </div>
 
+  <!-- Context for JS -->
+  <script>
+    // Template context exposed to JS (safe defaults)
+    const NurseContext = {{ nurse_context|default(false)|tojson }};
+    const NurseName    = {{ nurse_name|default('')|tojson }};
+    const NurseShift   = {{ shift|default('day')|tojson }};
+    const NurseScope   = {{ scope|default('all')|tojson }};
+  </script>
+
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script type="text/javascript">
     var socket = io();
-
-    // Build a cache key unique to the view (so Day/Mine vs Night/All don't clash)
-    const nurseView   = {{ 'true' if nurse_view else 'false' }};
-    const staffName   = "{{ staff_name|default('') }}";
-    const shiftVal    = "{{ shift|default('') }}";
-    const scopeVal    = "{{ scope|default('all') }}";
-    const cacheKey    = nurseView ? `reqcache:${staffName}:${shiftVal}:${scopeVal}` : 'reqcache:manager';
-
-    // ---- persistence helpers
-    function saveToCache(requests) {
-      try {
-        localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), items: requests || [] }));
-      } catch (e) {}
-    }
-    function loadFromCache() {
-      try {
-        const raw = localStorage.getItem(cacheKey);
-        if (!raw) return [];
-        const obj = JSON.parse(raw);
-        return Array.isArray(obj.items) ? obj.items : [];
-      } catch (e) {
-        return [];
-      }
-    }
-
-    // ---- UI helpers
-    function renderRequests(list) {
-      const ul = document.getElementById('requests-list');
-      if (!ul) return;
-
-      ul.innerHTML = '';
-      if (!list || list.length === 0) {
-        const li = document.createElement('li');
-        li.className = 'request-item';
-        li.style.justifyContent = 'center';
-        li.innerHTML = '<p>No active requests.</p>';
-        ul.appendChild(li);
-        return;
-      }
-
-      list.forEach(data => {
-        const li = document.createElement('li');
-        li.className = 'request-item ' + (data.role || '');
-        li.id = data.id || '';
-        li.dataset.id = data.id || '';
-        li.dataset.room = data.room || '';
-        li.dataset.request = data.request || '';
-        li.dataset.role = data.role || '';
-        li.dataset.timestamp = data.timestamp || '';
-
-        let deferBtn = '';
-        if ((data.role || '').toLowerCase() === 'cna') {
-          deferBtn = '<button class="defer-btn">Defer to Nurse</button>';
-        }
-
-        li.innerHTML = `
-          <p>${(data.request || '')}</p>
-          <div class="meta">
-            <span>Room: ${(data.room || '')}</span>
-            <span class="role-span">For: ${(data.role || '').toUpperCase()}</span>
-            <span class="timestamp"></span>
-          </div>
-          <button class="ack-button">Acknowledge</button>
-          <button class="omw-button">On my way</button>
-          <button class="asap-button">Be there ASAP</button>
-          ${deferBtn}
-          <button class="complete-btn">Complete</button>
-        `;
-        ul.appendChild(li);
-      });
-
-      updateAllTimersAndColors();
-    }
 
     let audioContext;
     function playNotificationSound() {
@@ -339,7 +216,7 @@
         gain.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.5);
         osc.start(audioContext.currentTime);
         osc.stop(audioContext.currentTime + 0.5);
-      } catch (e) { /* ignore */ }
+      } catch (_) {}
     }
 
     function updateAllTimersAndColors() {
@@ -363,131 +240,156 @@
       });
     }
 
+    function buildRequestHTML(data) {
+      const isCNA = (data.role || '') === 'cna';
+      const deferBtn = isCNA ? '<button class="defer-btn">Defer to Nurse</button>' : '';
+      return `
+        <p>${(data.request || '')}</p>
+        <div class="meta">
+          <span>Room: ${(data.room || '')}</span>
+          <span class="role-span">For: ${(data.role || '').toUpperCase()}</span>
+          <span class="timestamp"></span>
+        </div>
+        <button class="ack-button">Acknowledge</button>
+        <button class="omw-button">On my way</button>
+        <button class="asap-button">Be there ASAP</button>
+        ${deferBtn}
+        <button class="complete-btn">Complete</button>
+      `;
+    }
+
+    function upsertRequestItem(req) {
+      const list = document.getElementById('requests-list');
+      if (!list || !req || !req.id) return;
+
+      let li = document.getElementById(req.id);
+      if (li) {
+        // Update in place (do not remove)
+        li.dataset.room = req.room || '';
+        li.dataset.request = req.request || '';
+        li.dataset.role = req.role || '';
+        li.dataset.timestamp = req.timestamp || '';
+        li.className = 'request-item ' + (req.role || '');
+        li.innerHTML = buildRequestHTML(req);
+      } else {
+        // Create new
+        li = document.createElement('li');
+        li.id = req.id;
+        li.className = 'request-item ' + (req.role || '');
+        li.dataset.id = req.id || '';
+        li.dataset.room = req.room || '';
+        li.dataset.request = req.request || '';
+        li.dataset.role = req.role || '';
+        li.dataset.timestamp = req.timestamp || '';
+        li.innerHTML = buildRequestHTML(req);
+        list.prepend(li);
+      }
+    }
+
     function addRequestToDashboard(data) {
-      // Merge new item into current list, then re-render and save
-      const current = getCurrentList();
-      if (current.find(x => x.id === data.id)) return; // already present
-
-      current.unshift({
-        id: data.id, room: data.room, request: data.request,
-        role: data.role, timestamp: data.timestamp
-      });
-      saveToCache(current);
-      renderRequests(current);
-      playNotificationSound();
-    }
-
-    function removeRequestFromDashboard(id) {
-      const current = getCurrentList().filter(x => x.id !== id);
-      saveToCache(current);
-      renderRequests(current);
-    }
-
-    function getCurrentList() {
-      const ul = document.getElementById('requests-list');
-      // If UL is empty (first load), use cache
-      if (!ul || ul.children.length === 0) return loadFromCache();
-      // Otherwise rebuild from DOM (authoritative with latest timestamps)
-      const items = Array.from(document.querySelectorAll('#requests-list .request-item[id]'));
-      return items.map(el => ({
-        id: el.dataset.id,
-        room: el.dataset.room,
-        request: el.dataset.request,
-        role: el.dataset.role,
-        timestamp: el.dataset.timestamp
-      }));
-    }
-
-    async function fetchAndSync() {
-      // Hit the API; for nurse view include staff_name, shift, scope
-      const params = new URLSearchParams();
-      if (nurseView) {
-        params.set('staff_name', staffName);
-        params.set('shift', shiftVal || 'day');
-        params.set('scope', scopeVal || 'mine');
-      }
-      const url = '/api/active_requests' + (params.toString() ? `?${params.toString()}` : '');
-
-      try {
-        const res = await fetch(url, { cache: 'no-store' });
-        if (!res.ok) throw new Error('bad response');
-        const payload = await res.json();
-        const list = payload.active_requests || [];
-        saveToCache(list);
-        renderRequests(list);
-      } catch (e) {
-        // If API fails, at least show the cached items
-        renderRequests(loadFromCache());
-      }
+      upsertRequestItem(data);
+      updateAllTimersAndColors();
     }
 
     // --- Socket events ---
     socket.on('new_request', function(data) {
       addRequestToDashboard(data);
+      playNotificationSound();
     });
 
     socket.on('request_updated', function(data) {
-      // Change role in-place, keep original timestamp
-      const current = getCurrentList();
-      const item = current.find(x => x.id === (data.id || ''));
-      if (item) item.role = 'nurse';
-      saveToCache(current);
-      renderRequests(current);
+      const item = document.getElementById(data.id || '');
+      if (item) {
+        item.classList.remove('cna');
+        item.classList.add('nurse');
+        const roleSpan = item.querySelector('.role-span');
+        if (roleSpan) roleSpan.textContent = 'For: NURSE';
+        const deferBtn = item.querySelector('.defer-btn');
+        if (deferBtn) deferBtn.remove();
+        updateAllTimersAndColors(); // keep original timestamp
+      }
     });
 
     socket.on('remove_request', function(data) {
-      removeRequestFromDashboard(data.id || '');
+      const el = document.getElementById(data.id || '');
+      if (el) {
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 500);
+      }
     });
 
-    // --- Click handlers & init ---
+    // --- Click handlers ---
     document.addEventListener('DOMContentLoaded', function() {
       const list = document.getElementById('requests-list');
-      const refreshBtn = document.getElementById('refreshBtn');
+      if (!list) return;
 
-      // 1) Hydrate instantly from cache so nothing disappears on reload
-      renderRequests(loadFromCache());
-      // 2) Then sync from server to get the truth
-      fetchAndSync();
-      // 3) Keep timers updating
+      list.addEventListener('click', function(e) {
+        const btn = e.target;
+        if (btn.tagName !== 'BUTTON') return;
+
+        const item = btn.closest('.request-item');
+        if (!item) return;
+
+        const requestId = item.dataset.id || '';
+        const room = item.dataset.room || '';
+
+        if (btn.classList.contains('ack-button')) {
+          btn.disabled = true;
+          socket.emit('acknowledge_request', { room: room, message: "✅ Your request was received and will be addressed shortly." });
+        } else if (btn.classList.contains('omw-button')) {
+          btn.disabled = true;
+          const ack = item.querySelector('.ack-button'); if (ack) ack.disabled = true;
+          socket.emit('acknowledge_request', { room: room, message: "✅ A team member is on their way." });
+        } else if (btn.classList.contains('asap-button')) {
+          btn.disabled = true;
+          const ack = item.querySelector('.ack-button'); if (ack) ack.disabled = true;
+          const omw = item.querySelector('.omw-button'); if (omw) omw.disabled = true;
+          socket.emit('acknowledge_request', { room: room, message: "A team member is with another patient and will be with you as soon as possible." });
+        } else if (btn.classList.contains('defer-btn')) {
+          socket.emit('defer_request', { id: requestId });
+        } else if (btn.classList.contains('complete-btn')) {
+          socket.emit('complete_request', { request_id: requestId });
+        }
+      });
+
+      // Manual refresh
+      const btnRefresh = document.getElementById('manual-refresh');
+      if (btnRefresh) btnRefresh.addEventListener('click', pollActiveRequests);
+
+      // Start timers + polling
+      updateAllTimersAndColors();
       setInterval(updateAllTimersAndColors, 60000);
-
-      if (list) {
-        list.addEventListener('click', function(e) {
-          const btn = e.target;
-          if (btn.tagName !== 'BUTTON') return;
-
-          const item = btn.closest('.request-item');
-          if (!item) return;
-
-          const requestId = item.dataset.id || '';
-          const room = item.dataset.room || '';
-
-          if (btn.classList.contains('ack-button')) {
-            btn.disabled = true;
-            socket.emit('acknowledge_request', { room: room, message: "✅ Your request was received and will be addressed shortly." });
-          } else if (btn.classList.contains('omw-button')) {
-            btn.disabled = true;
-            const ack = item.querySelector('.ack-button'); if (ack) ack.disabled = true;
-            socket.emit('acknowledge_request', { room: room, message: "✅ A team member is on their way." });
-          } else if (btn.classList.contains('asap-button')) {
-            btn.disabled = true;
-            const ack = item.querySelector('.ack-button'); if (ack) ack.disabled = true;
-            const omw = item.querySelector('.omw-button'); if (omw) omw.disabled = true;
-            socket.emit('acknowledge_request', { room: room, message: "A team member is with another patient and will be with you as soon as possible." });
-          } else if (btn.classList.contains('defer-btn')) {
-            socket.emit('defer_request', { id: requestId });
-          } else if (btn.classList.contains('complete-btn')) {
-            socket.emit('complete_request', { request_id: requestId });
-          }
-        });
-      }
-
-      if (refreshBtn) {
-        refreshBtn.addEventListener('click', function() {
-          fetchAndSync();
-        });
-      }
+      setTimeout(pollActiveRequests, 500);            // initial gentle fetch
+      setInterval(pollActiveRequests, 20000);         // every 20s
     });
+
+    function pollActiveRequests() {
+      // Manager view: show all (no staff_name). Nurse view: pass staff_name, shift, scope.
+      const params = new URLSearchParams();
+      if (NurseContext && NurseName) {
+        params.set('staff_name', NurseName);
+        if (NurseShift) params.set('shift', NurseShift);
+        params.set('scope', NurseScope || 'mine');
+      } else {
+        // Manager view: scope=all
+        params.set('scope', 'all');
+      }
+
+      fetch(`/api/active_requests?${params.toString()}`)
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(json => {
+          const list = json && json.active_requests ? json.active_requests : [];
+          list.forEach(upsertRequestItem); // only add/update, do not remove
+          updateAllTimersAndColors();
+          const ts = new Date();
+          const el = document.getElementById('last-refresh');
+          if (el) el.textContent = `Updated ${ts.toLocaleTimeString()}`;
+        })
+        .catch(() => {
+          const el = document.getElementById('last-refresh');
+          if (el) el.textContent = `Update failed`;
+        });
+    }
   </script>
 </body>
 </html>
