@@ -873,10 +873,7 @@ def manager_dashboard():
 
                         # '', 'unspecified', None => store as NULL
                         pref_raw = (request.form.get('preferred_shift') or '').strip().lower()
-                        if pref_raw in ('day', 'night'):
-                            preferred_shift = pref_raw
-                        else:
-                            preferred_shift = None  # store NULL
+                        preferred_shift = pref_raw if pref_raw in ('day', 'night') else None
 
                         if name:
                             # Upsert on name so edits are easy from the UI
@@ -921,7 +918,7 @@ def manager_dashboard():
                         staff_id = request.form.get('staff_id')
                         new_pin  = (request.form.get('new_pin') or '').strip()
 
-                        if staff_id and new_pin:
+                        if staff_id and new_pin and new_pin.isdigit() and len(new_pin) >= 4:
                             try:
                                 pin_hash = generate_password_hash(new_pin)
                                 connection.execute(text("""
@@ -931,17 +928,57 @@ def manager_dashboard():
                                     WHERE id = :id;
                                 """), {"pin_hash": pin_hash, "id": staff_id})
 
-                                log_to_audit_trail(
-                                    "PIN Set",
-                                    f"Manager set/reset PIN for staff_id={staff_id}"
-                                )
+                                log_to_audit_trail("PIN Set", f"Manager set/reset PIN for staff_id={staff_id}")
                             except Exception as e:
                                 print(f"ERROR setting PIN: {e}")
+                        else:
+                            print("WARN set_pin: invalid staff_id/new_pin")
+
+                    elif action == 'clear_pin':
+                        staff_id = request.form.get('staff_id')
+                        if staff_id:
+                            try:
+                                connection.execute(text("""
+                                    UPDATE staff
+                                    SET pin_hash = NULL,
+                                        pin_set_at = NULL
+                                    WHERE id = :id;
+                                """), {"id": staff_id})
+                                log_to_audit_trail("PIN Cleared", f"Manager cleared PIN for staff_id={staff_id}")
+                            except Exception as e:
+                                print(f"ERROR clearing PIN: {e}")
+                        else:
+                            print("WARN clear_pin: missing staff_id")
 
         except Exception as e:
             print(f"ERROR updating staff: {e}")
 
         return redirect(url_for('manager_dashboard'))
+
+    # ----- GET: fetch staff + recent audit log -----
+    staff_list = []
+    audit_log = []
+    try:
+        with engine.connect() as connection:
+            staff_result = connection.execute(text("""
+                SELECT id, name, role, preferred_shift, pin_hash, pin_set_at
+                FROM staff
+                ORDER BY name;
+            """))
+            staff_list = staff_result.fetchall()
+
+            audit_result = connection.execute(text("""
+                SELECT timestamp, event_type, details
+                FROM audit_log
+                ORDER BY timestamp DESC
+                LIMIT 50;
+            """))
+            audit_log = audit_result.fetchall()
+    except Exception as e:
+        print(f"ERROR fetching manager dashboard data: {e}")
+
+    return render_template('manager_dashboard.html', staff=staff_list, audit_log=audit_log)
+
 
     # ----- GET: fetch staff + recent audit log -----
     staff_list = []
@@ -1300,6 +1337,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
