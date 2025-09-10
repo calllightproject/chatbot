@@ -22,13 +22,15 @@
     .link { color: var(--accent-blue); }
     .link:hover { color: var(--core-blue); }
     .badge { font-size: 0.75rem; line-height: 1rem; }
+    .btn-muted { background:#eef2f7; border:1px solid #d7dde6; color:#334155; }
+    .btn-danger { background:#fee2e2; border:1px solid #fca5a5; color:#991b1b; }
   </style>
 </head>
 <body class="p-4 sm:p-6 lg:p-8">
   <div class="container mx-auto max-w-7xl">
     <header class="mb-8">
       <h1 class="text-3xl font-bold header-title">Manager Dashboard</h1>
-      <p class="text-md mt-1">Manage staff and view system activity.</p>
+      <p class="text-md mt-1">Manage staff, PINs, and view system activity.</p>
     </header>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -37,7 +39,7 @@
         <h2 class="text-xl font-semibold mb-4">Manage Staff</h2>
 
         <!-- Add Staff -->
-        <form action="{{ url_for('manager_dashboard') }}" method="POST" class="mb-6">
+        <form action="{{ url_for('manager_dashboard') }}" method="POST" class="mb-8">
           <input type="hidden" name="action" value="add_staff" />
           <h3 class="text-lg font-medium text-gray-600 mb-2">Add New Staff Member</h3>
 
@@ -50,7 +52,6 @@
 
             <div>
               <label for="role" class="block text-sm font-medium text-gray-700">Role</label>
-              <!-- IMPORTANT: lowercase values -->
               <select name="role" id="role"
                       class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
                 <option value="nurse">Nurse</option>
@@ -60,16 +61,13 @@
 
             <div>
               <label for="preferred_shift" class="block text-sm font-medium text-gray-700">Preferred shift</label>
-              <!-- '' means unspecified -->
               <select name="preferred_shift" id="preferred_shift"
                       class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
                 <option value="">Unspecified</option>
                 <option value="day">Day</option>
                 <option value="night">Night</option>
               </select>
-              <p class="text-xs text-gray-500 mt-1">
-                This is used to group/filter nurses on the Staff Assignments page.
-              </p>
+              <p class="text-xs text-gray-500 mt-1">Used to group/filter nurses on the Staff Assignments page.</p>
             </div>
 
             <button type="submit"
@@ -82,32 +80,69 @@
         <!-- Current Staff -->
         <div>
           <h3 class="text-lg font-medium text-gray-600 mb-2">Current Staff</h3>
-          <ul class="space-y-2">
+          <ul class="space-y-3">
             {% for member in staff %}
-            <li class="flex items-center justify-between bg-gray-50 p-3 rounded-md">
-              <div>
-                <p class="font-medium text-gray-900">{{ member.name }}</p>
-                <div class="flex items-center gap-2 mt-1">
-                  <span class="badge inline-block px-2 py-0.5 rounded bg-blue-100 text-blue-800">
-                    {{ member.role|lower == 'nurse' and 'Nurse' or 'CNA' }}
-                  </span>
-                  {% if member.preferred_shift %}
-                    <span class="badge inline-block px-2 py-0.5 rounded bg-amber-100 text-amber-800">
-                      {{ member.preferred_shift|capitalize }}
+            <li class="bg-gray-50 p-4 rounded-md border border-gray-200">
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <p class="font-semibold text-gray-900">{{ member.name }}</p>
+                  <div class="flex items-center gap-2 mt-1">
+                    <span class="badge inline-block px-2 py-0.5 rounded bg-blue-100 text-blue-800">
+                      {{ member.role|lower == 'nurse' and 'Nurse' or 'CNA' }}
                     </span>
-                  {% else %}
-                    <span class="badge inline-block px-2 py-0.5 rounded bg-gray-100 text-gray-700">
-                      Unspecified
-                    </span>
-                  {% endif %}
+                    {% if member.preferred_shift %}
+                      <span class="badge inline-block px-2 py-0.5 rounded bg-amber-100 text-amber-800">
+                        {{ member.preferred_shift|capitalize }}
+                      </span>
+                    {% else %}
+                      <span class="badge inline-block px-2 py-0.5 rounded bg-gray-100 text-gray-700">
+                        Unspecified
+                      </span>
+                    {% endif %}
+                  </div>
                 </div>
+
+                <!-- Remove -->
+                <form action="{{ url_for('manager_dashboard') }}" method="POST" class="shrink-0">
+                  <input type="hidden" name="action" value="remove_staff" />
+                  <input type="hidden" name="staff_id" value="{{ member.id }}" />
+                  <button type="submit" class="text-red-600 hover:text-red-800 text-sm font-medium">Remove</button>
+                </form>
               </div>
 
-              <form action="{{ url_for('manager_dashboard') }}" method="POST">
-                <input type="hidden" name="action" value="remove_staff" />
-                <input type="hidden" name="staff_id" value="{{ member.id }}" />
-                <button type="submit" class="text-red-500 hover:text-red-700 text-sm font-medium">Remove</button>
-              </form>
+              {% if member.role|lower == 'nurse' %}
+              <!-- PIN Controls -->
+              <div class="mt-4 grid gap-3 sm:grid-cols-3">
+                <!-- Set/Update PIN -->
+                <form action="{{ url_for('manager_dashboard') }}" method="POST" class="sm:col-span-2 flex gap-2">
+                  <input type="hidden" name="action" value="set_pin">
+                  <input type="hidden" name="staff_id" value="{{ member.id }}">
+                  <input
+                    type="password"
+                    name="new_pin"
+                    inputmode="numeric"
+                    pattern="[0-9]*"
+                    minlength="4"
+                    maxlength="10"
+                    placeholder="Set/Update PIN (4+ digits)"
+                    class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    required
+                  >
+                  <button type="submit" class="px-3 py-2 rounded-md text-sm btn-muted hover:bg-white">
+                    Save PIN
+                  </button>
+                </form>
+
+                <!-- Clear PIN -->
+                <form action="{{ url_for('manager_dashboard') }}" method="POST" class="flex">
+                  <input type="hidden" name="action" value="clear_pin">
+                  <input type="hidden" name="staff_id" value="{{ member.id }}">
+                  <button type="submit" class="w-full px-3 py-2 rounded-md text-sm btn-danger hover:bg-white">
+                    Clear PIN
+                  </button>
+                </form>
+              </div>
+              {% endif %}
             </li>
             {% else %}
             <li class="text-gray-500">No staff members found.</li>
