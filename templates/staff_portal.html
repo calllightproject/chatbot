@@ -1,88 +1,73 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Staff Portal</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --core-blue: #00205b;
-      --accent-blue: #007eb4;
-      --light-gray-background: #f5f5f5;
-      --white: #ffffff;
+      --core-blue:#00205b; --accent:#007eb4; --bg:#f5f7fb; --white:#fff; --text:#303235; --border:#e5e7eb;
     }
-    body { font-family: 'Inter', sans-serif; background-color: var(--light-gray-background); }
-    .button-primary { background-color: var(--core-blue); color: var(--white); }
-    .button-primary:hover { background-color: #093582; }
-    .link { color: var(--accent-blue); }
-    .link:hover { color: var(--core-blue); }
+    body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background:var(--bg); color:var(--text); }
+    .wrap { max-width: 520px; margin: 48px auto; background: var(--white); border:1px solid var(--border); border-radius: 12px; box-shadow: 0 10px 24px rgba(0,0,0,.06); }
+    .head { padding: 20px 22px; border-bottom: 1px solid var(--border); }
+    h1 { margin:0; color: var(--core-blue); font-size: 1.4rem; }
+    .body { padding: 22px; }
+    .row { display:flex; gap:12px; margin-bottom: 14px; align-items: center; }
+    label { width: 120px; font-weight: 600; color:#0f172a; }
+    input[type="password"], select, input[type="text"] {
+      flex: 1; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; font-size: 1rem; background:#fff;
+    }
+    .hint { font-size:.9rem; color:#64748b; margin: 6px 0 14px 0; }
+    .actions { display:flex; gap:10px; justify-content: flex-end; padding: 0 22px 22px; }
+    .btn { border:1px solid var(--core-blue); background: var(--core-blue); color:#fff; padding:10px 14px; border-radius: 10px; cursor:pointer; }
+    .btn:hover { background:#093582; }
+    .flash { margin: 14px 22px 0; padding:10px 12px; border-radius:10px; background:#fef3c7; color:#7c2d12; border:1px solid #fde68a; }
   </style>
 </head>
-<body class="p-4 sm:p-6 lg:p-8">
-  <div class="container mx-auto max-w-md bg-white p-6 sm:p-8 rounded-xl shadow-md">
-    <header class="mb-6">
-      <h1 class="text-2xl font-bold text-gray-900">Staff Portal</h1>
-      <p class="text-sm text-gray-600 mt-1">Select your name and enter the PIN (if required) to view your dashboard.</p>
-    </header>
+<body>
+  <div class="wrap">
+    <div class="head">
+      <h1>Staff Portal</h1>
+    </div>
 
-    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% set has_flash = false %}
+    {% with messages = get_flashed_messages() %}
       {% if messages %}
-        <div class="mb-4 space-y-2">
-          {% for category, message in messages %}
-            <div class="text-sm px-3 py-2 rounded
-                        {% if category == 'danger' %} bg-red-50 text-red-700 border border-red-200
-                        {% elif category == 'success' %} bg-green-50 text-green-700 border border-green-200
-                        {% else %} bg-gray-50 text-gray-700 border border-gray-200 {% endif %}">
-              {{ message }}
-            </div>
-          {% endfor %}
+        {% set has_flash = true %}
+        <div class="flash">
+          {% for m in messages %}<div>{{ m }}</div>{% endfor %}
         </div>
       {% endif %}
     {% endwith %}
 
-    <form method="POST" action="{{ url_for('staff_portal') }}" class="space-y-5">
-      <!-- Nurse name -->
-      <div>
-        <label for="staff_name" class="block text-sm font-medium text-gray-700 mb-1">Your name</label>
+    <form method="POST" action="{{ url_for('staff_portal') }}">
+      <div class="body">
+        {% if pin_required %}
+          <div class="row">
+            <label for="pin">PIN</label>
+            <input type="password" id="pin" name="pin" placeholder="Enter PIN" autocomplete="current-password" required>
+          </div>
+          <div class="hint">A valid PIN is required to proceed.</div>
+        {% endif %}
 
-        {% if nurse_names and nurse_names|length > 0 %}
-          <select id="staff_name" name="staff_name"
-                  class="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+        <div class="row">
+          <label for="staff_name">Nurse</label>
+          <select id="staff_name" name="staff_name" required>
             <option value="">Select your name…</option>
             {% for n in nurse_names %}
-              <option value="{{ n }}" {% if prior_name|default('') == n %}selected{% endif %}>{{ n }}</option>
+              <option value="{{ n }}" {% if prior_name and prior_name == n %}selected{% endif %}>{{ n }}</option>
             {% endfor %}
           </select>
-        {% else %}
-          <!-- Fallback text input if no names available -->
-          <input type="text" id="staff_name" name="staff_name" value="{{ prior_name|default('') }}"
-                 placeholder="Type your full name"
-                 class="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"/>
-          <p class="text-xs text-gray-500 mt-1">Tip: add nurses in the Manager Dashboard to enable the dropdown.</p>
-        {% endif %}
+        </div>
+
+        <div class="hint">You’ll be taken to your dashboard. You can switch between Day/Night and My Rooms/All once inside.</div>
       </div>
 
-      <!-- PIN (only shown if portal requires one) -->
-      {% if pin_required %}
-        <div>
-          <label for="pin" class="block text-sm font-medium text-gray-700 mb-1">PIN</label>
-          <input type="password" id="pin" name="pin" inputmode="numeric" autocomplete="off"
-                 class="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"/>
-          <p class="text-xs text-gray-500 mt-1">Ask the charge RN for today’s PIN.</p>
-        </div>
-      {% endif %}
-
-      <button type="submit"
-              class="w-full px-6 py-3 rounded-md shadow-sm text-sm font-medium button-primary transition-colors">
-        Continue
-      </button>
+      <div class="actions">
+        <button class="btn" type="submit">Go to my dashboard</button>
+      </div>
     </form>
-
-    <div class="text-center mt-6">
-      <a href="{{ url_for('dashboard') }}" class="link">← Back to Request Dashboard</a>
-    </div>
   </div>
 </body>
 </html>
