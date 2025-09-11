@@ -973,29 +973,31 @@ def manager_dashboard():
 
         return redirect(url_for('manager_dashboard'))
 
-    # ----- GET: fetch staff + recent audit log -----
-    staff_list = []
-    audit_log = []
-    try:
-        with engine.connect() as connection:
-            staff_result = connection.execute(text("""
-                SELECT id, name, role, preferred_shift, pin_hash, pin_set_at
-                FROM staff
-                ORDER BY name;
-            """))
-            staff_list = staff_result.fetchall()
+   
+   # ----- GET: fetch staff + recent audit log -----
+staff_list = []
+audit_log = []
+try:
+    with engine.connect() as connection:
+        staff_result = connection.execute(text("""
+            SELECT id, name, role, preferred_shift, pin_set_at
+            FROM staff
+            ORDER BY name;
+        """))
+        staff_list = staff_result.fetchall()
 
-            audit_result = connection.execute(text("""
-                SELECT timestamp, event_type, details
-                FROM audit_log
-                ORDER BY timestamp DESC
-                LIMIT 50;
-            """))
-            audit_log = audit_result.fetchall()
-    except Exception as e:
-        print(f"ERROR fetching manager dashboard data: {e}")
+        audit_result = connection.execute(text("""
+            SELECT timestamp, event_type, details
+            FROM audit_log
+            ORDER BY timestamp DESC
+            LIMIT 50;
+        """))
+        audit_log = audit_result.fetchall()
+except Exception as e:
+    print(f"ERROR fetching manager dashboard data: {e}")
 
-    return render_template('manager_dashboard.html', staff=staff_list, audit_log=audit_log)
+return render_template('manager_dashboard.html', staff=staff_list, audit_log=audit_log)
+
 
 
     # ----- GET: fetch staff + recent audit log -----
@@ -1357,6 +1359,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
