@@ -855,23 +855,6 @@ def room_reset():
         return redirect(url_for('assignments', shift=(request.form.get('shift') or 'day').lower()))
 
 
-# --- Auth for Manager (unchanged) ---
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        password = request.form.get('password')
-        if password == os.getenv('MANAGER_PASSWORD'):
-            session['manager_logged_in'] = True
-            return redirect(url_for('manager_dashboard'))
-        else:
-            flash('Invalid password!', 'danger')
-    return render_template('login.html')
-
-@app.route('/logout')
-def logout():
-    session.pop('manager_logged_in', None)
-    return redirect(url_for('login'))
-
 @app.route('/manager-dashboard', methods=['GET', 'POST'])
 def manager_dashboard():
     if not session.get('manager_logged_in'):
@@ -973,33 +956,6 @@ def manager_dashboard():
 
         return redirect(url_for('manager_dashboard'))
 
-   
-   # ----- GET: fetch staff + recent audit log -----
-staff_list = []
-audit_log = []
-try:
-    with engine.connect() as connection:
-        staff_result = connection.execute(text("""
-            SELECT id, name, role, preferred_shift, pin_set_at
-            FROM staff
-            ORDER BY name;
-        """))
-        staff_list = staff_result.fetchall()
-
-        audit_result = connection.execute(text("""
-            SELECT timestamp, event_type, details
-            FROM audit_log
-            ORDER BY timestamp DESC
-            LIMIT 50;
-        """))
-        audit_log = audit_result.fetchall()
-except Exception as e:
-    print(f"ERROR fetching manager dashboard data: {e}")
-
-return render_template('manager_dashboard.html', staff=staff_list, audit_log=audit_log)
-
-
-
     # ----- GET: fetch staff + recent audit log -----
     staff_list = []
     audit_log = []
@@ -1025,30 +981,6 @@ return render_template('manager_dashboard.html', staff=staff_list, audit_log=aud
 
     return render_template('manager_dashboard.html', staff=staff_list, audit_log=audit_log)
 
-
-    # ----- GET: fetch staff + recent audit log -----
-    staff_list = []
-    audit_log = []
-    try:
-        with engine.connect() as connection:
-            staff_result = connection.execute(
-                text("SELECT id, name, role, preferred_shift, pin_set_at FROM staff ORDER BY name;")
-        )
-    staff_list = staff_result.fetchall()
-
-            staff_list = staff_result.fetchall()
-
-            audit_result = connection.execute(text("""
-                SELECT timestamp, event_type, details
-                FROM audit_log
-                ORDER BY timestamp DESC
-                LIMIT 50;
-            """))
-            audit_log = audit_result.fetchall()
-    except Exception as e:
-        print(f"ERROR fetching manager dashboard data: {e}")
-
-    return render_template('manager_dashboard.html', staff=staff_list, audit_log=audit_log)
 
 
 # --- Staff Portal (pilot PIN) -----------------------------------------------
@@ -1359,6 +1291,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
