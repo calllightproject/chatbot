@@ -1375,6 +1375,7 @@ def _valid_room(room_str: str) -> bool:
     n = int(room_str)
     return 231 <= n <= 260
 
+
 # --- Patient namespace — auto-join on connect with ?room_id=XYZ ---
 @socketio.on("connect", namespace="/patient")
 def patient_connect():
@@ -1382,6 +1383,14 @@ def patient_connect():
     if not _valid_room(room_id):
         return False
     join_room(f"patient:{room_id}", namespace="/patient")
+
+    # 🔎 Debug: immediately ping back to patient
+    emit_patient_event(
+        "debug:pong",
+        room_id,
+        {"ts": datetime.now(timezone.utc).isoformat()}
+    )
+
 
 # --- (kept) generic join for dashboards/other rooms ---
 @socketio.on("join")
@@ -1510,6 +1519,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
