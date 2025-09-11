@@ -22,15 +22,29 @@
     .link { color: var(--accent-blue); }
     .link:hover { color: var(--core-blue); }
     .badge { font-size: 0.75rem; line-height: 1rem; }
-    .pin-input { letter-spacing: 0.2em; }
+    .btn { @apply px-3 py-2 rounded-md text-sm font-medium; }
+    .btn-outline { border: 1px solid var(--core-blue); color: var(--core-blue); background: #fff; }
+    .btn-outline:hover { background: #f1f5ff; }
+    .btn-danger { border: 1px solid #dc2626; color: #dc2626; background: #fff; }
+    .btn-danger:hover { background: #fff1f1; }
   </style>
 </head>
 <body class="p-4 sm:p-6 lg:p-8">
   <div class="container mx-auto max-w-7xl">
     <header class="mb-8">
       <h1 class="text-3xl font-bold header-title">Manager Dashboard</h1>
-      <p class="text-md mt-1">Manage staff, PINs, and view system activity.</p>
+      <p class="text-md mt-1">Manage staff, set per-nurse PINs, and view activity.</p>
     </header>
+
+    {% with msgs = get_flashed_messages(with_categories=true) %}
+      {% if msgs %}
+        <div class="space-y-2 mb-4">
+          {% for category, message in msgs %}
+            <div class="p-3 rounded {{ 'bg-green-50 text-green-800' if category=='success' else 'bg-red-50 text-red-800' }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
       <!-- Left: Manage Staff -->
@@ -72,7 +86,7 @@
             </div>
 
             <button type="submit"
-                    class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium button-primary transition-colors">
+                    class="w-full flex justify-center py-2 px-4 rounded-md shadow-sm text-sm font-medium button-primary transition-colors">
               Add Staff
             </button>
           </div>
@@ -83,8 +97,8 @@
           <h3 class="text-lg font-medium text-gray-600 mb-2">Current Staff</h3>
           <ul class="space-y-3">
             {% for member in staff %}
-            <li class="bg-gray-50 p-4 rounded-lg border border-gray-200">
-              <div class="flex flex-col gap-3">
+            <li class="bg-gray-50 p-4 rounded-md">
+              <div class="flex flex-col gap-2">
                 <div class="flex items-start justify-between gap-4">
                   <div>
                     <p class="font-semibold text-gray-900">{{ member.name }}</p>
@@ -101,58 +115,46 @@
                           Unspecified
                         </span>
                       {% endif %}
+                      {% if member.pin_set_at %}
+                        <span class="badge inline-block px-2 py-0.5 rounded bg-green-100 text-green-800" title="PIN set at {{ member.pin_set_at }}">
+                          PIN set
+                        </span>
+                      {% else %}
+                        <span class="badge inline-block px-2 py-0.5 rounded bg-gray-100 text-gray-700">
+                          No PIN
+                        </span>
+                      {% endif %}
                     </div>
                   </div>
 
-                  <form action="{{ url_for('manager_dashboard') }}" method="POST">
+                  <!-- Remove staff -->
+                  <form action="{{ url_for('manager_dashboard') }}" method="POST" class="shrink-0">
                     <input type="hidden" name="action" value="remove_staff" />
                     <input type="hidden" name="staff_id" value="{{ member.id }}" />
-                    <button type="submit" class="text-red-600 hover:text-red-700 text-sm font-medium">Remove</button>
+                    <button type="submit" class="btn btn-danger">Remove</button>
                   </form>
                 </div>
 
                 <!-- PIN controls -->
-                <div class="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
+                <div class="flex flex-wrap items-center gap-2">
                   <form action="{{ url_for('manager_dashboard') }}" method="POST" class="flex items-center gap-2">
                     <input type="hidden" name="action" value="set_pin" />
                     <input type="hidden" name="staff_id" value="{{ member.id }}" />
-                    <label class="text-sm text-gray-700">PIN:</label>
-                    <input
-                      type="password"
-                      name="new_pin"
-                      inputmode="numeric"
-                      pattern="[0-9]{4,8}"
-                      placeholder="4–8 digits"
-                      title="Enter 4–8 digits"
-                      required
-                      class="pin-input w-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    />
-                    <button type="submit"
-                      class="px-3 py-2 rounded-md text-sm font-medium text-white"
-                      style="background-color:#0b6aa2">
-                      Set PIN
-                    </button>
+                    <input type="password" name="new_pin" inputmode="numeric" pattern="[0-9]*" minlength="4" placeholder="Set 4+ digit PIN"
+                           class="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                    <button type="submit" class="btn btn-outline">Set PIN</button>
                   </form>
 
                   <form action="{{ url_for('manager_dashboard') }}" method="POST">
                     <input type="hidden" name="action" value="clear_pin" />
                     <input type="hidden" name="staff_id" value="{{ member.id }}" />
-                    <button type="submit"
-                      class="px-3 py-2 rounded-md text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300">
-                      Clear PIN
-                    </button>
+                    <button type="submit" class="btn btn-outline">Clear PIN</button>
                   </form>
-
-                  {% if member.pin_set_at %}
-                    <span class="text-xs text-gray-500">
-                      Set {{ member.pin_set_at.strftime('%Y-%m-%d %H:%M') }} UTC
-                    </span>
-                  {% endif %}
                 </div>
               </div>
             </li>
             {% else %}
-            <li class="text-gray-500">No staff members found.</li>
+              <li class="text-gray-500">No staff members found.</li>
             {% endfor %}
           </ul>
         </div>
@@ -199,15 +201,15 @@
   <script>
     const socket = io();
     socket.on('new_audit_log', function(data) {
-      const tableBody = document.getElementById('audit-log-body');
-      const noLogsRow = document.getElementById('no-logs-row');
-      if (noLogsRow) noLogsRow.remove();
+      const body = document.getElementById('audit-log-body');
+      const empty = document.getElementById('no-logs-row');
+      if (empty) empty.remove();
 
       const tr = document.createElement('tr');
 
       const tdTime = document.createElement('td');
       tdTime.className = 'px-4 py-4 whitespace-nowrap text-sm text-gray-500';
-      tdTime.textContent = data.timestamp;
+      tdTime.textContent = data.timestamp + ' UTC';
 
       const tdEvent = document.createElement('td');
       tdEvent.className = 'px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900';
@@ -220,7 +222,7 @@
       tr.appendChild(tdTime);
       tr.appendChild(tdEvent);
       tr.appendChild(tdDetails);
-      tableBody.prepend(tr);
+      body.prepend(tr);
     });
   </script>
 </body>
