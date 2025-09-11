@@ -506,24 +506,24 @@ def _current_room() -> str | None:
     return None
 
 def _emit_received_for(room_number: str, user_text: str, kind: str):
-    """Emit 'request:received' for the most recent request in this room (no exact text match needed)."""
-    if not room_number:
+    """Look up the most recent matching request row and emit to the patient room."""
+    if not (room_number and user_text):
         return
     try:
         with engine.connect() as conn:
             row = conn.execute(text("""
                 SELECT request_id, timestamp
                 FROM requests
-                WHERE room = :room
+                WHERE room = :room AND user_input = :txt
                 ORDER BY timestamp DESC
                 LIMIT 1
-            """), {"room": str(room_number)}).fetchone()
+            """), {"room": str(room_number), "txt": user_text}).fetchone()
         if row and row.request_id:
             emit_patient_event("request:received", room_number, {
                 "request_id": row.request_id,
                 "kind": kind,  # "note" or "option"
                 "note": user_text if kind == "note" else "",
-                "created_at": (row.timestamp or datetime.now(timezone.utc)).isoformat(),
+                "created_at": (row.timestamp or datetime.now(timezone.utc)).isoformat()
             })
     except Exception as e:
         print(f"WARN: could not emit request:received for room {room_number}: {e}")
@@ -1555,73 +1555,6 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
