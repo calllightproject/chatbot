@@ -81,7 +81,9 @@ def setup_database():
                         name VARCHAR(255) UNIQUE NOT NULL,
                         role VARCHAR(50) NOT NULL,
                         preferred_shift VARCHAR(10),
-                        languages TEXT
+                        languages TEXT,
+                        pin_hash TEXT,
+                        pin_set_at TIMESTAMPTZ
                     );
                 """))
 
@@ -112,15 +114,18 @@ def setup_database():
 
                 print("CREATE TABLE statements complete.")
 
-                # --- Hardening / idempotent fixes ---
+                # ---------------- Idempotent hardening ----------------
 
-                # Ensure 'shift' column exists on assignments (older DBs)
+                # Ensure 'shift' column exists on older DBs (harmless if already there)
                 try:
                     connection.execute(text("""
                         ALTER TABLE assignments
                         ADD COLUMN IF NOT EXISTS shift VARCHAR(10) NOT NULL DEFAULT 'day';
                     """))
-                    connection.execute(text("ALTER TABLE assignments ALTER COLUMN shift DROP DEFAULT;"))
+                    connection.execute(text("""
+                        ALTER TABLE assignments
+                        ALTER COLUMN shift DROP DEFAULT;
+                    """))
                 except Exception:
                     pass
 
@@ -130,9 +135,9 @@ def setup_database():
                         DO $$
                         BEGIN
                           IF NOT EXISTS (
-                            SELECT 1 FROM pg_indexes
-                            WHERE schemaname = 'public'
-                              AND indexname = 'assignments_uniq_date_shift_room'
+                            SELECT 1
+                            FROM   pg_constraint
+                            WHERE  conname = 'assignments_uniq_date_shift_room'
                           ) THEN
                             ALTER TABLE assignments
                             ADD CONSTRAINT assignments_uniq_date_shift_room
@@ -143,24 +148,37 @@ def setup_database():
                 except Exception:
                     pass
 
-                # Backfill defaults (safe)
+                # Backfill safe defaults
                 try:
-                    connection.execute(text("UPDATE room_state SET tags = COALESCE(tags, '[]'::jsonb);"))
-                except Exception:
-                    pass
-                try:
-                    connection.execute(text("UPDATE staff SET languages = COALESCE(languages, '[""en""]');"))
-                except Exception:
-                    pass
-
-                # ✅ Per-nurse PIN support (hash + timestamp)
-                try:
-                    connection.execute(text("ALTER TABLE staff ADD COLUMN IF NOT EXISTS pin_hash TEXT;"))
-                    connection.execute(text("ALTER TABLE staff ADD COLUMN IF NOT EXISTS pin_set_at TIMESTAMPTZ;"))
+                    connection.execute(text("""
+                        UPDATE room_state
+                        SET tags = COALESCE(tags, '[]'::jsonb);
+                    """))
                 except Exception:
                     pass
 
-        # Keep this separate: older DBs might lack deferral_timestamp
+                try:
+                    connection.execute(text("""
+                        UPDATE staff
+                        SET languages = COALESCE(languages, '["en"]');
+                    """))
+                except Exception:
+                    pass
+
+                # Ensure PIN columns exist on older DBs
+                try:
+                    connection.execute(text("""
+                        ALTER TABLE staff
+                        ADD COLUMN IF NOT EXISTS pin_hash TEXT;
+                    """))
+                    connection.execute(text("""
+                        ALTER TABLE staff
+                        ADD COLUMN IF NOT EXISTS pin_set_at TIMESTAMPTZ;
+                    """))
+                except Exception:
+                    pass
+
+        # Legacy safety: make sure deferral_timestamp exists
         try:
             with engine.connect() as connection:
                 with connection.begin():
@@ -1012,8 +1030,10 @@ def manager_dashboard():
     try:
         with engine.connect() as connection:
             staff_result = connection.execute(
-                text("SELECT id, name, role, preferred_shift FROM staff ORDER BY name;")
-            )
+                text("SELECT id, name, role, preferred_shift, pin_set_at FROM staff ORDER BY name;")
+        )
+    staff_list = staff_result.fetchall()
+
             staff_list = staff_result.fetchall()
 
             audit_result = connection.execute(text("""
@@ -1337,6 +1357,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
