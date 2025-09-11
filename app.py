@@ -491,6 +491,83 @@ def demographics():
     no_text = button_data.get("demographic_no", "No")
     return render_template("demographics.html", question_text=question_text, yes_text=yes_text, no_text=no_text)
 
+# ---- helpers for this block ----
+def _valid_room(room_str: str) -> bool:
+    if not room_str or not str(room_str).isdigit():
+        return False
+    n = int(room_str)
+    return 231 <= n <= 260
+
+def _current_room() -> str | None:
+    # Prefer session, allow override via ?room=XYZ for testing
+    room = session.get("room_number") or request.args.get("room")
+    if room and _valid_room(str(room)):
+        return str(room)
+    return None
+
+def _emit_received_for(room_number: str, user_text: str, kind: str):
+    """Look up the most recent matching request row and emit to the patient room."""
+    if not (room_number and user_text):
+        return
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(text("""
+                SELECT request_id, timestamp
+                FROM requests
+                WHERE room = :room AND user_input = :txt
+                ORDER BY timestamp DESC
+                LIMIT 1
+            """), {"room": str(room_number), "txt": user_text}).fetchone()
+        if row and row.request_id:
+            emit_patient_event("request:received", room_number, {
+                "request_id": row.request_id,
+                "kind": kind,  # "note" or "option"
+                "note": user_text if kind == "note" else "",
+                "created_at": (row.timestamp or datetime.now(timezone.utc)).isoformat()
+            })
+    except Exception as e:
+        print(f"WARN: could not emit request:received for room {room_number}: {e}")
+
+
+# ---------------- Routes ----------------
+
+def _valid_room(room_str: str) -> bool:
+    if not room_str or not str(room_str).isdigit():
+        return False
+    n = int(room_str)
+    return 231 <= n <= 260
+
+def _current_room() -> str | None:
+    # Prefer session, allow ?room=XYZ for testing
+    room = session.get("room_number") or request.args.get("room")
+    if room and _valid_room(str(room)):
+        return str(room)
+    return None
+
+def _emit_received_for(room_number: str, user_text: str, kind: str):
+    """Look up the most recent matching request row and emit to the patient room."""
+    if not (room_number and user_text):
+        return
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(text("""
+                SELECT request_id, timestamp
+                FROM requests
+                WHERE room = :room AND user_input = :txt
+                ORDER BY timestamp DESC
+                LIMIT 1
+            """), {"room": str(room_number), "txt": user_text}).fetchone()
+        if row and row.request_id:
+            emit_patient_event("request:received", room_number, {
+                "request_id": row.request_id,
+                "kind": kind,  # "note" or "option"
+                "note": user_text if kind == "note" else "",
+                "created_at": (row.timestamp or datetime.now(timezone.utc)).isoformat()
+            })
+    except Exception as e:
+        print(f"WARN: could not emit request:received for room {room_number}: {e}")
+
+
 @app.route("/chat", methods=["GET", "POST"])
 def handle_chat():
     pathway = session.get("pathway", "standard")
@@ -503,21 +580,32 @@ def handle_chat():
         print(f"ERROR: Could not load configuration module '{config_module_name}'. Error: {e}")
         return f"Error: Configuration file '{config_module_name}.py' is missing or invalid. Please contact support."
 
+    room_number = _current_room()
+
     if request.method == 'POST':
         if request.form.get("action") == "send_note":
-            note_text = request.form.get("custom_note")
+            note_text = (request.form.get("custom_note") or "").strip()
             if note_text:
-                role = route_note_intelligently(note_text)
+                role = route_note_intelligently(note_text)  # "nurse" or "cna"
                 reply_message = button_data.get(f"{role}_notification", "Your request has been sent.")
-                session['reply'] = process_request(role=role, subject="Custom Patient Note", user_input=note_text, reply_message=reply_message)
+                # Persist + notify (your existing behavior inside process_request)
+                session['reply'] = process_request(
+                    role=role,
+                    subject="Custom Patient Note",
+                    user_input=note_text,
+                    reply_message=reply_message
+                )
                 session['options'] = button_data["main_buttons"]
+
+                # NEW: broadcast to patient page that the request was received
+                if room_number:
+                    _emit_received_for(room_number, note_text, kind="note")
             else:
-                # Use localized empty message if present; fall back to English
                 session['reply'] = button_data.get("empty_custom_note", "Please type a message in the box.")
                 session['options'] = button_data["main_buttons"]
 
         else:
-            user_input = request.form.get("user_input", "").strip()
+            user_input = (request.form.get("user_input") or "").strip()
             if user_input == button_data.get("back_text", "⬅ Back"):
                 session.pop('reply', None)
                 session.pop('options', None)
@@ -539,22 +627,45 @@ def handle_chat():
                     role = "cna" if action == "Notify CNA" else "nurse"
                     subject = f"{role.upper()} Request"
                     notification_message = button_info.get("note", button_data[f"{role}_notification"])
-                    session['reply'] = process_request(role=role, subject=subject, user_input=user_input, reply_message=notification_message)
+
+                    # Persist + notify (your existing behavior inside process_request)
+                    session['reply'] = process_request(
+                        role=role,
+                        subject=subject,
+                        user_input=user_input,
+                        reply_message=notification_message
+                    )
                     session['options'] = button_data["main_buttons"]
+
+                    # NEW: emit "received" for button-driven requests too
+                    if room_number:
+                        _emit_received_for(room_number, user_input, kind="option")
             else:
-                session['reply'] = button_data.get("fallback_unrecognized", "I'm sorry, I didn't understand that. Please use the buttons provided.")
+                session['reply'] = button_data.get(
+                    "fallback_unrecognized",
+                    "I'm sorry, I didn't understand that. Please use the buttons provided."
+                )
                 session['options'] = button_data["main_buttons"]
 
-        return redirect(url_for('handle_chat'))
+        return redirect(url_for('handle_chat', room=room_number) if room_number else url_for('handle_chat'))
 
+    # --- GET: render page ---
     reply = session.pop('reply', button_data["greeting"])
     options = session.pop('options', button_data["main_buttons"])
-    return render_template("chat.html", reply=reply, options=options, button_data=button_data)
+    return render_template(
+        "chat.html",
+        reply=reply,
+        options=options,
+        button_data=button_data,
+        room_number=room_number  # needed by chat.html Socket.IO connect
+    )
+
 
 @app.route("/reset-language")
 def reset_language():
     session.clear()
     return redirect(url_for("language_selector"))
+
 
 @app.route("/dashboard")
 def dashboard():
@@ -573,11 +684,12 @@ def dashboard():
                     'room': row.room,
                     'request': row.user_input,
                     'role': row.role,
-                    'timestamp': row.timestamp.isoformat()
+                    'timestamp': row.timestamp.isoformat() if row.timestamp else None
                 })
     except Exception as e:
         print(f"ERROR fetching active requests: {e}")
     return render_template("dashboard.html", active_requests=active_requests)
+
 
 # --- Analytics ---
 @app.route('/analytics')
@@ -1232,65 +1344,168 @@ def debug_assignments_today():
 
 
 # --- SocketIO Event Handlers ---
-@socketio.on('join')
+
+# If you already defined this elsewhere, keep only one copy.
+def emit_patient_event(event: str, room_number: str | int, payload: dict):
+    """Emit an event to the patient's socket.io room."""
+    socketio.emit(
+        event,
+        {"room_id": str(room_number), **(payload or {})},
+        to=f"patient:{room_number}",
+        namespace="/patient",
+    )
+
+def _get_room_for_request(request_id: str | int) -> str | None:
+    """Look up room number for a given request_id from the requests table."""
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT room FROM requests WHERE request_id = :rid LIMIT 1"),
+                {"rid": request_id},
+            ).fetchone()
+            if row and row[0]:
+                return str(row[0])
+    except Exception as e:
+        print(f"ERROR reading room for request {request_id}: {e}")
+    return None
+
+def _valid_room(room_str: str) -> bool:
+    if not room_str or not str(room_str).isdigit():
+        return False
+    n = int(room_str)
+    return 231 <= n <= 260
+
+# --- Patient namespace — auto-join on connect with ?room_id=XYZ ---
+@socketio.on("connect", namespace="/patient")
+def patient_connect():
+    room_id = (request.args.get("room_id") or "").strip()
+    if not _valid_room(room_id):
+        return False
+    join_room(f"patient:{room_id}", namespace="/patient")
+
+# --- (kept) generic join for dashboards/other rooms ---
+@socketio.on("join")
 def on_join(data):
-    room = data['room']
-    join_room(room)
+    room = data.get("room")
+    if room:
+        join_room(room)
 
-@socketio.on('acknowledge_request')
+# Nurse clicks "On My Way" (acknowledge)
+@socketio.on("acknowledge_request")
 def handle_acknowledge(data):
-    room = data['room']
-    message = data['message']
-    socketio.emit('status_update', {'message': message}, to=room)
+    """
+    Expected data:
+      - request_id (recommended)
+      - nurse_name (optional)
+      - room_number (optional; if missing we'll look it up)
+      - room (optional; your existing dashboard room for status_update)
+      - message (optional; your existing dashboard status string)
+    """
+    # Keep your existing dashboard broadcast (if you use it)
+    dash_room = data.get("room")
+    if dash_room and "message" in data:
+        socketio.emit("status_update", {"message": data["message"]}, to=dash_room)
 
-@socketio.on('defer_request')
+    # Patient-side emit
+    room_number = data.get("room_number")
+    if not room_number and data.get("request_id"):
+        room_number = _get_room_for_request(data["request_id"])
+
+    if room_number and _valid_room(str(room_number)):
+        emit_patient_event(
+            "request:status",
+            room_number,
+            {
+                "request_id": data.get("request_id"),
+                "status": "omw",
+                "nurse": data.get("nurse_name"),
+                "ts": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+
+# "Defer" (re-route to nurse) — dashboard only
+@socketio.on("defer_request")
 def handle_defer_request(data):
-    request_id = data.get('id')
+    request_id = data.get("id")
     if not request_id:
         return
     now_utc = datetime.now(timezone.utc)
-    new_timestamp_iso = now_utc.isoformat()
     try:
         with engine.connect() as connection:
             with connection.begin():
-                # IMPORTANT: do NOT overwrite original timestamp; only set category + deferral_timestamp
-                connection.execute(text("""
-                    UPDATE requests
-                    SET category = 'nurse', deferral_timestamp = :now
-                    WHERE request_id = :request_id;
-                """), {"now": now_utc, "request_id": request_id})
-        socketio.emit('request_updated', {
-            'id': request_id, 'new_role': 'nurse', 'new_timestamp': new_timestamp_iso
-        })
+                connection.execute(
+                    text("""
+                        UPDATE requests
+                        SET category = 'nurse', deferral_timestamp = :now
+                        WHERE request_id = :request_id;
+                    """),
+                    {"now": now_utc, "request_id": request_id},
+                )
+        socketio.emit(
+            "request_updated",
+            {"id": request_id, "new_role": "nurse", "new_timestamp": now_utc.isoformat()},
+        )
         log_to_audit_trail("Request Deferred", f"Request ID: {request_id} deferred to NURSE.")
     except Exception as e:
         print(f"ERROR deferring request {request_id}: {e}")
 
-@socketio.on('complete_request')
+# Nurse marks "Complete"
+@socketio.on("complete_request")
 def handle_complete_request(data):
-    request_id = data.get('request_id')
-    if request_id:
-        try:
-            with engine.connect() as connection:
-                trans = connection.begin()
-                try:
-                    connection.execute(text("""
+    """
+    Expected data:
+      - request_id (required)
+      - nurse_name (optional)
+      - room_number (optional; if missing, we'll look it up)
+    """
+    request_id = data.get("request_id")
+    if not request_id:
+        return
+
+    now_utc = datetime.now(timezone.utc)
+    try:
+        with engine.connect() as connection:
+            trans = connection.begin()
+            try:
+                connection.execute(
+                    text("""
                         UPDATE requests
                         SET completion_timestamp = :now
                         WHERE request_id = :request_id;
-                    """), {"now": datetime.now(timezone.utc), "request_id": request_id})
-                    trans.commit()
-                    log_to_audit_trail("Request Completed", f"Request ID: {request_id} marked as complete.")
-                except Exception:
-                    trans.rollback()
-                    raise
-            socketio.emit('remove_request', {'id': request_id})
-        except Exception as e:
-            print(f"ERROR updating completion timestamp: {e}")
+                    """),
+                    {"now": now_utc, "request_id": request_id},
+                )
+                trans.commit()
+                log_to_audit_trail("Request Completed", f"Request ID: {request_id} marked as complete.")
+            except Exception:
+                trans.rollback()
+                raise
+
+        # Remove from dashboards
+        socketio.emit("remove_request", {"id": request_id})
+
+        # Notify patient
+        room_number = data.get("room_number") or _get_room_for_request(request_id)
+        if room_number and _valid_room(str(room_number)):
+            emit_patient_event(
+                "request:done",
+                room_number,
+                {
+                    "request_id": request_id,
+                    "status": "completed",
+                    "nurse": data.get("nurse_name"),
+                    "ts": now_utc.isoformat(),
+                },
+            )
+    except Exception as e:
+        print(f"ERROR updating completion timestamp: {e}")
+
+
 
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
