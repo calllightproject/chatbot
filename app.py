@@ -1390,7 +1390,7 @@ def on_join(data):
     if room:
         join_room(room)
 
-# Nurse clicks "On My Way" (acknowledge)
+# Nurse/CNA acknowledges / on-my-way / asap (one handler, 3 statuses)
 @socketio.on("acknowledge_request")
 def handle_acknowledge(data):
     """
@@ -1398,6 +1398,7 @@ def handle_acknowledge(data):
       - request_id (recommended)
       - nurse_name (optional)
       - room_number (optional; if missing we'll look it up)
+      - status: "ack" | "omw" | "asap"   <-- REQUIRED for patient messaging
       - room (optional; your existing dashboard room for status_update)
       - message (optional; your existing dashboard status string)
     """
@@ -1406,7 +1407,11 @@ def handle_acknowledge(data):
     if dash_room and "message" in data:
         socketio.emit("status_update", {"message": data["message"]}, to=dash_room)
 
-    # Patient-side emit
+    # Patient-side emit (only for ack/omw/asap)
+    status = (data.get("status") or "ack").lower()
+    if status not in ("ack", "omw", "asap"):
+        return  # ignore unknown statuses
+
     room_number = data.get("room_number")
     if not room_number and data.get("request_id"):
         room_number = _get_room_for_request(data["request_id"])
@@ -1417,13 +1422,13 @@ def handle_acknowledge(data):
             room_number,
             {
                 "request_id": data.get("request_id"),
-                "status": "omw",
+                "status": status,  # "ack" | "omw" | "asap"
                 "nurse": data.get("nurse_name"),
                 "ts": datetime.now(timezone.utc).isoformat(),
             },
         )
 
-# "Defer" (re-route to nurse) — dashboard only
+# "Defer" (re-route to nurse) — dashboard only (no patient message)
 @socketio.on("defer_request")
 def handle_defer_request(data):
     request_id = data.get("id")
@@ -1449,7 +1454,7 @@ def handle_defer_request(data):
     except Exception as e:
         print(f"ERROR deferring request {request_id}: {e}")
 
-# Nurse marks "Complete"
+# Nurse/CNA marks "Complete"
 @socketio.on("complete_request")
 def handle_complete_request(data):
     """
@@ -1484,7 +1489,7 @@ def handle_complete_request(data):
         # Remove from dashboards
         socketio.emit("remove_request", {"id": request_id})
 
-        # Notify patient
+        # Notify patient with a short confirmation
         room_number = data.get("room_number") or _get_room_for_request(request_id)
         if room_number and _valid_room(str(room_number)):
             emit_patient_event(
@@ -1505,6 +1510,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
