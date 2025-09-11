@@ -1240,6 +1240,19 @@ def staff_dashboard_for_nurse(staff_name):
         night_url=night_url,
         toggle_url=toggle_url
     )
+@app.get("/debug/ping_patient")
+def debug_ping_patient():
+    room = request.args.get("room", "").strip()
+    status = request.args.get("status", "ack").strip().lower()  # ack|omw|asap
+    if not _valid_room(room):
+        return jsonify({"ok": False, "error": "invalid room"}), 400
+    emit_patient_event("request:status", room, {
+        "request_id": "debug",
+        "status": status,
+        "nurse": "Debug",
+        "ts": datetime.now(timezone.utc).isoformat()
+    })
+    return jsonify({"ok": True, "room": room, "status": status})
 
 
 @app.route('/api/active_requests')
@@ -1547,6 +1560,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
