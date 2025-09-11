@@ -186,30 +186,56 @@
     <!-- Socket.IO -->
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script>
-      // Template var (may be empty/None if not set on server)
+      // Room resolution (template or URL fallback)
       const TEMPLATE_ROOM = "{{ room_number or '' }}";
-      // URL fallback: /chat?room=241
       const urlRoom = new URLSearchParams(location.search).get('room') || '';
-      // Final choice
       const ROOM_NUMBER = (TEMPLATE_ROOM && TEMPLATE_ROOM !== 'None') ? TEMPLATE_ROOM : urlRoom;
 
+      // Optional i18n map from server config (falls back to English below if missing)
+      const PM = {{ button_data.get('patient_messages', {})|tojson }};
+
+      // Helpers
       const statusEl = document.getElementById('live-status');
       function showStatus(msg){ statusEl.textContent = msg; statusEl.style.display = 'block'; }
       function toast(msg){ const el=document.createElement('div'); el.className='toast'; el.textContent=msg; document.body.appendChild(el); setTimeout(()=>el.remove(),2800); }
+      function fmt(tpl, vars){ return (tpl || '').replace(/\{(\w+)\}/g, (_, k) => (vars && vars[k] !== undefined) ? vars[k] : ''); }
 
-      // Visible debug (safe)
-      console.log("[patient] ROOM_NUMBER=", ROOM_NUMBER);
+      // Role labels (fallbacks). If PM.role_labels exists, we use that.
+      const RoleLabel = (PM.role_labels && typeof PM.role_labels === 'object') ? PM.role_labels : {
+        nurse: "nurse",
+        cna: "nursing assistant"
+      };
+      function roleLabel(raw){
+        const key = (raw || 'nurse').toLowerCase();
+        return RoleLabel[key] || RoleLabel['nurse'] || key;
+      }
+
+      // Whether to append staff names in messages (off by default here)
+      const SHOW_NAME = false;
+      function namePart(nurse){ return (SHOW_NAME && nurse) ? ` (${nurse})` : ''; }
+
+      // Message fallbacks (English) if not provided in PM
+      const STR = {
+        received:      PM.received      || "Your request has been received by the nurse station.",
+        ack:           PM.ack           || "Your {role} has acknowledged your request{name}.",
+        omw:           PM.omw           || "Your {role} is on their way for your request{name}.",
+        asap:          PM.asap          || "Your {role} is in another room and will be with you as soon as possible{name}.",
+        done:          PM.done          || "All set — your request has been marked complete{name}.",
+        queue_initial: PM.queue_initial || "Your request is still in the queue. A team member will be with you soon.",
+        queue_followup:PM.queue_followup|| "Thank you for your patience — your request is still in the queue."
+      };
+
+      // Connect
       if (!ROOM_NUMBER) showStatus("No room number found. Try /chat?room=241");
-
       const socket = io("/patient", { query: { room_id: ROOM_NUMBER } });
 
-      // --- Optional: gentle nudge if no staff action within 2 minutes ---
+      // Nudge if no staff action within 2 minutes
       let nudgeTimer = setTimeout(() => {
-        showStatus("Your request is still in the queue. A team member will be with you soon.");
-        toast("Still in queue — a team member will be with you soon.");
+        showStatus(STR.queue_initial);
+        toast(STR.queue_initial);
       }, 2 * 60 * 1000);
 
-      function cancelNudge() {
+      function cancelNudge(){
         if (nudgeTimer) { clearTimeout(nudgeTimer); nudgeTimer = null; }
       }
 
@@ -222,42 +248,47 @@
         showStatus("Connection error: " + (err && err.message ? err.message : "unknown"));
       });
 
+      // Server confirms it saved the request and broadcasted receipt
       socket.on("request:received", (data) => {
         if (String(data.room_id) !== String(ROOM_NUMBER)) return;
-        showStatus("Your request has been received by the nurse station.");
+        showStatus(STR.received);
         toast("Request received.");
         cancelNudge();
-        // restart a shorter nudge for long waits after receipt (optional)
+        // Optional: follow-up nudge if a long wait after receipt (6 min)
         nudgeTimer = setTimeout(() => {
-          showStatus("Thank you for your patience — your request is still in the queue.");
-          toast("Still in queue — thanks for your patience.");
-        }, 6 * 60 * 1000); // 6 minutes after receipt (adjust as desired)
+          showStatus(STR.queue_followup);
+          toast(STR.queue_followup);
+        }, 6 * 60 * 1000);
       });
 
+      // Staff action updates (ack | omw | asap)
       socket.on("request:status", (data) => {
         if (String(data.room_id) !== String(ROOM_NUMBER)) return;
         cancelNudge();
-        const who = data.nurse ? ` (${data.nurse})` : "";
-        switch ((data.status || "").toLowerCase()) {
-          case "ack":
-            showStatus(`Your nurse/CNA has acknowledged your request${who}.`);
-            toast("Request acknowledged.");
-            break;
-          case "omw":
-            showStatus(`Your nurse/CNA is on their way for your request${who}.`);
-            toast("Nurse/CNA on the way.");
-            break;
-          case "asap":
-            showStatus(`Your nurse/CNA is in another room and will be with you as soon as possible${who}.`);
-            toast("They’ll be there ASAP.");
-            break;
+        const status = (data.status || '').toLowerCase();
+        const role = roleLabel(data.role || 'nurse');
+        const name = namePart(data.nurse);
+
+        let tpl = "";
+        if (status === "ack") tpl = STR.ack;
+        else if (status === "omw") tpl = STR.omw;
+        else if (status === "asap") tpl = STR.asap;
+
+        if (tpl) {
+          const msg = fmt(tpl, { role, name });
+          showStatus(msg);
+          toast(msg);
         }
       });
 
+      // Completion confirmation
       socket.on("request:done", (data) => {
         if (String(data.room_id) !== String(ROOM_NUMBER)) return;
         cancelNudge();
-        showStatus("All set — your request has been marked complete.");
+        const role = roleLabel(data.role || 'nurse');
+        const name = namePart(data.nurse);
+        const msg = fmt(STR.done, { role, name });
+        showStatus(msg);
         toast("Request completed.");
       });
 
