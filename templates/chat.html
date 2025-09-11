@@ -186,20 +186,20 @@
     <!-- Socket.IO -->
     <script src="/socket.io/socket.io.js"></script>
     <script>
-      const ROOM_NUMBER = "{{ room_number }}";
-      const statusEl = document.getElementById('live-status');
+      // Template var (may be empty/None if not set on server)
+      const TEMPLATE_ROOM = "{{ room_number or '' }}";
+      // URL fallback: /chat?room=241
+      const urlRoom = new URLSearchParams(location.search).get('room') || '';
+      // Final choice
+      const ROOM_NUMBER = (TEMPLATE_ROOM && TEMPLATE_ROOM !== 'None') ? TEMPLATE_ROOM : urlRoom;
 
-      function showStatus(msg) {
-        statusEl.textContent = msg;
-        statusEl.style.display = 'block';
-      }
-      function toast(msg) {
-        const el = document.createElement('div');
-        el.className = 'toast';
-        el.textContent = msg;
-        document.body.appendChild(el);
-        setTimeout(() => el.remove(), 2800);
-      }
+      const statusEl = document.getElementById('live-status');
+      function showStatus(msg){ statusEl.textContent = msg; statusEl.style.display = 'block'; }
+      function toast(msg){ const el=document.createElement('div'); el.className='toast'; el.textContent=msg; document.body.appendChild(el); setTimeout(()=>el.remove(),2800); }
+
+      // Visible debug
+      console.log("[patient] TEMPLATE_ROOM=", TEMPLATE_ROOM, " urlRoom=", urlRoom, " ROOM_NUMBER=", ROOM_NUMBER);
+      if (!ROOM_NUMBER) showStatus("No room number found. Try /chat?room=241");
 
       const socket = io("/patient", { query: { room_id: ROOM_NUMBER } });
 
@@ -207,9 +207,15 @@
         showStatus("Connected for Room " + ROOM_NUMBER);
       });
 
-      // 🔎 Debug: confirm patient room join works
+      socket.on("connect_error", (err) => {
+        console.error("[patient] connect_error:", err);
+        showStatus("Connection error: " + (err && err.message ? err.message : "unknown"));
+      });
+
+      // 🔎 Debug pings from server
       socket.on("debug:pong", (data) => {
-        toast("✅ Connected test message at " + data.ts);
+        console.log("[patient] debug:pong", data);
+        toast("✅ Connected test message at " + (data && data.ts ? data.ts : ""));
       });
 
       socket.on("request:received", (data) => {
@@ -221,7 +227,7 @@
       socket.on("request:status", (data) => {
         if (String(data.room_id) !== String(ROOM_NUMBER)) return;
         const who = data.nurse ? ` (${data.nurse})` : "";
-        switch (data.status) {
+        switch ((data.status || "").toLowerCase()) {
           case "ack":
             showStatus(`Your nurse/CNA has acknowledged your request${who}.`);
             toast("Request acknowledged.");
