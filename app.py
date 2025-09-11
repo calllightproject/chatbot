@@ -1397,12 +1397,7 @@ def patient_connect():
         return False
     join_room(f"patient:{room_id}", namespace="/patient")
 
-    # 🔎 Debug: immediately ping back to patient
-    emit_patient_event(
-        "debug:pong",
-        room_id,
-        {"ts": datetime.now(timezone.utc).isoformat()}
-    )
+
 
 
 # --- (kept) generic join for dashboards/other rooms ---
@@ -1560,6 +1555,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
