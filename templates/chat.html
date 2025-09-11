@@ -197,11 +197,21 @@
       function showStatus(msg){ statusEl.textContent = msg; statusEl.style.display = 'block'; }
       function toast(msg){ const el=document.createElement('div'); el.className='toast'; el.textContent=msg; document.body.appendChild(el); setTimeout(()=>el.remove(),2800); }
 
-      // Visible debug
-      console.log("[patient] TEMPLATE_ROOM=", TEMPLATE_ROOM, " urlRoom=", urlRoom, " ROOM_NUMBER=", ROOM_NUMBER);
+      // Visible debug (safe)
+      console.log("[patient] ROOM_NUMBER=", ROOM_NUMBER);
       if (!ROOM_NUMBER) showStatus("No room number found. Try /chat?room=241");
 
       const socket = io("/patient", { query: { room_id: ROOM_NUMBER } });
+
+      // --- Optional: gentle nudge if no staff action within 2 minutes ---
+      let nudgeTimer = setTimeout(() => {
+        showStatus("Your request is still in the queue. A team member will be with you soon.");
+        toast("Still in queue — a team member will be with you soon.");
+      }, 2 * 60 * 1000);
+
+      function cancelNudge() {
+        if (nudgeTimer) { clearTimeout(nudgeTimer); nudgeTimer = null; }
+      }
 
       socket.on("connect", () => {
         showStatus("Connected for Room " + ROOM_NUMBER);
@@ -212,20 +222,21 @@
         showStatus("Connection error: " + (err && err.message ? err.message : "unknown"));
       });
 
-      // 🔎 Debug pings from server
-      socket.on("debug:pong", (data) => {
-        console.log("[patient] debug:pong", data);
-        toast("✅ Connected test message at " + (data && data.ts ? data.ts : ""));
-      });
-
       socket.on("request:received", (data) => {
         if (String(data.room_id) !== String(ROOM_NUMBER)) return;
         showStatus("Your request has been received by the nurse station.");
         toast("Request received.");
+        cancelNudge();
+        // restart a shorter nudge for long waits after receipt (optional)
+        nudgeTimer = setTimeout(() => {
+          showStatus("Thank you for your patience — your request is still in the queue.");
+          toast("Still in queue — thanks for your patience.");
+        }, 6 * 60 * 1000); // 6 minutes after receipt (adjust as desired)
       });
 
       socket.on("request:status", (data) => {
         if (String(data.room_id) !== String(ROOM_NUMBER)) return;
+        cancelNudge();
         const who = data.nurse ? ` (${data.nurse})` : "";
         switch ((data.status || "").toLowerCase()) {
           case "ack":
@@ -245,6 +256,7 @@
 
       socket.on("request:done", (data) => {
         if (String(data.room_id) !== String(ROOM_NUMBER)) return;
+        cancelNudge();
         showStatus("All set — your request has been marked complete.");
         toast("Request completed.");
       });
@@ -255,4 +267,3 @@
     </script>
 </body>
 </html>
-
