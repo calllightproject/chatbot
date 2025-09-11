@@ -317,7 +317,6 @@
         setTimeout(() => el.remove(), 500);
       }
     });
-
     // --- Click handlers (UPDATED) ---
     document.addEventListener('DOMContentLoaded', function() {
       const list = document.getElementById('requests-list');
@@ -327,49 +326,68 @@
         const btn = e.target;
         if (btn.tagName !== 'BUTTON') return;
 
-        const item = btn.closest('.request-item');
+        const item       = btn.closest('.request-item');
         if (!item) return;
 
-        const requestId   = item.dataset.id || '';
-        const roomNumber  = item.dataset.room || '';   // patient room number (string)
-        const dashRoom    = item.dataset.room || '';   // re-use for your dashboard status_update
-        const nurseName   = NurseName || '';
+        const requestId  = item.dataset.id   || '';
+        const roomNumber = item.dataset.room || '';   // patient room number
+        const dashRoom   = item.dataset.room || '';   // for dashboard broadcast
+        const nurseName  = NurseName || '';
+        const role       = item.dataset.role || 'nurse';
 
-        function sendAck(status, dashMessage) {
+        if (btn.classList.contains('ack-button')) {
+          btn.disabled = true;
           socket.emit('acknowledge_request', {
             request_id: requestId,
             room_number: roomNumber,
             nurse_name: nurseName,
-            status: status,      // "ack" | "omw" | "asap"
+            role: role,
+            status: "ack",
             room: dashRoom,
-            message: dashMessage
+            message: "✅ Your request was received and will be addressed shortly."
           });
-        }
-
-        if (btn.classList.contains('ack-button')) {
-          btn.disabled = true;
-          sendAck('ack', "✅ Request acknowledged.");
         } else if (btn.classList.contains('omw-button')) {
           btn.disabled = true;
-          const ack = item.querySelector('.ack-button'); if (ack) ack.disabled = true;
-          sendAck('omw', "✅ On my way.");
+          const ack = item.querySelector('.ack-button'); 
+          if (ack) ack.disabled = true;
+          socket.emit('acknowledge_request', {
+            request_id: requestId,
+            room_number: roomNumber,
+            nurse_name: nurseName,
+            role: role,
+            status: "omw",
+            room: dashRoom,
+            message: "✅ A team member is on their way."
+          });
         } else if (btn.classList.contains('asap-button')) {
           btn.disabled = true;
-          const ack = item.querySelector('.ack-button'); if (ack) ack.disabled = true;
-          const omw = item.querySelector('.omw-button'); if (omw) omw.disabled = true;
-          sendAck('asap', "In another room — will be there ASAP.");
+          const ack = item.querySelector('.ack-button'); 
+          if (ack) ack.disabled = true;
+          const omw = item.querySelector('.omw-button'); 
+          if (omw) omw.disabled = true;
+          socket.emit('acknowledge_request', {
+            request_id: requestId,
+            room_number: roomNumber,
+            nurse_name: nurseName,
+            role: role,
+            status: "asap",
+            room: dashRoom,
+            message: "A team member is with another patient and will be with you as soon as possible."
+          });
         } else if (btn.classList.contains('defer-btn')) {
-          // No patient message for defer
           socket.emit('defer_request', { id: requestId });
         } else if (btn.classList.contains('complete-btn')) {
           socket.emit('complete_request', {
             request_id: requestId,
             room_number: roomNumber,
-            nurse_name: nurseName
+            nurse_name: nurseName,
+            role: role
           });
           btn.disabled = true;
         }
       });
+    });
+
 
       // Manual refresh
       const btnRefresh = document.getElementById('manual-refresh');
@@ -412,3 +430,4 @@
   </script>
 </body>
 </html>
+
