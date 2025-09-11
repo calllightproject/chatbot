@@ -1399,32 +1399,60 @@ def on_join(data):
     if room:
         join_room(room)
 
-# Nurse/CNA acknowledges / on-my-way / asap (one handler, 3 statuses)
+# Nurse/CNA acknowledges / on-my-way / asap (tolerant to old payloads)
 @socketio.on("acknowledge_request")
 def handle_acknowledge(data):
     """
-    Expected data:
-      - request_id (recommended)
-      - nurse_name (optional)
-      - room_number (optional; if missing we'll look it up)
-      - status: "ack" | "omw" | "asap"   <-- REQUIRED for patient messaging
-      - room (optional; your existing dashboard room for status_update)
-      - message (optional; your existing dashboard status string)
+    Accepts both new and legacy payloads.
+
+    New (preferred):
+      {
+        "request_id": "...",
+        "room_number": "241",
+        "nurse_name": "Sam",
+        "status": "ack" | "omw" | "asap",
+        "room": "241",                     # optional dashboard room
+        "message": "✅ On my way."         # optional dashboard status text
+      }
+
+    Legacy (what you likely have right now):
+      {
+        "room": "241",
+        "message": "✅ A team member is on their way."
+      }
     """
-    # Keep your existing dashboard broadcast (if you use it)
+    # 1) keep your dashboard broadcast (unchanged)
     dash_room = data.get("room")
     if dash_room and "message" in data:
         socketio.emit("status_update", {"message": data["message"]}, to=dash_room)
 
-    # Patient-side emit (only for ack/omw/asap)
-    status = (data.get("status") or "ack").lower()
-    if status not in ("ack", "omw", "asap"):
-        return  # ignore unknown statuses
-
+    # 2) figure out patient room_number
     room_number = data.get("room_number")
-    if not room_number and data.get("request_id"):
-        room_number = _get_room_for_request(data["request_id"])
+    if not room_number:
+        # try to infer from request_id
+        reqid = data.get("request_id")
+        if reqid:
+            room_number = _get_room_for_request(reqid)
+        # legacy fallback: reuse `room` field if it looks like a room number
+        if not room_number and dash_room and _valid_room(str(dash_room)):
+            room_number = str(dash_room)
 
+    # 3) figure out status
+    status = (data.get("status") or "").lower().strip()
+    if status not in ("ack", "omw", "asap"):
+        # LEGACY: derive from free-text dashboard 'message'
+        msg = (data.get("message") or "").lower()
+        if "ack" in msg or "received" in msg:
+            status = "ack"
+        elif "on my way" in msg or "on the way" in msg:
+            status = "omw"
+        elif "asap" in msg or "another room" in msg or "soon as" in msg:
+            status = "asap"
+        else:
+            # if truly unknown, default to 'ack'
+            status = "ack"
+
+    # 4) emit to patient if we have a valid room
     if room_number and _valid_room(str(room_number)):
         emit_patient_event(
             "request:status",
@@ -1519,6 +1547,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
