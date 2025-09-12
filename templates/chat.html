@@ -160,8 +160,8 @@
     <div id="live-status"></div>
 
     <div class="options">
-      <form method="POST" action="{{ url_for('handle_chat') }}" style="display: contents;">
-        <input type="hidden" name="room" value="{{ room_number or request.args.get('room','') }}">
+      <!-- ✅ Keep ?room= in POST action -->
+      <form method="POST" action="{{ url_for('handle_chat', room=room_number) }}" style="display: contents;">
         {% for option in options %}
           <button type="submit" name="user_input" value="{{ option }}">{{ option }}</button>
         {% endfor %}
@@ -169,9 +169,9 @@
     </div>
 
     <div class="note-section">
-      <form method="POST" action="{{ url_for('handle_chat') }}">
+      <!-- ✅ Keep ?room= in POST action -->
+      <form method="POST" action="{{ url_for('handle_chat', room=room_number) }}">
         <input type="hidden" name="action" value="send_note">
-        <input type="hidden" name="room" value="{{ room_number or request.args.get('room','') }}">
         <label for="custom_note" class="note-label">{{ button_data.get('custom_note_placeholder', 'Or send a custom note to your nurse:') }}</label>
         <div class="note-form">
           <textarea id="custom_note" name="custom_note" rows="2" placeholder="Type your message here..."></textarea>
@@ -188,8 +188,11 @@
   <!-- Socket.IO -->
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script>
+    // Template var (may be empty/None if not set on server)
     const TEMPLATE_ROOM = "{{ room_number or '' }}";
+    // URL fallback: /chat?room=241
     const urlRoom = new URLSearchParams(location.search).get('room') || '';
+    // Final choice
     const ROOM_NUMBER = (TEMPLATE_ROOM && TEMPLATE_ROOM !== 'None') ? TEMPLATE_ROOM : urlRoom;
 
     const statusEl = document.getElementById('live-status');
@@ -236,7 +239,7 @@
     socket.on("patient:joined", (data) => {
       if (String(data.room_id) === String(ROOM_NUMBER)) {
         showStatus("Live updates enabled for Room " + ROOM_NUMBER);
-        cancelNudge();
+        cancelNudge(); // ensure no stray timers
       }
     });
 
@@ -256,7 +259,8 @@
       if (String(data.room_id) !== String(ROOM_NUMBER)) return;
       showStatus("Your request has been received by the nurse station.");
       toast("Request received.");
-      startNudge(6 * 60 * 1000); // 6 minutes
+      // Start a later nudge only after we know the request was received
+      startNudge(6 * 60 * 1000); // 6 minutes; adjust as desired
     });
 
     socket.on("request:status", (data) => {
