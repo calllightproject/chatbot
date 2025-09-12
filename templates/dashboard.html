@@ -188,7 +188,6 @@
 
   <!-- Context for JS -->
   <script>
-    // Template context exposed to JS (safe defaults)
     const NurseContext = {{ nurse_context|default(false)|tojson }};
     const NurseName    = {{ nurse_name|default('')|tojson }};
     const NurseShift   = {{ shift|default('day')|tojson }};
@@ -199,30 +198,9 @@
   <script type="text/javascript">
     var socket = io();
 
-    let audioContext;
-    function playNotificationSound() {
-      try {
-        if (!audioContext) {
-          audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        }
-        if (audioContext.state === 'suspended') audioContext.resume();
-
-        const osc = audioContext.createOscillator();
-        const gain = audioContext.createGain();
-        osc.connect(gain); gain.connect(audioContext.destination);
-        osc.type = 'sine'; osc.frequency.setValueAtTime(880, audioContext.currentTime);
-        gain.gain.setValueAtTime(0, audioContext.currentTime);
-        gain.gain.linearRampToValueAtTime(0.5, audioContext.currentTime + 0.05);
-        gain.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.5);
-        osc.start(audioContext.currentTime);
-        osc.stop(audioContext.currentTime + 0.5);
-      } catch (_) {}
-    }
-
     function updateAllTimersAndColors() {
       const items = document.querySelectorAll('#requests-list .request-item');
       const now = new Date();
-
       items.forEach(item => {
         const raw = item.dataset.timestamp || '';
         const ts = raw ? new Date(raw) : null;
@@ -264,7 +242,6 @@
 
       let li = document.getElementById(req.id);
       if (li) {
-        // Update in place (do not remove)
         li.dataset.room = req.room || '';
         li.dataset.request = req.request || '';
         li.dataset.role = req.role || '';
@@ -272,7 +249,6 @@
         li.className = 'request-item ' + (req.role || '');
         li.innerHTML = buildRequestHTML(req);
       } else {
-        // Create new
         li = document.createElement('li');
         li.id = req.id;
         li.className = 'request-item ' + (req.role || '');
@@ -294,7 +270,6 @@
     // --- Socket events ---
     socket.on('new_request', function(data) {
       addRequestToDashboard(data);
-      playNotificationSound();
     });
 
     socket.on('request_updated', function(data) {
@@ -306,7 +281,7 @@
         if (roleSpan) roleSpan.textContent = 'For: NURSE';
         const deferBtn = item.querySelector('.defer-btn');
         if (deferBtn) deferBtn.remove();
-        updateAllTimersAndColors(); // keep original timestamp
+        updateAllTimersAndColors();
       }
     });
 
@@ -318,54 +293,61 @@
       }
     });
 
-    // --- Click handlers (UPDATED) ---
-    document.addEventListener('DOMContentLoaded', function() {
+    // --- Click handlers (FINAL) ---
+    document.addEventListener('DOMContentLoaded', function () {
       const list = document.getElementById('requests-list');
       if (!list) return;
 
-      list.addEventListener('click', function(e) {
+      list.addEventListener('click', function (e) {
         const btn = e.target;
         if (btn.tagName !== 'BUTTON') return;
 
         const item = btn.closest('.request-item');
         if (!item) return;
 
-        const requestId   = item.dataset.id || '';
-        const roomNumber  = item.dataset.room || '';   // patient room number (string)
-        const dashRoom    = item.dataset.room || '';   // re-use for your dashboard status_update
-        const nurseName   = NurseName || '';
+        const requestId  = item.dataset.id || '';
+        const roomNumber = (item.dataset.room || '').trim();
+        const nurseName  = (window.NurseName || '').trim();
+        const dashRoom   = roomNumber;
+
+        // Guard: only allow actions for valid patient rooms (231-260)
+        if (!/^(23[1-9]|24\d|25\d|260)$/.test(roomNumber)) {
+          alert('This request is missing a valid room number. Please have the patient resend from their room page.');
+          return;
+        }
 
         function sendAck(status, dashMessage) {
           socket.emit('acknowledge_request', {
             request_id: requestId,
-            room_number: roomNumber,
+            room_number: roomNumber,              // critical for patient side
             nurse_name: nurseName,
-            status: status,      // "ack" | "omw" | "asap"
-            room: dashRoom,
+            role: (item.dataset.role || 'nurse'),
+            status: status,                       // "ack" | "omw" | "asap"
+            room: dashRoom,                       // keeps your legacy dashboard status_update
             message: dashMessage
           });
         }
 
         if (btn.classList.contains('ack-button')) {
           btn.disabled = true;
-          sendAck('ack', "✅ Request acknowledged.");
+          sendAck('ack', '✅ Request acknowledged.');
         } else if (btn.classList.contains('omw-button')) {
           btn.disabled = true;
           const ack = item.querySelector('.ack-button'); if (ack) ack.disabled = true;
-          sendAck('omw', "✅ On my way.");
+          sendAck('omw', '✅ On my way.');
         } else if (btn.classList.contains('asap-button')) {
           btn.disabled = true;
           const ack = item.querySelector('.ack-button'); if (ack) ack.disabled = true;
           const omw = item.querySelector('.omw-button'); if (omw) omw.disabled = true;
-          sendAck('asap', "In another room — will be there ASAP.");
+          sendAck('asap', 'In another room — will be there ASAP.');
         } else if (btn.classList.contains('defer-btn')) {
-          // No patient message for defer
           socket.emit('defer_request', { id: requestId });
         } else if (btn.classList.contains('complete-btn')) {
           socket.emit('complete_request', {
             request_id: requestId,
             room_number: roomNumber,
-            nurse_name: nurseName
+            nurse_name: nurseName,
+            role: (item.dataset.role || 'nurse')
           });
           btn.disabled = true;
         }
@@ -375,22 +357,20 @@
       const btnRefresh = document.getElementById('manual-refresh');
       if (btnRefresh) btnRefresh.addEventListener('click', pollActiveRequests);
 
-      // Start timers + polling
+      // Timers + polling
       updateAllTimersAndColors();
       setInterval(updateAllTimersAndColors, 60000);
-      setTimeout(pollActiveRequests, 500);            // initial gentle fetch
-      setInterval(pollActiveRequests, 20000);         // every 20s
+      setTimeout(pollActiveRequests, 500);
+      setInterval(pollActiveRequests, 20000);
     });
 
     function pollActiveRequests() {
-      // Manager view: show all (no staff_name). Nurse view: pass staff_name, shift, scope.
       const params = new URLSearchParams();
       if (NurseContext && NurseName) {
         params.set('staff_name', NurseName);
         if (NurseShift) params.set('shift', NurseShift);
         params.set('scope', NurseScope || 'mine');
       } else {
-        // Manager view: scope=all
         params.set('scope', 'all');
       }
 
@@ -398,7 +378,7 @@
         .then(r => r.ok ? r.json() : Promise.reject())
         .then(json => {
           const list = json && json.active_requests ? json.active_requests : [];
-          list.forEach(upsertRequestItem); // only add/update, do not remove
+          list.forEach(upsertRequestItem);
           updateAllTimersAndColors();
           const ts = new Date();
           const el = document.getElementById('last-refresh');
