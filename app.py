@@ -1368,6 +1368,7 @@ def emit_patient_event(event: str, room_number: str | int, payload: dict):
         namespace="/patient",
     )
 
+
 def _get_room_for_request(request_id: str | int) -> str | None:
     """Look up room number for a given request_id from the requests table."""
     try:
@@ -1382,6 +1383,7 @@ def _get_room_for_request(request_id: str | int) -> str | None:
         print(f"ERROR reading room for request {request_id}: {e}")
     return None
 
+
 def _valid_room(room_str: str) -> bool:
     if not room_str or not str(room_str).isdigit():
         return False
@@ -1394,10 +1396,9 @@ def _valid_room(room_str: str) -> bool:
 def patient_connect():
     room_id = (request.args.get("room_id") or "").strip()
     if not _valid_room(room_id):
+        # refuse connection for invalid rooms
         return False
     join_room(f"patient:{room_id}", namespace="/patient")
-
-
 
 
 # --- (kept) generic join for dashboards/other rooms ---
@@ -1406,6 +1407,7 @@ def on_join(data):
     room = data.get("room")
     if room:
         join_room(room)
+
 
 # Nurse/CNA acknowledges / on-my-way / asap (tolerant to old payloads)
 @socketio.on("acknowledge_request")
@@ -1418,12 +1420,13 @@ def handle_acknowledge(data):
         "request_id": "...",
         "room_number": "241",
         "nurse_name": "Sam",
+        "role": "nurse" | "cna",
         "status": "ack" | "omw" | "asap",
         "room": "241",                     # optional dashboard room
         "message": "✅ On my way."         # optional dashboard status text
       }
 
-    Legacy (what you likely have right now):
+    Legacy (what you may still send):
       {
         "room": "241",
         "message": "✅ A team member is on their way."
@@ -1457,21 +1460,27 @@ def handle_acknowledge(data):
         elif "asap" in msg or "another room" in msg or "soon as" in msg:
             status = "asap"
         else:
-            # if truly unknown, default to 'ack'
-            status = "ack"
+            status = "ack"  # safe default
 
-    # 4) emit to patient if we have a valid room
+    # 4) role (default to 'nurse' if not provided)
+    role = (data.get("role") or "nurse").lower().strip()
+    if role not in ("nurse", "cna"):
+        role = "nurse"
+
+    # 5) emit to patient if we have a valid room
     if room_number and _valid_room(str(room_number)):
         emit_patient_event(
             "request:status",
             room_number,
             {
                 "request_id": data.get("request_id"),
-                "status": status,  # "ack" | "omw" | "asap"
+                "status": status,             # "ack" | "omw" | "asap"
                 "nurse": data.get("nurse_name"),
+                "role": role,                 # "nurse" | "cna"
                 "ts": datetime.now(timezone.utc).isoformat(),
             },
         )
+
 
 # "Defer" (re-route to nurse) — dashboard only (no patient message)
 @socketio.on("defer_request")
@@ -1499,6 +1508,7 @@ def handle_defer_request(data):
     except Exception as e:
         print(f"ERROR deferring request {request_id}: {e}")
 
+
 # Nurse/CNA marks "Complete"
 @socketio.on("complete_request")
 def handle_complete_request(data):
@@ -1507,6 +1517,7 @@ def handle_complete_request(data):
       - request_id (required)
       - nurse_name (optional)
       - room_number (optional; if missing, we'll look it up)
+      - role (optional; 'nurse' | 'cna')
     """
     request_id = data.get("request_id")
     if not request_id:
@@ -1536,6 +1547,10 @@ def handle_complete_request(data):
 
         # Notify patient with a short confirmation
         room_number = data.get("room_number") or _get_room_for_request(request_id)
+        role = (data.get("role") or "nurse").lower().strip()
+        if role not in ("nurse", "cna"):
+            role = "nurse"
+
         if room_number and _valid_room(str(room_number)):
             emit_patient_event(
                 "request:done",
@@ -1544,6 +1559,7 @@ def handle_complete_request(data):
                     "request_id": request_id,
                     "status": "completed",
                     "nurse": data.get("nurse_name"),
+                    "role": role,  # include role for consistency
                     "ts": now_utc.isoformat(),
                 },
             )
@@ -1552,9 +1568,11 @@ def handle_complete_request(data):
 
 
 
+
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
