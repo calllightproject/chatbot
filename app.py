@@ -1391,14 +1391,50 @@ def _valid_room(room_str: str) -> bool:
     return 231 <= n <= 260
 
 
-# --- Patient namespace — auto-join on connect with ?room_id=XYZ ---
+# --- Patient namespace: connect first, then join via 'patient:join' ---
 @socketio.on("connect", namespace="/patient")
 def patient_connect():
-    room_id = (request.args.get("room_id") or "").strip()
-    if not _valid_room(room_id):
-        # refuse connection for invalid rooms
-        return False
-    join_room(f"patient:{room_id}", namespace="/patient")
+    """
+    Do not reject the connection here; some proxies race the query args.
+    We will join the room when the client sends 'patient:join'.
+    """
+    try:
+        # If query has room_id and it's valid, we can eagerly join as well.
+        room_id = (request.args.get("room_id") or "").strip()
+        if _valid_room(room_id):
+            join_room(f"patient:{room_id}", namespace="/patient")
+            # Optional: tell client we auto-joined
+            socketio.emit("patient:joined", {"room_id": room_id}, namespace="/patient")
+    except Exception as e:
+        print(f"[patient] connect error: {e}")
+
+
+@socketio.on("patient:join", namespace="/patient")
+def patient_join(data):
+    """Explicit join from the client after connect/reconnect."""
+    try:
+        room_id = str(data.get("room_id", "")).strip()
+        if _valid_room(room_id):
+            join_room(f"patient:{room_id}", namespace="/patient")
+            socketio.emit("patient:joined", {"room_id": room_id}, to=f"patient:{room_id}", namespace="/patient")
+        else:
+            # Notify this socket that the room id was invalid (no join).
+            socketio.emit("patient:error", {"error": "invalid_room", "room_id": room_id}, namespace="/patient")
+    except Exception as e:
+        print(f"[patient] join error: {e}")
+        socketio.emit("patient:error", {"error": "join_exception"}, namespace="/patient")
+
+
+@socketio.on("disconnect", namespace="/patient")
+def patient_disconnect():
+    # Reason is not directly provided by Flask-SocketIO here; this is just for visibility.
+    print("[patient] client disconnected")
+
+
+# --- Default error logger for any namespace/event ---
+@socketio.on_error_default
+def default_error_handler(e):
+    print(f"[socketio] error: {e}")
 
 
 # --- (kept) generic join for dashboards/other rooms ---
@@ -1426,32 +1462,29 @@ def handle_acknowledge(data):
         "message": "✅ On my way."         # optional dashboard status text
       }
 
-    Legacy (what you may still send):
+    Legacy:
       {
         "room": "241",
         "message": "✅ A team member is on their way."
       }
     """
-    # 1) keep your dashboard broadcast (unchanged)
+    # 1) dashboard broadcast (if you still use it)
     dash_room = data.get("room")
     if dash_room and "message" in data:
         socketio.emit("status_update", {"message": data["message"]}, to=dash_room)
 
-    # 2) figure out patient room_number
+    # 2) patient room
     room_number = data.get("room_number")
     if not room_number:
-        # try to infer from request_id
         reqid = data.get("request_id")
         if reqid:
             room_number = _get_room_for_request(reqid)
-        # legacy fallback: reuse `room` field if it looks like a room number
         if not room_number and dash_room and _valid_room(str(dash_room)):
             room_number = str(dash_room)
 
-    # 3) figure out status
+    # 3) status
     status = (data.get("status") or "").lower().strip()
     if status not in ("ack", "omw", "asap"):
-        # LEGACY: derive from free-text dashboard 'message'
         msg = (data.get("message") or "").lower()
         if "ack" in msg or "received" in msg:
             status = "ack"
@@ -1460,14 +1493,14 @@ def handle_acknowledge(data):
         elif "asap" in msg or "another room" in msg or "soon as" in msg:
             status = "asap"
         else:
-            status = "ack"  # safe default
+            status = "ack"
 
-    # 4) role (default to 'nurse' if not provided)
+    # 4) role
     role = (data.get("role") or "nurse").lower().strip()
     if role not in ("nurse", "cna"):
         role = "nurse"
 
-    # 5) emit to patient if we have a valid room
+    # 5) emit to patient
     if room_number and _valid_room(str(room_number)):
         emit_patient_event(
             "request:status",
@@ -1545,7 +1578,7 @@ def handle_complete_request(data):
         # Remove from dashboards
         socketio.emit("remove_request", {"id": request_id})
 
-        # Notify patient with a short confirmation
+        # Notify patient
         room_number = data.get("room_number") or _get_room_for_request(request_id)
         role = (data.get("role") or "nurse").lower().strip()
         if role not in ("nurse", "cna"):
@@ -1559,7 +1592,7 @@ def handle_complete_request(data):
                     "request_id": request_id,
                     "status": "completed",
                     "nurse": data.get("nurse_name"),
-                    "role": role,  # include role for consistency
+                    "role": role,
                     "ts": now_utc.isoformat(),
                 },
             )
@@ -1568,10 +1601,10 @@ def handle_complete_request(data):
 
 
 
-
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
