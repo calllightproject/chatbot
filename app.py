@@ -434,7 +434,8 @@ def process_request(role, subject, user_input, reply_message):
     request_id = 'req_' + str(datetime.now(timezone.utc).timestamp()).replace('.', '')
 
     # ✅ FIX: prefer current_room, fall back to session
-    room_number = _current_room() or session.get('room_number', 'N/A')
+    room_number = session.get('room_number') or request.args.get('room') or 'N/A'
+
     is_first_baby = session.get('is_first_baby')
 
     socketio.start_background_task(send_email_alert, subject, english_user_input, room_number)
@@ -1577,6 +1578,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
