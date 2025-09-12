@@ -454,25 +454,19 @@ def log_request_to_db(request_id, category, user_input, reply, room, is_first_ba
 
 
 def process_request(role, subject, user_input, reply_message):
-    # Normalize to English for dashboard/email/logs
     lang = session.get('language', 'en')
     english_user_input = to_english_label(user_input, lang)
 
     request_id = 'req_' + str(datetime.now(timezone.utc).timestamp()).replace('.', '')
 
-    # ✅ Prefer URL ?room=, persist to session, then fall back to session; last resort 'N/A'
-    room_number = _current_room() or session.get('room_number') or request.args.get('room') or 'N/A'
-    room_number = str(room_number).strip()
+    # ✅ FIX: prefer _current_room (checks ?room=XYZ and session), fallback to None
+    room_number = _current_room() or session.get('room_number')
+    if not room_number or not _valid_room(room_number):
+        room_number = None  # instead of "N/A"
 
     is_first_baby = session.get('is_first_baby')
 
-    # Safe background email (no-op if creds missing)
-    try:
-        socketio.start_background_task(send_email_alert, subject, english_user_input, room_number)
-    except Exception as e:
-        print(f"send_email_alert skipped: {e}")
-
-    # Persist to DB (with clear debug)
+    # Background tasks
     socketio.start_background_task(
         log_request_to_db,
         request_id,
@@ -483,19 +477,24 @@ def process_request(role, subject, user_input, reply_message):
         is_first_baby
     )
 
-    # Live-update dashboards with the correct room
+    # 🔔 Optional: keep if you want emails
+    # socketio.start_background_task(
+    #     send_email_alert,
+    #     subject,
+    #     english_user_input,
+    #     room_number or "Unknown"
+    # )
+
+    # Broadcast to dashboards
     socketio.emit('new_request', {
         'id': request_id,
-        'room': room_number,
+        'room': room_number,   # None if unknown
         'request': english_user_input,
         'role': role,
         'timestamp': datetime.now(timezone.utc).isoformat()
     })
 
     return reply_message
-
-
-
 
 # --- App Routes ---
 @app.route("/room/<room_id>")
@@ -1391,35 +1390,6 @@ def debug_assignments_today():
         return jsonify({"error": f"query_failed: {e.__class__.__name__}: {e}"}), 500
     return jsonify({"count": len(rows), "rows": rows})
 
-@app.post("/debug/complete_na")
-def debug_complete_na():
-    """
-    One-time cleanup: mark as completed any active requests whose room is NULL/'N/A'/blank,
-    and broadcast 'remove_request' so they disappear from dashboards.
-    """
-    try:
-        with engine.connect() as conn:
-            with conn.begin():
-                rows = conn.execute(text("""
-                    UPDATE requests
-                    SET completion_timestamp = NOW()
-                    WHERE completion_timestamp IS NULL
-                      AND (
-                            room IS NULL
-                         OR TRIM(room) = ''
-                         OR UPPER(TRIM(room)) = 'N/A'
-                      )
-                    RETURNING request_id
-                """)).fetchall()
-
-        # Tell dashboards to remove them now
-        for (req_id,) in rows:
-            socketio.emit("remove_request", {"id": req_id})
-
-        return jsonify({"ok": True, "completed": len(rows)})
-    except Exception as e:
-        print(f"/debug/complete_na error: {e}")
-        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 # --- SocketIO Event Handlers ---
@@ -1681,6 +1651,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
