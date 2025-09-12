@@ -183,114 +183,118 @@
     </div>
   </div>
 
-  <!-- Socket.IO -->
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script>
-    // Template var (may be empty/None if not set on server)
-    const TEMPLATE_ROOM = "{{ room_number or '' }}";
-    // URL fallback: /chat?room=241
-    const urlRoom = new URLSearchParams(location.search).get('room') || '';
-    // Final choice
-    const ROOM_NUMBER = (TEMPLATE_ROOM && TEMPLATE_ROOM !== 'None') ? TEMPLATE_ROOM : urlRoom;
+<script>
+  const TEMPLATE_ROOM = "{{ room_number or '' }}";
+  const urlRoom = new URLSearchParams(location.search).get('room') || '';
+  const ROOM_NUMBER = ((TEMPLATE_ROOM && TEMPLATE_ROOM !== 'None') ? TEMPLATE_ROOM : urlRoom).trim();
 
-    const statusEl = document.getElementById('live-status');
-    function showStatus(msg) {
-      statusEl.textContent = msg;
-      statusEl.style.display = 'block';
-    }
-    function toast(msg) {
-      const el = document.createElement('div');
-      el.className = 'toast';
-      el.textContent = msg;
-      document.body.appendChild(el);
-      setTimeout(() => el.remove(), 2800);
-    }
+  const statusEl = document.getElementById('live-status');
+  function showStatus(msg){ statusEl.textContent = msg; statusEl.style.display = 'block'; }
+  function toast(msg){ const el=document.createElement('div'); el.className='toast'; el.textContent=msg; document.body.appendChild(el); setTimeout(()=>el.remove(),2800); }
 
-    console.log("[patient] ROOM_NUMBER=", ROOM_NUMBER);
-    if (!ROOM_NUMBER) showStatus("No room number found. Try /chat?room=241");
+  console.log("[patient] ROOM_NUMBER=", ROOM_NUMBER);
+  if (!ROOM_NUMBER) showStatus("No room number found. Try /chat?room=241");
 
-    // Connect to the /patient namespace
-    const socket = io("/patient", { query: { room_id: ROOM_NUMBER } });
+  // Stronger client config + reconnection
+  const socket = io("/patient", {
+    query: { room_id: ROOM_NUMBER },
+    transports: ["websocket", "polling"],
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+    timeout: 20000
+  });
 
-    // Nudge helpers (start only after 'request:received')
-    let nudgeTimer = null;
-    function cancelNudge() {
-      if (nudgeTimer) { clearTimeout(nudgeTimer); nudgeTimer = null; }
-    }
-    function startNudge(ms) {
+  // (Optional) log all patient events for quick debugging
+  ["connect","disconnect","connect_error","patient:joined","patient:error","request:received","request:status","request:done"]
+    .forEach(ev => socket.on(ev, data => console.log("[patient] event:", ev, data)));
+
+  // Nudge helpers (start only after 'request:received')
+  let nudgeTimer = null;
+  function cancelNudge(){ if (nudgeTimer){ clearTimeout(nudgeTimer); nudgeTimer = null; } }
+  function startNudge(ms){
+    cancelNudge();
+    nudgeTimer = setTimeout(() => {
+      showStatus("Your request is still in the queue. A team member will be with you soon.");
+      toast("Still in queue — a team member will be with you soon.");
+    }, ms);
+  }
+
+  // Join (and re-join after reconnect)
+  function joinPatientRoom(){
+    if (ROOM_NUMBER) socket.emit("patient:join", { room_id: ROOM_NUMBER });
+  }
+
+  socket.on("connect", () => {
+    showStatus("Connected for Room " + ROOM_NUMBER);
+    joinPatientRoom();
+  });
+
+  socket.on("patient:joined", (data) => {
+    if (String(data.room_id) === String(ROOM_NUMBER)) {
+      showStatus("Live updates enabled for Room " + ROOM_NUMBER);
       cancelNudge();
-      nudgeTimer = setTimeout(() => {
-        showStatus("Your request is still in the queue. A team member will be with you soon.");
-        toast("Still in queue — a team member will be with you soon.");
-      }, ms);
     }
+  });
 
-    // On connect, explicitly join the patient room
-    socket.on("connect", () => {
-      showStatus("Connected for Room " + ROOM_NUMBER);
-      if (ROOM_NUMBER) {
-        socket.emit("patient:join", { room_id: ROOM_NUMBER });
-      }
-    });
+  socket.on("patient:error", (data) => {
+    console.warn("[patient:error]", data);
+    showStatus("Connection ok, but room join failed.");
+  });
 
-    // Confirm we actually joined the room group
-    socket.on("patient:joined", (data) => {
-      if (String(data.room_id) === String(ROOM_NUMBER)) {
-        showStatus("Live updates enabled for Room " + ROOM_NUMBER);
-        cancelNudge(); // ensure no stray timers
-      }
-    });
+  socket.on("connect_error", (err) => {
+    console.error("[patient] connect_error:", err);
+    showStatus("Connection error: " + (err && err.message ? err.message : "unknown"));
+  });
 
-    // Join problems (e.g., invalid/missing room)
-    socket.on("patient:error", (data) => {
-      console.warn("[patient:error]", data);
-      showStatus("Connection ok, but room join failed.");
-    });
+  // Re-join on reconnect
+  socket.io.on("reconnect", () => {
+    console.log("[patient] reconnected — rejoining room");
+    joinPatientRoom();
+  });
 
-    socket.on("connect_error", (err) => {
-      console.error("[patient] connect_error:", err);
-      showStatus("Connection error: " + (err && err.message ? err.message : "unknown"));
-    });
+  // Patient-facing updates
+  socket.on("request:received", (data) => {
+    if (String(data.room_id) !== String(ROOM_NUMBER)) return;
+    showStatus("Your request has been received by the nurse station.");
+    toast("Request received.");
+    startNudge(6 * 60 * 1000);
+  });
 
-    // Patient-facing status updates
-    socket.on("request:received", (data) => {
-      if (String(data.room_id) !== String(ROOM_NUMBER)) return;
-      showStatus("Your request has been received by the nurse station.");
-      toast("Request received.");
-      // Start a later nudge only after we know the request was received
-      startNudge(6 * 60 * 1000); // 6 minutes; adjust as desired
-    });
+  socket.on("request:status", (data) => {
+    if (String(data.room_id) !== String(ROOM_NUMBER)) return;
+    cancelNudge();
+    const who = data.nurse ? ` (${data.nurse})` : "";
+    switch ((data.status || "").toLowerCase()) {
+      case "ack":
+        showStatus(`Your nurse/CNA has acknowledged your request${who}.`);
+        toast("Request acknowledged.");
+        break;
+      case "omw":
+        showStatus(`Your nurse/CNA is on their way for your request${who}.`);
+        toast("Nurse/CNA on the way.");
+        break;
+      case "asap":
+        showStatus(`Your nurse/CNA is in another room and will be with you as soon as possible${who}.`);
+        toast("They’ll be there ASAP.");
+        break;
+    }
+  });
 
-    socket.on("request:status", (data) => {
-      if (String(data.room_id) !== String(ROOM_NUMBER)) return;
-      cancelNudge();
-      const who = data.nurse ? ` (${data.nurse})` : "";
-      switch ((data.status || "").toLowerCase()) {
-        case "ack":
-          showStatus(`Your nurse/CNA has acknowledged your request${who}.`);
-          toast("Request acknowledged.");
-          break;
-        case "omw":
-          showStatus(`Your nurse/CNA is on their way for your request${who}.`);
-          toast("Nurse/CNA on the way.");
-          break;
-        case "asap":
-          showStatus(`Your nurse/CNA is in another room and will be with you as soon as possible${who}.`);
-          toast("They’ll be there ASAP.");
-          break;
-      }
-    });
+  socket.on("request:done", (data) => {
+    if (String(data.room_id) !== String(ROOM_NUMBER)) return;
+    cancelNudge();
+    showStatus("All set — your request has been marked complete.");
+    toast("Request completed.");
+  });
 
-    socket.on("request:done", (data) => {
-      if (String(data.room_id) !== String(ROOM_NUMBER)) return;
-      cancelNudge();
-      showStatus("All set — your request has been marked complete.");
-      toast("Request completed.");
-    });
+  socket.on("disconnect", () => {
+    showStatus("Disconnected. Trying to reconnect…");
+  });
+</script>
 
-    socket.on("disconnect", () => {
-      showStatus("Disconnected. Trying to reconnect…");
-    });
-  </script>
 </body>
 </html>
+
