@@ -1567,44 +1567,66 @@ def handle_defer_request(data):
         print(f"ERROR deferring request {request_id}: {e}")
 
 
-# Nurse/CNA marks "Complete"
 @socketio.on("complete_request")
 def handle_complete_request(data):
     """
-    Expected data:
-      - request_id (required)
-      - nurse_name (optional)
-      - room_number (optional; if missing, we'll look it up)
-      - role (optional; 'nurse' | 'cna')
+    Accepts:
+      - request_id: string (UUID-like) OR numeric string that maps to the 'id' PK
+      - nurse_name: optional
+      - room_number: optional; used only for patient notification
+      - role: optional ('nurse'|'cna'), used only for patient notification
     """
-    request_id = data.get("request_id")
-    if not request_id:
+    rid = (data.get("request_id") or "").strip()
+    if not rid:
         return
 
+    # Decide how to target the row: by request_id or by numeric id
+    by_pk = rid.isdigit()
     now_utc = datetime.now(timezone.utc)
+
     try:
         with engine.connect() as connection:
             trans = connection.begin()
             try:
-                connection.execute(
-                    text("""
-                        UPDATE requests
-                        SET completion_timestamp = :now
-                        WHERE request_id = :request_id;
-                    """),
-                    {"now": now_utc, "request_id": request_id},
-                )
+                if by_pk:
+                    connection.execute(
+                        text("""
+                            UPDATE requests
+                            SET completion_timestamp = :now
+                            WHERE id = :pk
+                        """),
+                        {"now": now_utc, "pk": int(rid)}
+                    )
+                else:
+                    connection.execute(
+                        text("""
+                            UPDATE requests
+                            SET completion_timestamp = :now
+                            WHERE request_id = :rid
+                        """),
+                        {"now": now_utc, "rid": rid}
+                    )
                 trans.commit()
-                log_to_audit_trail("Request Completed", f"Request ID: {request_id} marked as complete.")
+                log_to_audit_trail("Request Completed", f"Request {('ID' if by_pk else 'ReqID')}={rid} marked as complete.")
             except Exception:
                 trans.rollback()
                 raise
 
         # Remove from dashboards
-        socketio.emit("remove_request", {"id": request_id})
+        socketio.emit("remove_request", {"id": rid})
 
-        # Notify patient
-        room_number = data.get("room_number") or _get_room_for_request(request_id)
+        # Notify patient (best-effort)
+        room_number = data.get("room_number")
+        if not room_number:
+            # Try to look up from DB using the same key
+            with engine.connect() as connection:
+                if by_pk:
+                    row = connection.execute(text("SELECT room FROM requests WHERE id = :pk LIMIT 1"), {"pk": int(rid)}).fetchone()
+                else:
+                    row = connection.execute(text("SELECT room FROM requests WHERE request_id = :rid LIMIT 1"), {"rid": rid}).fetchone()
+                if row and row[0]:
+                    room_number = str(row[0])
+
         role = (data.get("role") or "nurse").lower().strip()
         if role not in ("nurse", "cna"):
             role = "nurse"
@@ -1614,7 +1636,7 @@ def handle_complete_request(data):
                 "request:done",
                 room_number,
                 {
-                    "request_id": request_id,
+                    "request_id": rid,
                     "status": "completed",
                     "nurse": data.get("nurse_name"),
                     "role": role,
@@ -1622,13 +1644,14 @@ def handle_complete_request(data):
                 },
             )
     except Exception as e:
-        print(f"ERROR updating completion timestamp: {e}")
+        print(f"ERROR completing request {rid}: {e}")
 
 
 
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
