@@ -1570,87 +1570,94 @@ def handle_defer_request(data):
 @socketio.on("complete_request")
 def handle_complete_request(data):
     """
-    Accepts:
-      - request_id: string (UUID-like) OR numeric string that maps to the 'id' PK
-      - nurse_name: optional
-      - room_number: optional; used only for patient notification
-      - role: optional ('nurse'|'cna'), used only for patient notification
+    Expected data (new or legacy):
+      - request_id (preferred)
+      - nurse_name (optional)
+      - room_number (optional; used for patient emit only)
+      - request_text (optional; used to resolve missing request_id for old 'N/A' rows)
+      - role (optional; 'nurse' | 'cna')
     """
-    rid = (data.get("request_id") or "").strip()
-    if not rid:
-        return
-
-    # Decide how to target the row: by request_id or by numeric id
-    by_pk = rid.isdigit()
-    now_utc = datetime.now(timezone.utc)
-
     try:
+        request_id   = (data.get("request_id") or "").strip()
+        room_number  = (data.get("room_number") or "").strip()
+        request_text = (data.get("request_text") or "").strip()
+
+        # Fallback: resolve missing request_id using the request text (legacy 'N/A' rows)
+        if not request_id and request_text:
+            try:
+                with engine.connect() as conn:
+                    row = conn.execute(text("""
+                        SELECT request_id
+                        FROM requests
+                        WHERE completion_timestamp IS NULL
+                          AND user_input = :txt
+                          AND (room IS NULL OR room = '' OR room = 'N/A' OR room = :room)
+                        ORDER BY timestamp DESC
+                        LIMIT 1
+                    """), {"txt": request_text, "room": room_number or "N/A"}).fetchone()
+                    if row and row[0]:
+                        request_id = row[0]
+            except Exception as e:
+                print(f"[complete_request] lookup by text failed: {e}")
+
+        if not request_id:
+            print("[complete_request] no request_id could be resolved; aborting completion.")
+            return  # nothing to do
+
+        now_utc = datetime.now(timezone.utc)
+
+        # Mark completed
         with engine.connect() as connection:
             trans = connection.begin()
             try:
-                if by_pk:
-                    connection.execute(
-                        text("""
-                            UPDATE requests
-                            SET completion_timestamp = :now
-                            WHERE id = :pk
-                        """),
-                        {"now": now_utc, "pk": int(rid)}
-                    )
-                else:
-                    connection.execute(
-                        text("""
-                            UPDATE requests
-                            SET completion_timestamp = :now
-                            WHERE request_id = :rid
-                        """),
-                        {"now": now_utc, "rid": rid}
-                    )
+                connection.execute(
+                    text("""
+                        UPDATE requests
+                        SET completion_timestamp = :now
+                        WHERE request_id = :request_id;
+                    """),
+                    {"now": now_utc, "request_id": request_id},
+                )
                 trans.commit()
-                log_to_audit_trail("Request Completed", f"Request {('ID' if by_pk else 'ReqID')}={rid} marked as complete.")
+                log_to_audit_trail("Request Completed", f"Request ID: {request_id} marked as complete.")
             except Exception:
                 trans.rollback()
                 raise
 
-        # Remove from dashboards
-        socketio.emit("remove_request", {"id": rid})
+        # Remove from dashboards (allow clients to match by id or (room, request))
+        socketio.emit("remove_request", {
+            "id": request_id,
+            "room": room_number or None,
+            "request": request_text or None
+        })
 
-        # Notify patient (best-effort)
-        room_number = data.get("room_number")
-        if not room_number:
-            # Try to look up from DB using the same key
-            with engine.connect() as connection:
-                if by_pk:
-                    row = connection.execute(text("SELECT room FROM requests WHERE id = :pk LIMIT 1"), {"pk": int(rid)}).fetchone()
-                else:
-                    row = connection.execute(text("SELECT room FROM requests WHERE request_id = :rid LIMIT 1"), {"rid": rid}).fetchone()
-                if row and row[0]:
-                    room_number = str(row[0])
-
+        # Patient notify (optional; only if a valid room)
         role = (data.get("role") or "nurse").lower().strip()
         if role not in ("nurse", "cna"):
             role = "nurse"
 
-        if room_number and _valid_room(str(room_number)):
+        if room_number and room_number.isdigit() and 231 <= int(room_number) <= 260:
             emit_patient_event(
                 "request:done",
                 room_number,
                 {
-                    "request_id": rid,
+                    "request_id": request_id,
                     "status": "completed",
                     "nurse": data.get("nurse_name"),
                     "role": role,
                     "ts": now_utc.isoformat(),
                 },
             )
+
     except Exception as e:
-        print(f"ERROR completing request {rid}: {e}")
+        print(f"ERROR updating completion timestamp: {e}")
 
 
 
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
