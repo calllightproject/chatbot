@@ -359,6 +359,24 @@ def migrate_schema():
         print("Schema migration OK.")
     except Exception as e:
         print(f"Schema migration error: {e}")
+def send_email_alert(subject, body, room_number):
+    """Safe/no-op email alert. Will quietly skip if creds aren’t set."""
+    try:
+        sender_email = os.getenv("EMAIL_USER")
+        sender_password = os.getenv("EMAIL_PASSWORD")
+        recipient_email = os.getenv("RECIPIENT_EMAIL", "call.light.project@gmail.com")
+        if not sender_email or not sender_password:
+            return  # no creds → skip
+        msg = EmailMessage()
+        msg["Subject"] = f"Room {room_number} - {subject}"
+        msg["From"] = sender_email
+        msg["To"] = recipient_email
+        msg.set_content(body)
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+            smtp.login(sender_email, sender_password)
+            smtp.send_message(msg)
+    except Exception as e:
+        print(f"EMAIL disabled or failed: {e}")
 
 
 # --- Smart Routing Logic ---
@@ -442,16 +460,19 @@ def process_request(role, subject, user_input, reply_message):
 
     request_id = 'req_' + str(datetime.now(timezone.utc).timestamp()).replace('.', '')
 
-    # ✅ Always resolve the real room, persisting ?room=XYZ into session if present
+    # ✅ Prefer URL ?room=, persist to session, then fall back to session; last resort 'N/A'
     room_number = _current_room() or session.get('room_number') or request.args.get('room') or 'N/A'
     room_number = str(room_number).strip()
 
     is_first_baby = session.get('is_first_baby')
 
-    # (optional) email alert – can be left as-is or removed if unused
-    socketio.start_background_task(send_email_alert, subject, english_user_input, room_number)
+    # Safe background email (no-op if creds missing)
+    try:
+        socketio.start_background_task(send_email_alert, subject, english_user_input, room_number)
+    except Exception as e:
+        print(f"send_email_alert skipped: {e}")
 
-    # Persist to DB (with clear debug of resolved room)
+    # Persist to DB (with clear debug)
     socketio.start_background_task(
         log_request_to_db,
         request_id,
@@ -462,16 +483,17 @@ def process_request(role, subject, user_input, reply_message):
         is_first_baby
     )
 
-    # Live-update dashboards
+    # Live-update dashboards with the correct room
     socketio.emit('new_request', {
         'id': request_id,
-        'room': room_number,   # ✅ correct room now
+        'room': room_number,
         'request': english_user_input,
         'role': role,
         'timestamp': datetime.now(timezone.utc).isoformat()
     })
 
     return reply_message
+
 
 
 
@@ -1595,6 +1617,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
