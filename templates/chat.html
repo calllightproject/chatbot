@@ -160,15 +160,22 @@
     // Robust socket with reconnection
     if (!ROOM_NUMBER) showStatus("No room number found. Try /chat?room=241");
     const socket = io("/patient", {
-      query: { room_id: ROOM_NUMBER },
-      transports: ["websocket", "polling"],
-      reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 500,
-      reconnectionDelayMax: 5000,
-      timeout: 20000
-      // To test with polling only, temporarily use: transports: ["polling"]
+        query: { room_id: ROOM_NUMBER },
+        forceNew: true,          // isolate each tab's connection
+        transports: ["polling"], // TEMP: force long-polling (most proxy-proof)
+        upgrade: false,          // don't try WS upgrade while stabilizing
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 500,
+        reconnectionDelayMax: 5000,
+        timeout: 20000
     });
+
+// ensure clean close when navigating away (prevents ghost sockets)
+window.addEventListener("beforeunload", () => {
+  try { socket.close(); } catch (_) {}
+});
+
 
     // See every inbound event for quick debugging
     socket.onAny((event, ...args) => {
@@ -266,3 +273,4 @@
   </script>
 </body>
 </html>
+
