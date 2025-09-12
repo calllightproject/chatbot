@@ -1451,74 +1451,63 @@ def on_join(data):
         join_room(room)
 
 
-# Nurse/CNA acknowledges / on-my-way / asap (tolerant to old payloads)
 @socketio.on("acknowledge_request")
 def handle_acknowledge(data):
     """
     Accepts both new and legacy payloads.
-
-    New (preferred):
-      {
-        "request_id": "...",
-        "room_number": "241",
-        "nurse_name": "Sam",
-        "role": "nurse" | "cna",
-        "status": "ack" | "omw" | "asap",
-        "room": "241",                     # optional dashboard room
-        "message": "✅ On my way."         # optional dashboard status text
-      }
-
-    Legacy:
-      {
-        "room": "241",
-        "message": "✅ A team member is on their way."
-      }
     """
-    # 1) dashboard broadcast (if you still use it)
-    dash_room = data.get("room")
-    if dash_room and "message" in data:
-        socketio.emit("status_update", {"message": data["message"]}, to=dash_room)
+    try:
+        print("\n[acknowledge_request] IN:", data)
 
-    # 2) patient room
-    room_number = data.get("room_number")
-    if not room_number:
-        reqid = data.get("request_id")
-        if reqid:
-            room_number = _get_room_for_request(reqid)
-        if not room_number and dash_room and _valid_room(str(dash_room)):
-            room_number = str(dash_room)
+        # 1) dashboard broadcast (if you still use it)
+        dash_room = data.get("room")
+        if dash_room and "message" in data:
+            socketio.emit("status_update", {"message": data["message"]}, to=dash_room)
 
-    # 3) status
-    status = (data.get("status") or "").lower().strip()
-    if status not in ("ack", "omw", "asap"):
-        msg = (data.get("message") or "").lower()
-        if "ack" in msg or "received" in msg:
-            status = "ack"
-        elif "on my way" in msg or "on the way" in msg:
-            status = "omw"
-        elif "asap" in msg or "another room" in msg or "soon as" in msg:
-            status = "asap"
-        else:
-            status = "ack"
+        # 2) patient room
+        room_number = data.get("room_number")
+        if not room_number:
+            reqid = data.get("request_id")
+            if reqid:
+                room_number = _get_room_for_request(reqid)
+            if not room_number and dash_room and _valid_room(str(dash_room)):
+                room_number = str(dash_room)
 
-    # 4) role
-    role = (data.get("role") or "nurse").lower().strip()
-    if role not in ("nurse", "cna"):
-        role = "nurse"
+        # 3) status
+        status = (data.get("status") or "").lower().strip()
+        if status not in ("ack", "omw", "asap"):
+            msg = (data.get("message") or "").lower()
+            if "ack" in msg or "received" in msg:
+                status = "ack"
+            elif "on my way" in msg or "on the way" in msg:
+                status = "omw"
+            elif "asap" in msg or "another room" in msg or "soon as" in msg:
+                status = "asap"
+            else:
+                status = "ack"
 
-    # 5) emit to patient
-    if room_number and _valid_room(str(room_number)):
-        emit_patient_event(
-            "request:status",
-            room_number,
-            {
+        # 4) role
+        role = (data.get("role") or "nurse").lower().strip()
+        if role not in ("nurse", "cna"):
+            role = "nurse"
+
+        print(f"[acknowledge_request] RESOLVED room={room_number} status={status} role={role}")
+
+        # 5) emit to patient
+        if room_number and _valid_room(str(room_number)):
+            payload = {
                 "request_id": data.get("request_id"),
                 "status": status,             # "ack" | "omw" | "asap"
                 "nurse": data.get("nurse_name"),
                 "role": role,                 # "nurse" | "cna"
                 "ts": datetime.now(timezone.utc).isoformat(),
-            },
-        )
+            }
+            print(f"[acknowledge_request] EMIT to patient:{room_number} -> request:status {payload}")
+            emit_patient_event("request:status", room_number, payload)
+        else:
+            print(f"[acknowledge_request] SKIP emit — invalid or missing room: {room_number}")
+    except Exception as e:
+        print(f"[acknowledge_request] ERROR: {e}")
 
 
 # "Defer" (re-route to nurse) — dashboard only (no patient message)
@@ -1610,6 +1599,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
