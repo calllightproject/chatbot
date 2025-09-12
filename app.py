@@ -1391,6 +1391,36 @@ def debug_assignments_today():
         return jsonify({"error": f"query_failed: {e.__class__.__name__}: {e}"}), 500
     return jsonify({"count": len(rows), "rows": rows})
 
+@app.post("/debug/complete_na")
+def debug_complete_na():
+    """
+    One-time cleanup: mark as completed any active requests whose room is NULL/'N/A'/blank,
+    and broadcast 'remove_request' so they disappear from dashboards.
+    """
+    try:
+        with engine.connect() as conn:
+            with conn.begin():
+                rows = conn.execute(text("""
+                    UPDATE requests
+                    SET completion_timestamp = NOW()
+                    WHERE completion_timestamp IS NULL
+                      AND (
+                            room IS NULL
+                         OR TRIM(room) = ''
+                         OR UPPER(TRIM(room)) = 'N/A'
+                      )
+                    RETURNING request_id
+                """)).fetchall()
+
+        # Tell dashboards to remove them now
+        for (req_id,) in rows:
+            socketio.emit("remove_request", {"id": req_id})
+
+        return jsonify({"ok": True, "completed": len(rows)})
+    except Exception as e:
+        print(f"/debug/complete_na error: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
 
 # --- SocketIO Event Handlers ---
 
@@ -1651,6 +1681,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
