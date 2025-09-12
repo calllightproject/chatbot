@@ -206,21 +206,23 @@
       setTimeout(() => el.remove(), 2800);
     }
 
-    // Visible debug (safe)
     console.log("[patient] ROOM_NUMBER=", ROOM_NUMBER);
     if (!ROOM_NUMBER) showStatus("No room number found. Try /chat?room=241");
 
     // Connect to the /patient namespace
     const socket = io("/patient", { query: { room_id: ROOM_NUMBER } });
 
-    // Optional: gentle nudge if no staff action within 2 minutes
-    let nudgeTimer = setTimeout(() => {
-      showStatus("Your request is still in the queue. A team member will be with you soon.");
-      toast("Still in queue — a team member will be with you soon.");
-    }, 2 * 60 * 1000);
-
+    // Nudge helpers (start only after 'request:received')
+    let nudgeTimer = null;
     function cancelNudge() {
       if (nudgeTimer) { clearTimeout(nudgeTimer); nudgeTimer = null; }
+    }
+    function startNudge(ms) {
+      cancelNudge();
+      nudgeTimer = setTimeout(() => {
+        showStatus("Your request is still in the queue. A team member will be with you soon.");
+        toast("Still in queue — a team member will be with you soon.");
+      }, ms);
     }
 
     // On connect, explicitly join the patient room
@@ -235,10 +237,11 @@
     socket.on("patient:joined", (data) => {
       if (String(data.room_id) === String(ROOM_NUMBER)) {
         showStatus("Live updates enabled for Room " + ROOM_NUMBER);
+        cancelNudge(); // ensure no stray timers
       }
     });
 
-    // Surface join problems (e.g., invalid/missing room)
+    // Join problems (e.g., invalid/missing room)
     socket.on("patient:error", (data) => {
       console.warn("[patient:error]", data);
       showStatus("Connection ok, but room join failed.");
@@ -254,12 +257,8 @@
       if (String(data.room_id) !== String(ROOM_NUMBER)) return;
       showStatus("Your request has been received by the nurse station.");
       toast("Request received.");
-      cancelNudge();
-      // restart a later nudge after receipt (optional)
-      nudgeTimer = setTimeout(() => {
-        showStatus("Thank you for your patience — your request is still in the queue.");
-        toast("Still in queue — thanks for your patience.");
-      }, 6 * 60 * 1000);
+      // Start a later nudge only after we know the request was received
+      startNudge(6 * 60 * 1000); // 6 minutes; adjust as desired
     });
 
     socket.on("request:status", (data) => {
