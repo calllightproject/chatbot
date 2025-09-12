@@ -1567,42 +1567,67 @@ def handle_defer_request(data):
         print(f"ERROR deferring request {request_id}: {e}")
 
 
+# Nurse/CNA marks "Complete" — allow completion even if room is unknown (N/A)
 @socketio.on("complete_request")
 def handle_complete_request(data):
     """
-    Expected data (new or legacy):
-      - request_id (preferred)
+    Expected data:
+      - request_id (required)
       - nurse_name (optional)
-      - room_number (optional; used for patient emit only)
-      - request_text (optional; used to resolve missing request_id for old 'N/A' rows)
+      - room_number (optional; if missing, we'll look it up)
       - role (optional; 'nurse' | 'cna')
     """
+    request_id = data.get("request_id")
+    if not request_id:
+        return  # nothing to do
+
+    now_utc = datetime.now(timezone.utc)
     try:
-        request_id   = (data.get("request_id") or "").strip()
-        room_number  = (data.get("room_number") or "").strip()
-        request_text = (data.get("request_text") or "").strip()
-
-        # Fallback: resolve missing request_id using the request text (legacy 'N/A' rows)
-        if not request_id and request_text:
+        # 1) Mark complete in DB
+        with engine.connect() as connection:
+            trans = connection.begin()
             try:
-                with engine.connect() as conn:
-                    row = conn.execute(text("""
-                        SELECT request_id
-                        FROM requests
-                        WHERE completion_timestamp IS NULL
-                          AND user_input = :txt
-                          AND (room IS NULL OR room = '' OR room = 'N/A' OR room = :room)
-                        ORDER BY timestamp DESC
-                        LIMIT 1
-                    """), {"txt": request_text, "room": room_number or "N/A"}).fetchone()
-                    if row and row[0]:
-                        request_id = row[0]
-            except Exception as e:
-                print(f"[complete_request] lookup by text failed: {e}")
+                connection.execute(
+                    text("""
+                        UPDATE requests
+                        SET completion_timestamp = :now
+                        WHERE request_id = :request_id;
+                    """),
+                    {"now": now_utc, "request_id": request_id},
+                )
+                trans.commit()
+                log_to_audit_trail("Request Completed", f"Request ID: {request_id} marked as complete.")
+            except Exception:
+                trans.rollback()
+                raise
 
-        if not request_id:
-            print("[complete_request] no request_id could be resolved; aborting completion.")
-            return  # nothing to do
+        # 2) Remove from dashboards (always do this, even if room is unknown)
+        socketio.emit("remove_request", {"id": request_id})
+
+        # 3) Notify patient only when we have a valid room
+        room_number = data.get("room_number") or _get_room_for_request(request_id)
+        role = (data.get("role") or "nurse").lower().strip()
+        if role not in ("nurse", "cna"):
+            role = "nurse"
+
+        if room_number and _valid_room(str(room_number)):
+            emit_patient_event(
+                "request:done",
+                room_number,
+                {
+                    "request_id": request_id,
+                    "status": "completed",
+                    "nurse": data.get("nurse_name"),
+                    "role": role,
+                    "ts": now_utc.isoformat(),
+                },
+            )
+        # If room is missing/invalid, we simply skip the patient emit
+        # (dashboard already removed above).
+
+    except Exception as e:
+        print(f"ERROR updating completion timestamp: {e}")
+
 
         now_utc = datetime.now(timezone.utc)
 
@@ -1657,6 +1682,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
