@@ -601,6 +601,12 @@ def handle_chat():
         return f"Error: Configuration file '{config_module_name}.py' is missing or invalid. Please contact support."
 
     room_number = _current_room()
+    # If POST carried a room value, persist it (works even if the URL lacks ?room=)
+    room_from_form = (request.form.get("room") or "").strip() if request.method == "POST" else ""
+    if room_from_form and _valid_room(room_from_form):
+        session["room_number"] = room_from_form
+        room_number = room_from_form
+
 
 
     if room_number and session.get("room_number") != room_number:
@@ -697,7 +703,9 @@ def dashboard():
     try:
         with engine.connect() as connection:
             result = connection.execute(text("""
-                SELECT request_id, room, user_input, category as role, timestamp
+                SELECT COALESCE(request_id, CAST(id AS VARCHAR)) AS request_id,
+                    room, user_input, category as role, timestamp
+
                 FROM requests
                 WHERE completion_timestamp IS NULL
                 ORDER BY timestamp DESC;
@@ -1213,7 +1221,9 @@ def staff_dashboard_for_nurse(staff_name):
         with engine.connect() as connection:
             if scope == 'all':
                 q = text("""
-                    SELECT request_id, room, user_input, category as role, timestamp
+                    SELECT COALESCE(request_id, CAST(id AS VARCHAR)) AS request_id,
+                        room, user_input, category as role, timestamp
+
                     FROM requests
                     WHERE completion_timestamp IS NULL
                     ORDER BY timestamp DESC;
@@ -1222,7 +1232,9 @@ def staff_dashboard_for_nurse(staff_name):
             else:
                 if rooms_for_nurse:
                     q = text("""
-                        SELECT request_id, room, user_input, category as role, timestamp
+                        SELECT COALESCE(request_id, CAST(id AS VARCHAR)) AS request_id,
+                            room, user_input, category as role, timestamp
+
                         FROM requests
                         WHERE completion_timestamp IS NULL
                           AND room = ANY(:room_list)
@@ -1617,6 +1629,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
