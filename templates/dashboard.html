@@ -188,6 +188,7 @@
 
   <!-- Context for JS -->
   <script>
+    // Template context exposed to JS (safe defaults)
     const NurseContext = {{ nurse_context|default(false)|tojson }};
     const NurseName    = {{ nurse_name|default('')|tojson }};
     const NurseShift   = {{ shift|default('day')|tojson }};
@@ -198,9 +199,30 @@
   <script type="text/javascript">
     var socket = io();
 
+    let audioContext;
+    function playNotificationSound() {
+      try {
+        if (!audioContext) {
+          audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioContext.state === 'suspended') audioContext.resume();
+
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        osc.connect(gain); gain.connect(audioContext.destination);
+        osc.type = 'sine'; osc.frequency.setValueAtTime(880, audioContext.currentTime);
+        gain.gain.setValueAtTime(0, audioContext.currentTime);
+        gain.gain.linearRampToValueAtTime(0.5, audioContext.currentTime + 0.05);
+        gain.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.5);
+        osc.start(audioContext.currentTime);
+        osc.stop(audioContext.currentTime + 0.5);
+      } catch (_) {}
+    }
+
     function updateAllTimersAndColors() {
       const items = document.querySelectorAll('#requests-list .request-item');
       const now = new Date();
+
       items.forEach(item => {
         const raw = item.dataset.timestamp || '';
         const ts = raw ? new Date(raw) : null;
@@ -242,6 +264,7 @@
 
       let li = document.getElementById(req.id);
       if (li) {
+        // Update in place (do not remove)
         li.dataset.room = req.room || '';
         li.dataset.request = req.request || '';
         li.dataset.role = req.role || '';
@@ -249,6 +272,7 @@
         li.className = 'request-item ' + (req.role || '');
         li.innerHTML = buildRequestHTML(req);
       } else {
+        // Create new
         li = document.createElement('li');
         li.id = req.id;
         li.className = 'request-item ' + (req.role || '');
@@ -258,7 +282,7 @@
         li.dataset.role = req.role || '';
         li.dataset.timestamp = req.timestamp || '';
         li.innerHTML = buildRequestHTML(req);
-        list.prepend(li);
+        document.getElementById('requests-list').prepend(li);
       }
     }
 
@@ -270,6 +294,7 @@
     // --- Socket events ---
     socket.on('new_request', function(data) {
       addRequestToDashboard(data);
+      playNotificationSound();
     });
 
     socket.on('request_updated', function(data) {
@@ -281,73 +306,84 @@
         if (roleSpan) roleSpan.textContent = 'For: NURSE';
         const deferBtn = item.querySelector('.defer-btn');
         if (deferBtn) deferBtn.remove();
-        updateAllTimersAndColors();
+        updateAllTimersAndColors(); // keep original timestamp
       }
     });
 
+    // ✅ Updated: remove by id OR by (room, request) for legacy N/A items
     socket.on('remove_request', function(data) {
-      const el = document.getElementById(data.id || '');
+      let el = null;
+
+      // 1) Try by id first
+      if (data.id) {
+        el = document.getElementById(data.id);
+      }
+
+      // 2) Fallback: match by (room, request) for legacy N/A rows
+      if (!el && (data.request || data.room)) {
+        const items = document.querySelectorAll('#requests-list .request-item');
+        el = Array.from(items).find(li => {
+          const sameText = data.request ? (li.dataset.request || '') === data.request : true;
+          const sameRoom = data.room ? (li.dataset.room || '') === data.room : true;
+          return sameText && sameRoom;
+        });
+      }
+
       if (el) {
         el.style.opacity = '0';
         setTimeout(() => el.remove(), 500);
       }
     });
 
-    // --- Click handlers (FINAL) ---
-    document.addEventListener('DOMContentLoaded', function () {
+    // --- Click handlers (includes request_text on complete) ---
+    document.addEventListener('DOMContentLoaded', function() {
       const list = document.getElementById('requests-list');
       if (!list) return;
 
-      list.addEventListener('click', function (e) {
+      list.addEventListener('click', function(e) {
         const btn = e.target;
         if (btn.tagName !== 'BUTTON') return;
 
         const item = btn.closest('.request-item');
         if (!item) return;
 
-        const requestId  = item.dataset.id || '';
-        const roomNumber = (item.dataset.room || '').trim();
-        const nurseName  = (window.NurseName || '').trim();
-        const dashRoom   = roomNumber;
-
-        // Guard: only allow actions for valid patient rooms (231-260)
-        if (!/^(23[1-9]|24\d|25\d|260)$/.test(roomNumber)) {
-          alert('This request is missing a valid room number. Please have the patient resend from their room page.');
-          return;
-        }
+        const requestId   = item.dataset.id || '';
+        const roomNumber  = item.dataset.room || '';
+        const dashRoom    = item.dataset.room || '';
+        const nurseName   = NurseName || '';
 
         function sendAck(status, dashMessage) {
           socket.emit('acknowledge_request', {
             request_id: requestId,
-            room_number: roomNumber,              // critical for patient side
+            room_number: roomNumber,
             nurse_name: nurseName,
-            role: (item.dataset.role || 'nurse'),
-            status: status,                       // "ack" | "omw" | "asap"
-            room: dashRoom,                       // keeps your legacy dashboard status_update
+            status: status,      // "ack" | "omw" | "asap"
+            room: dashRoom,
             message: dashMessage
           });
         }
 
         if (btn.classList.contains('ack-button')) {
           btn.disabled = true;
-          sendAck('ack', '✅ Request acknowledged.');
+          sendAck('ack', "✅ Request acknowledged.");
         } else if (btn.classList.contains('omw-button')) {
           btn.disabled = true;
           const ack = item.querySelector('.ack-button'); if (ack) ack.disabled = true;
-          sendAck('omw', '✅ On my way.');
+          sendAck('omw', "✅ On my way.");
         } else if (btn.classList.contains('asap-button')) {
           btn.disabled = true;
           const ack = item.querySelector('.ack-button'); if (ack) ack.disabled = true;
           const omw = item.querySelector('.omw-button'); if (omw) omw.disabled = true;
-          sendAck('asap', 'In another room — will be there ASAP.');
+          sendAck('asap', "In another room — will be there ASAP.");
         } else if (btn.classList.contains('defer-btn')) {
           socket.emit('defer_request', { id: requestId });
         } else if (btn.classList.contains('complete-btn')) {
+          // ✅ Include request_text so server can resolve legacy N/A requests
           socket.emit('complete_request', {
             request_id: requestId,
             room_number: roomNumber,
             nurse_name: nurseName,
-            role: (item.dataset.role || 'nurse')
+            request_text: item.dataset.request || ""
           });
           btn.disabled = true;
         }
@@ -357,7 +393,7 @@
       const btnRefresh = document.getElementById('manual-refresh');
       if (btnRefresh) btnRefresh.addEventListener('click', pollActiveRequests);
 
-      // Timers + polling
+      // Start timers + polling
       updateAllTimersAndColors();
       setInterval(updateAllTimersAndColors, 60000);
       setTimeout(pollActiveRequests, 500);
