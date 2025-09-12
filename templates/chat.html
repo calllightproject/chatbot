@@ -74,16 +74,10 @@
       transition: background-color 0.3s;
     }
     .options button:hover, .options button:focus { background-color: #093582; }
-    .note-section {
-      border-top: 1px solid #e1e1e2;
-      padding-top: 20px;
-      margin-top: 20px;
-    }
+    .note-section { border-top: 1px solid #e1e1e2; padding-top: 20px; margin-top: 20px; }
     .note-label { display:block; margin-bottom:10px; font-size:14px; color:#4b5563; }
     .note-form { display:flex; gap:10px; }
-    .note-form textarea {
-      flex-grow: 1; border-radius: 5px; border: 1px solid #ccc; padding: 10px; font-size: 14px;
-    }
+    .note-form textarea { flex-grow: 1; border-radius: 5px; border: 1px solid #ccc; padding: 10px; font-size: 14px; }
     .note-form button {
       flex-shrink: 0; padding: 10px 15px; border: 1px solid var(--core-blue);
       border-radius: 5px; background-color: var(--core-blue); color: var(--white);
@@ -157,65 +151,68 @@
     const RoleLabel = { nurse: "nurse", cna: "nursing assistant" };
     function roleLabel(raw){ const k=(raw||'nurse').toLowerCase(); return RoleLabel[k] || "nurse/CNA"; }
 
-    // Robust socket with reconnection
+    // Robust socket with reconnection — polling-only for stability
     if (!ROOM_NUMBER) showStatus("No room number found. Try /chat?room=241");
     const socket = io("/patient", {
-        query: { room_id: ROOM_NUMBER },
-        forceNew: true,          // isolate each tab's connection
-        transports: ["polling"], // TEMP: force long-polling (most proxy-proof)
-        upgrade: false,          // don't try WS upgrade while stabilizing
-        reconnection: true,
-        reconnectionAttempts: Infinity,
-        reconnectionDelay: 500,
-        reconnectionDelayMax: 5000,
-        timeout: 20000
+      query: { room_id: ROOM_NUMBER },
+      forceNew: true,          // isolate each tab's connection
+      transports: ["polling"], // TEMP: force long-polling (proxy-proof)
+      upgrade: false,          // don't try WS upgrade while stabilizing
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 5000,
+      timeout: 20000
     });
 
-// ensure clean close when navigating away (prevents ghost sockets)
-window.addEventListener("beforeunload", () => {
-  try { socket.close(); } catch (_) {}
-});
+    // Clean close on navigation
+    window.addEventListener("beforeunload", () => { try { socket.close(); } catch (_) {} });
 
+    // Log events for quick debugging
+    socket.onAny((event, ...args) => { console.log("[patient] event:", event, ...args); });
 
-    // See every inbound event for quick debugging
-    socket.onAny((event, ...args) => {
-      console.log("[patient] event:", event, ...args);
-    });
+    // 🔑 Explicit room join after connect & reconnect
+    function joinPatientRoom() {
+      if (!ROOM_NUMBER) return;
+      socket.emit("patient:join", { room_id: ROOM_NUMBER });
+    }
 
     // Connection lifecycle
     socket.on("connect", () => {
+      joinPatientRoom();
       showStatus("Connected for Room " + ROOM_NUMBER);
       console.log("[patient] connected id=", socket.id);
     });
+
+    socket.io.on("reconnect", () => {
+      joinPatientRoom();
+      showStatus("Reconnected for Room " + ROOM_NUMBER);
+    });
+
     socket.on("disconnect", (reason) => {
       console.warn("[patient] disconnected:", reason);
       if (reason !== "io client disconnect") showStatus("Reconnecting…");
     });
+
     socket.io.on("reconnect_attempt", (n) => {
       console.log("[patient] reconnect_attempt", n);
       showStatus("Reconnecting…");
     });
-    socket.io.on("reconnect", (n) => {
-      console.log("[patient] reconnected on attempt", n);
-      showStatus("Reconnected for Room " + ROOM_NUMBER);
-    });
-    socket.io.on("reconnect_error", (err) => {
-      console.warn("[patient] reconnect_error:", err?.message || err);
-    });
-    socket.io.on("reconnect_failed", () => {
-      console.error("[patient] reconnect_failed");
-      showStatus("Connection lost. Retrying…");
-    });
-    socket.on("connect_error", (err) => {
-      console.error("[patient] connect_error:", err?.message || err);
-      showStatus("Connection error — retrying…");
-    });
+
+    socket.io.on("reconnect_error", (err) => { console.warn("[patient] reconnect_error:", err?.message || err); });
+    socket.io.on("reconnect_failed", () => { console.error("[patient] reconnect_failed"); showStatus("Connection lost. Retrying…"); });
+    socket.on("connect_error", (err) => { console.error("[patient] connect_error:", err?.message || err); showStatus("Connection error — retrying…"); });
+
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible" && !socket.connected) {
         console.log("[patient] tab visible — forcing reopen");
         socket.connect();
       }
     });
+
+    // Optional: server acks
+    socket.on("patient:joined", (d) => console.log("[patient] joined", d));
+    socket.on("patient:error", (d) => console.warn("[patient] error", d));
 
     // Queue nudge timers
     let nudgeTimer = setTimeout(() => {
@@ -258,7 +255,6 @@ window.addEventListener("beforeunload", () => {
         showStatus(`Your ${who} is in another room and will be with you as soon as possible${nameSuffix}.`);
         toast("They’ll be there ASAP.");
       } else {
-        // Unknown status (defensive)
         console.warn("[patient] unknown status:", data);
       }
     });
@@ -273,4 +269,3 @@ window.addEventListener("beforeunload", () => {
   </script>
 </body>
 </html>
-
