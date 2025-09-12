@@ -428,12 +428,13 @@ def send_email_alert(subject, body, room_number):
         print(f"ERROR: Email failed to send: {e}")
 
 def process_request(role, subject, user_input, reply_message):
-    # Normalize to English for dashboard/email/logs; tag unknown custom notes with language
     lang = session.get('language', 'en')
     english_user_input = to_english_label(user_input, lang)
 
     request_id = 'req_' + str(datetime.now(timezone.utc).timestamp()).replace('.', '')
-    room_number = session.get('room_number', 'N/A')
+
+    # ✅ FIX: prefer current_room, fall back to session
+    room_number = _current_room() or session.get('room_number', 'N/A')
     is_first_baby = session.get('is_first_baby')
 
     socketio.start_background_task(send_email_alert, subject, english_user_input, room_number)
@@ -441,16 +442,20 @@ def process_request(role, subject, user_input, reply_message):
         log_request_to_db,
         request_id,
         role,
-        english_user_input,  # store/emit English text
+        english_user_input,
         reply_message,
         room_number,
         is_first_baby
     )
     socketio.emit('new_request', {
-        'id': request_id, 'room': room_number, 'request': english_user_input,
-        'role': role, 'timestamp': datetime.now(timezone.utc).isoformat()
+        'id': request_id,
+        'room': room_number,   # ✅ FIX: now patient can match
+        'request': english_user_input,
+        'role': role,
+        'timestamp': datetime.now(timezone.utc).isoformat()
     })
     return reply_message
+
 
 # --- App Routes ---
 @app.route("/room/<room_id>")
@@ -1572,6 +1577,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
