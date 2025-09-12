@@ -436,17 +436,22 @@ def log_request_to_db(request_id, category, user_input, reply, room, is_first_ba
 
 
 def process_request(role, subject, user_input, reply_message):
+    # Normalize to English for dashboard/email/logs
     lang = session.get('language', 'en')
     english_user_input = to_english_label(user_input, lang)
 
     request_id = 'req_' + str(datetime.now(timezone.utc).timestamp()).replace('.', '')
 
-    # ✅ FIX: prefer current_room, fall back to session
-    room_number = session.get('room_number') or request.args.get('room') or 'N/A'
+    # ✅ Always resolve the real room, persisting ?room=XYZ into session if present
+    room_number = _current_room() or session.get('room_number') or request.args.get('room') or 'N/A'
+    room_number = str(room_number).strip()
 
     is_first_baby = session.get('is_first_baby')
 
+    # (optional) email alert – can be left as-is or removed if unused
     socketio.start_background_task(send_email_alert, subject, english_user_input, room_number)
+
+    # Persist to DB (with clear debug of resolved room)
     socketio.start_background_task(
         log_request_to_db,
         request_id,
@@ -456,14 +461,18 @@ def process_request(role, subject, user_input, reply_message):
         room_number,
         is_first_baby
     )
+
+    # Live-update dashboards
     socketio.emit('new_request', {
         'id': request_id,
-        'room': room_number,   # ✅ FIX: now patient can match
+        'room': room_number,   # ✅ correct room now
         'request': english_user_input,
         'role': role,
         'timestamp': datetime.now(timezone.utc).isoformat()
     })
+
     return reply_message
+
 
 
 # --- App Routes ---
@@ -1586,6 +1595,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
