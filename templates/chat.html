@@ -1,269 +1,268 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Postpartum CareConnect</title>
-    <style>
-        :root {
-            --core-blue: #00205b;
-            --accent-blue: #007eb4;
-            --neutral-gray-text: #303235;
-            --light-gray-background: #f5f5f5;
-            --white: #ffffff;
-        }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            padding: 20px;
-            background-color: var(--light-gray-background);
-            color: var(--neutral-gray-text);
-        }
-        .chat-box {
-            max-width: 500px;
-            margin: 20px auto;
-            background: var(--white);
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        }
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #e1e1e2;
-            margin-bottom: 20px;
-        }
-        .header h2 {
-            color: var(--core-blue);
-            margin: 0;
-            font-size: 22px;
-        }
-        .language-link {
-            text-decoration: none;
-            color: var(--accent-blue);
-            font-size: 14px;
-            white-space: nowrap;
-            margin-left: 10px;
-        }
-        .bot-reply {
-            background-color: #ebf0fa;
-            padding: 15px;
-            margin-bottom: 20px;
-            border-radius: 8px;
-            line-height: 1.5;
-            text-align: center;
-            min-height: 50px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .options button {
-            display: block;
-            width: 100%;
-            box-sizing: border-box;
-            margin: 8px 0;
-            padding: 15px;
-            border: 1px solid var(--core-blue);
-            border-radius: 5px;
-            background-color: var(--core-blue);
-            color: var(--white);
-            cursor: pointer;
-            font-size: 16px;
-            text-align: left;
-            transition: background-color 0.3s;
-        }
-        .options button:hover, .options button:focus {
-            background-color: #093582;
-        }
-        .note-section {
-            border-top: 1px solid #e1e1e2;
-            padding-top: 20px;
-            margin-top: 20px;
-        }
-        .note-label {
-            display: block;
-            margin-bottom: 10px;
-            font-size: 14px;
-            color: #4b5563;
-        }
-        .note-form {
-            display: flex;
-            gap: 10px;
-        }
-        .note-form textarea {
-            flex-grow: 1;
-            border-radius: 5px;
-            border: 1px solid #ccc;
-            padding: 10px;
-            font-size: 14px;
-        }
-        .note-form button {
-            flex-shrink: 0;
-            padding: 10px 15px;
-            border: 1px solid var(--core-blue);
-            border-radius: 5px;
-            background-color: var(--core-blue);
-            color: var(--white);
-            cursor: pointer;
-            font-size: 14px;
-            transition: background-color 0.3s;
-        }
-        .note-form button:hover {
-            background-color: #093582;
-        }
-        .footer {
-            text-align: center;
-            margin-top: 20px;
-            padding-top: 15px;
-            border-top: 1px solid #e1e1e2;
-        }
-        .footer p {
-            font-size: 12px;
-            color: #6b7280;
-            margin: 0;
-            line-height: 1.5;
-        }
-        #live-status {
-            margin-top: 10px;
-            padding: 8px;
-            background: #f0f4ff;
-            border: 1px solid #c7d2fe;
-            border-radius: 6px;
-            font-size: 14px;
-            display: none;
-        }
-        .toast {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: #333;
-            color: white;
-            padding: 8px 12px;
-            border-radius: 6px;
-            opacity: 0.9;
-            font-size: 14px;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Postpartum CareConnect</title>
+  <style>
+    :root {
+      --core-blue: #00205b;
+      --accent-blue: #007eb4;
+      --neutral-gray-text: #303235;
+      --light-gray-background: #f5f5f5;
+      --white: #ffffff;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      padding: 20px;
+      background-color: var(--light-gray-background);
+      color: var(--neutral-gray-text);
+    }
+    .chat-box {
+      max-width: 500px;
+      margin: 20px auto;
+      background: var(--white);
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #e1e1e2;
+      margin-bottom: 20px;
+    }
+    .header h2 {
+      color: var(--core-blue);
+      margin: 0;
+      font-size: 22px;
+    }
+    .language-link {
+      text-decoration: none;
+      color: var(--accent-blue);
+      font-size: 14px;
+      white-space: nowrap;
+      margin-left: 10px;
+    }
+    .bot-reply {
+      background-color: #ebf0fa;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 8px;
+      line-height: 1.5;
+      text-align: center;
+      min-height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .options button {
+      display: block;
+      width: 100%;
+      box-sizing: border-box;
+      margin: 8px 0;
+      padding: 15px;
+      border: 1px solid var(--core-blue);
+      border-radius: 5px;
+      background-color: var(--core-blue);
+      color: var(--white);
+      cursor: pointer;
+      font-size: 16px;
+      text-align: left;
+      transition: background-color 0.3s;
+    }
+    .options button:hover, .options button:focus { background-color: #093582; }
+    .note-section {
+      border-top: 1px solid #e1e1e2;
+      padding-top: 20px;
+      margin-top: 20px;
+    }
+    .note-label { display:block; margin-bottom:10px; font-size:14px; color:#4b5563; }
+    .note-form { display:flex; gap:10px; }
+    .note-form textarea {
+      flex-grow: 1; border-radius: 5px; border: 1px solid #ccc; padding: 10px; font-size: 14px;
+    }
+    .note-form button {
+      flex-shrink: 0; padding: 10px 15px; border: 1px solid var(--core-blue);
+      border-radius: 5px; background-color: var(--core-blue); color: var(--white);
+      cursor: pointer; font-size: 14px; transition: background-color 0.3s;
+    }
+    .note-form button:hover { background-color: #093582; }
+    .footer { text-align:center; margin-top:20px; padding-top:15px; border-top:1px solid #e1e1e2; }
+    .footer p { font-size:12px; color:#6b7280; margin:0; line-height:1.5; }
+
+    #live-status {
+      margin-top: 10px; padding: 8px; background: #f0f4ff; border: 1px solid #c7d2fe;
+      border-radius: 6px; font-size: 14px; display: none;
+    }
+    .toast {
+      position: fixed; bottom: 20px; right: 20px; background: #333; color: white;
+      padding: 8px 12px; border-radius: 6px; opacity: 0.9; font-size: 14px;
+    }
+  </style>
 </head>
 <body>
-    <div class="chat-box">
-        <div class="header">
-            <h2>Postpartum CareConnect</h2>
-            <a href="{{ url_for('reset_language') }}" class="language-link">Change Language</a>
-        </div>
-
-        <div class="bot-reply">
-            <p>{{ reply }}</p>
-        </div>
-
-        <div id="live-status"></div>
-
-        <div class="options">
-            <form method="POST" action="{{ url_for('handle_chat') }}" style="display: contents;">
-                {% for option in options %}
-                    <button type="submit" name="user_input" value="{{ option }}">{{ option }}</button>
-                {% endfor %}
-            </form>
-        </div>
-
-        <div class="note-section">
-            <form method="POST" action="{{ url_for('handle_chat') }}">
-                <input type="hidden" name="action" value="send_note">
-                <label for="custom_note" class="note-label">{{ button_data.get('custom_note_placeholder', 'Or send a custom note to your nurse:') }}</label>
-                <div class="note-form">
-                    <textarea id="custom_note" name="custom_note" rows="2" placeholder="Type your message here..."></textarea>
-                    <button type="submit">{{ button_data.get('send_note_button', 'Send Note') }}</button>
-                </div>
-            </form>
-        </div>
-        
-        <div class="footer">
-            <p>Educational content sourced from the Banner Health New Beginnings guide.</p>
-        </div>
+  <div class="chat-box">
+    <div class="header">
+      <h2>Postpartum CareConnect</h2>
+      <a href="{{ url_for('reset_language') }}" class="language-link">Change Language</a>
     </div>
 
-    <!-- Socket.IO -->
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-    <script>
-      // Template var (may be empty/None if not set on server)
-      const TEMPLATE_ROOM = "{{ room_number or '' }}";
-      // URL fallback: /chat?room=241
-      const urlRoom = new URLSearchParams(location.search).get('room') || '';
-      // Final choice
-      const ROOM_NUMBER = (TEMPLATE_ROOM && TEMPLATE_ROOM !== 'None') ? TEMPLATE_ROOM : urlRoom;
+    <div class="bot-reply"><p>{{ reply }}</p></div>
 
-      const statusEl = document.getElementById('live-status');
-      function showStatus(msg){ statusEl.textContent = msg; statusEl.style.display = 'block'; }
-      function toast(msg){ const el=document.createElement('div'); el.className='toast'; el.textContent=msg; document.body.appendChild(el); setTimeout(()=>el.remove(),2800); }
+    <div id="live-status"></div>
 
-      // Visible debug (safe)
-      console.log("[patient] ROOM_NUMBER=", ROOM_NUMBER);
-      if (!ROOM_NUMBER) showStatus("No room number found. Try /chat?room=241");
+    <div class="options">
+      <form method="POST" action="{{ url_for('handle_chat') }}" style="display: contents;">
+        {% for option in options %}
+          <button type="submit" name="user_input" value="{{ option }}">{{ option }}</button>
+        {% endfor %}
+      </form>
+    </div>
 
-      const socket = io("/patient", { query: { room_id: ROOM_NUMBER } });
+    <div class="note-section">
+      <form method="POST" action="{{ url_for('handle_chat') }}">
+        <input type="hidden" name="action" value="send_note">
+        <label for="custom_note" class="note-label">
+          {{ button_data.get('custom_note_placeholder', 'Or send a custom note to your nurse:') }}
+        </label>
+        <div class="note-form">
+          <textarea id="custom_note" name="custom_note" rows="2" placeholder="Type your message here..."></textarea>
+          <button type="submit">{{ button_data.get('send_note_button', 'Send Note') }}</button>
+        </div>
+      </form>
+    </div>
 
-      // --- Optional: gentle nudge if no staff action within 2 minutes ---
-      let nudgeTimer = setTimeout(() => {
-        showStatus("Your request is still in the queue. A team member will be with you soon.");
-        toast("Still in queue — a team member will be with you soon.");
-      }, 2 * 60 * 1000);
+    <div class="footer">
+      <p>Educational content sourced from the Banner Health New Beginnings guide.</p>
+    </div>
+  </div>
 
-      function cancelNudge() {
-        if (nudgeTimer) { clearTimeout(nudgeTimer); nudgeTimer = null; }
+  <!-- Socket.IO -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script>
+    // Resolve room (template > URL fallback)
+    const TEMPLATE_ROOM = "{{ room_number or '' }}";
+    const urlRoom = new URLSearchParams(location.search).get('room') || '';
+    const ROOM_NUMBER = (TEMPLATE_ROOM && TEMPLATE_ROOM !== 'None') ? TEMPLATE_ROOM : urlRoom;
+
+    // UI helpers
+    const statusEl = document.getElementById('live-status');
+    function showStatus(msg){ statusEl.textContent = msg; statusEl.style.display = 'block'; }
+    function toast(msg){ const el=document.createElement('div'); el.className='toast'; el.textContent=msg; document.body.appendChild(el); setTimeout(()=>el.remove(),2800); }
+
+    // Role label (fallback). If your server sends role: 'nurse' | 'cna', we’ll print a nice label.
+    const RoleLabel = { nurse: "nurse", cna: "nursing assistant" };
+    function roleLabel(raw){ const k=(raw||'nurse').toLowerCase(); return RoleLabel[k] || "nurse/CNA"; }
+
+    // Robust socket with reconnection
+    if (!ROOM_NUMBER) showStatus("No room number found. Try /chat?room=241");
+    const socket = io("/patient", {
+      query: { room_id: ROOM_NUMBER },
+      transports: ["websocket", "polling"],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 5000,
+      timeout: 20000
+      // To test with polling only, temporarily use: transports: ["polling"]
+    });
+
+    // See every inbound event for quick debugging
+    socket.onAny((event, ...args) => {
+      console.log("[patient] event:", event, ...args);
+    });
+
+    // Connection lifecycle
+    socket.on("connect", () => {
+      showStatus("Connected for Room " + ROOM_NUMBER);
+      console.log("[patient] connected id=", socket.id);
+    });
+    socket.on("disconnect", (reason) => {
+      console.warn("[patient] disconnected:", reason);
+      if (reason !== "io client disconnect") showStatus("Reconnecting…");
+    });
+    socket.io.on("reconnect_attempt", (n) => {
+      console.log("[patient] reconnect_attempt", n);
+      showStatus("Reconnecting…");
+    });
+    socket.io.on("reconnect", (n) => {
+      console.log("[patient] reconnected on attempt", n);
+      showStatus("Reconnected for Room " + ROOM_NUMBER);
+    });
+    socket.io.on("reconnect_error", (err) => {
+      console.warn("[patient] reconnect_error:", err?.message || err);
+    });
+    socket.io.on("reconnect_failed", () => {
+      console.error("[patient] reconnect_failed");
+      showStatus("Connection lost. Retrying…");
+    });
+    socket.on("connect_error", (err) => {
+      console.error("[patient] connect_error:", err?.message || err);
+      showStatus("Connection error — retrying…");
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && !socket.connected) {
+        console.log("[patient] tab visible — forcing reopen");
+        socket.connect();
       }
+    });
 
-      socket.on("connect", () => {
-        showStatus("Connected for Room " + ROOM_NUMBER);
-      });
+    // Queue nudge timers
+    let nudgeTimer = setTimeout(() => {
+      showStatus("Your request is still in the queue. A team member will be with you soon.");
+      toast("Still in queue — a team member will be with you soon.");
+    }, 2 * 60 * 1000);
+    function cancelNudge(){ if (nudgeTimer) { clearTimeout(nudgeTimer); nudgeTimer = null; } }
 
-      socket.on("connect_error", (err) => {
-        console.error("[patient] connect_error:", err);
-        showStatus("Connection error: " + (err && err.message ? err.message : "unknown"));
-      });
+    // === Event handlers ===
 
-      socket.on("request:received", (data) => {
-        if (String(data.room_id) !== String(ROOM_NUMBER)) return;
-        showStatus("Your request has been received by the nurse station.");
-        toast("Request received.");
-        cancelNudge();
-        // restart a shorter nudge for long waits after receipt (optional)
-        nudgeTimer = setTimeout(() => {
-          showStatus("Thank you for your patience — your request is still in the queue.");
-          toast("Still in queue — thanks for your patience.");
-        }, 6 * 60 * 1000); // 6 minutes after receipt (adjust as desired)
-      });
+    // Server-side: emit when the request row is saved
+    socket.on("request:received", (data) => {
+      if (String(data.room_id) !== String(ROOM_NUMBER)) return;
+      showStatus("Your request has been received by the nurse station.");
+      toast("Request received.");
+      cancelNudge();
+      // Optional follow-up nudge if still waiting a while after receipt
+      nudgeTimer = setTimeout(() => {
+        showStatus("Thank you for your patience — your request is still in the queue.");
+        toast("Still in queue — thanks for your patience.");
+      }, 6 * 60 * 1000);
+    });
 
-      socket.on("request:status", (data) => {
-        if (String(data.room_id) !== String(ROOM_NUMBER)) return;
-        cancelNudge();
-        const who = data.nurse ? ` (${data.nurse})` : "";
-        switch ((data.status || "").toLowerCase()) {
-          case "ack":
-            showStatus(`Your nurse/CNA has acknowledged your request${who}.`);
-            toast("Request acknowledged.");
-            break;
-          case "omw":
-            showStatus(`Your nurse/CNA is on their way for your request${who}.`);
-            toast("Nurse/CNA on the way.");
-            break;
-          case "asap":
-            showStatus(`Your nurse/CNA is in another room and will be with you as soon as possible${who}.`);
-            toast("They’ll be there ASAP.");
-            break;
-        }
-      });
+    // Dashboard actions → status updates
+    socket.on("request:status", (data) => {
+      if (String(data.room_id) !== String(ROOM_NUMBER)) return;
+      cancelNudge();
 
-      socket.on("request:done", (data) => {
-        if (String(data.room_id) !== String(ROOM_NUMBER)) return;
-        cancelNudge();
-        showStatus("All set — your request has been marked complete.");
-        toast("Request completed.");
-      });
+      const status = (data.status || "").toLowerCase();  // "ack" | "omw" | "asap"
+      const who = roleLabel(data.role);                   // nurse vs CNA
+      const nameSuffix = ""; // set to data.nurse ? ` (${data.nurse})` : "" if you want names
 
-      socket.on("disconnect", () => {
-        showStatus("Disconnected. Trying to reconnect…");
-      });
-    </script>
+      if (status === "ack") {
+        showStatus(`Your ${who} has acknowledged your request${nameSuffix}.`);
+        toast("Request acknowledged.");
+      } else if (status === "omw") {
+        showStatus(`Your ${who} is on their way for your request${nameSuffix}.`);
+        toast("Help is on the way.");
+      } else if (status === "asap") {
+        showStatus(`Your ${who} is in another room and will be with you as soon as possible${nameSuffix}.`);
+        toast("They’ll be there ASAP.");
+      } else {
+        // Unknown status (defensive)
+        console.warn("[patient] unknown status:", data);
+      }
+    });
+
+    // Completion
+    socket.on("request:done", (data) => {
+      if (String(data.room_id) !== String(ROOM_NUMBER)) return;
+      cancelNudge();
+      showStatus("All set — your request has been marked complete.");
+      toast("Request completed.");
+    });
+  </script>
 </body>
 </html>
