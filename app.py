@@ -395,37 +395,45 @@ def log_to_audit_trail(event_type, details):
         print(f"ERROR logging to audit trail: {e}")
 
 def log_request_to_db(request_id, category, user_input, reply, room, is_first_baby):
+    """
+    Persist a request and emit a clear server-side debug line showing the resolved room.
+    """
     try:
+        # Normalize room for storage + debugging
+        room_str = str(room).strip() if room is not None else None
+        is_digit = room_str.isdigit() if room_str else False
+        is_valid_room = is_digit and 231 <= int(room_str) <= 260
+
+        # Helpful debug so you can see exactly what's being stored
+        if is_valid_room:
+            print(f"[log_request_to_db] OK  | request_id={request_id} room={room_str} role={category}")
+        else:
+            print(f"[log_request_to_db] WARN| request_id={request_id} invalid/unknown room='{room_str}' role={category}")
+
         with engine.connect() as connection:
             with connection.begin():
                 connection.execute(text("""
                     INSERT INTO requests (request_id, timestamp, room, category, user_input, reply, is_first_baby)
                     VALUES (:request_id, :timestamp, :room, :category, :user_input, :reply, :is_first_baby);
                 """), {
-                    "request_id": request_id, "timestamp": datetime.now(timezone.utc), "room": room,
-                    "category": category, "user_input": user_input, "reply": reply, "is_first_baby": is_first_baby
+                    "request_id": request_id,
+                    "timestamp": datetime.now(timezone.utc),
+                    "room": room_str,  # store the normalized string (e.g., "241")
+                    "category": category,
+                    "user_input": user_input,
+                    "reply": reply,
+                    "is_first_baby": is_first_baby
                 })
-        log_to_audit_trail("Request Created", f"Room: {room}, Request: '{user_input}', Assigned to: {category.upper()}")
+
+        log_to_audit_trail(
+            "Request Created",
+            f"Room: {room_str or 'N/A'}, Request: '{user_input}', Assigned to: {category.upper()}"
+        )
+
     except Exception as e:
         print(f"ERROR logging to database: {e}")
 
-def send_email_alert(subject, body, room_number):
-    sender_email = os.getenv("EMAIL_USER")
-    sender_password = os.getenv("EMAIL_PASSWORD")
-    recipient_email = os.getenv("RECIPIENT_EMAIL", "call.light.project@gmail.com")
-    if not sender_email or not sender_password:
-        return
-    msg = EmailMessage()
-    msg["Subject"] = f"Room {room_number} - {subject}"
-    msg["From"] = sender_email
-    msg["To"] = recipient_email
-    msg.set_content(body)
-    try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-            smtp.login(sender_email, sender_password)
-            smtp.send_message(msg)
-    except Exception as e:
-        print(f"ERROR: Email failed to send: {e}")
+
 
 def process_request(role, subject, user_input, reply_message):
     lang = session.get('language', 'en')
@@ -1578,6 +1586,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
