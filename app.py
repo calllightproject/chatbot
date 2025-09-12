@@ -504,51 +504,20 @@ def _valid_room(room_str: str) -> bool:
     n = int(room_str)
     return 231 <= n <= 260
 
-def _current_room() -> str | None:
-    # Prefer session, allow override via ?room=XYZ for testing
-    room = session.get("room_number") or request.args.get("room")
-    if room and _valid_room(str(room)):
-        return str(room)
-    return None
-
-def _emit_received_for(room_number: str, user_text: str, kind: str):
-    """Look up the most recent matching request row and emit to the patient room."""
-    if not (room_number and user_text):
-        return
-    try:
-        with engine.connect() as conn:
-            row = conn.execute(text("""
-                SELECT request_id, timestamp
-                FROM requests
-                WHERE room = :room AND user_input = :txt
-                ORDER BY timestamp DESC
-                LIMIT 1
-            """), {"room": str(room_number), "txt": user_text}).fetchone()
-        if row and row.request_id:
-            emit_patient_event("request:received", room_number, {
-                "request_id": row.request_id,
-                "kind": kind,  # "note" or "option"
-                "note": user_text if kind == "note" else "",
-                "created_at": (row.timestamp or datetime.now(timezone.utc)).isoformat()
-            })
-    except Exception as e:
-        print(f"WARN: could not emit request:received for room {room_number}: {e}")
-
-
-# ---------------- Routes ----------------
-
-def _valid_room(room_str: str) -> bool:
-    if not room_str or not str(room_str).isdigit():
-        return False
-    n = int(room_str)
-    return 231 <= n <= 260
 
 def _current_room() -> str | None:
-    # Prefer session, allow ?room=XYZ for testing
-    room = session.get("room_number") or request.args.get("room")
+    """
+    Prefer session, but allow override via ?room=XYZ for testing.
+    If a valid ?room= is passed, persist it into the session.
+    """
+    room = request.args.get("room") or session.get("room_number")
     if room and _valid_room(str(room)):
-        return str(room)
+        room_str = str(room)
+        if session.get("room_number") != room_str:
+            session["room_number"] = room_str
+        return room_str
     return None
+
 
 def _emit_received_for(room_number: str, user_text: str, kind: str):
     """Look up the most recent matching request row and emit to the patient room."""
@@ -587,6 +556,10 @@ def handle_chat():
         return f"Error: Configuration file '{config_module_name}.py' is missing or invalid. Please contact support."
 
     room_number = _current_room()
+
+
+    if room_number and session.get("room_number") != room_number:
+        session["room_number"] = room_number
 
     if request.method == 'POST':
         if request.form.get("action") == "send_note":
@@ -1599,6 +1572,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
