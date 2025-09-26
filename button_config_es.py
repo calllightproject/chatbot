@@ -16,19 +16,20 @@ button_data = {
     "ai_no": "No, estoy bien",
     "unknown_input": "Perdón, no entendí. Por favor use los botones.",
 
-    # --- Main Menu Options ---
-    "main_buttons": [
-        "Tengo una emergencia",
-        "Necesito suministros",
-        "Necesito medicamentos",
-        "Mi bomba de IV está sonando",
-        "Tengo preguntas",
-        "Quiero saber sobre el alta",
-        "Baño / Ducha",
-        "Necesito ayuda para amamantar",
-        "Azúcar en la sangre",
-        "Hielo / Agua"
-    ],
+   # --- Main Menu Options ---
+"main_buttons": [
+    "Tengo una emergencia",
+    "Mi bomba de IV está sonando",
+    "Necesito medicamentos",
+    "Necesito suministros",
+    "Baño / Ducha",
+    "Hielo / Agua",
+    "Azúcar en la sangre",
+    "Necesito ayuda para amamantar",
+    "Tengo preguntas",
+    "Quiero saber sobre el alta"
+],
+
 
     # --- Direct Actions & Simple Sub-menus ---
     "Tengo una emergencia": {"action": "Notificar a la enfermera"},
@@ -182,3 +183,4 @@ button_data = {
     "¿Cuándo recibiré mis papeles de alta?": {"note": "Una vez que el ginecólogo y el pediatra ingresen notas y órdenes de alta, su enfermera imprimirá la documentación."},
     "¿Tengo que usar una silla de ruedas?": {"note": "No es obligatorio, pero alguien del personal debe acompañarle. Si enfermería está ocupada, le llevará personal de traslado."}
 }
+
