@@ -8,7 +8,7 @@ button_data = {
     "nurse_notification": "✅ Nurse has been notified.",
     "back_text": "⬅ Back",
 
-    # --- Main Menu Options ---
+# --- Main Menu Options (Bereavement) ---
 "main_buttons": [
     "I'm having an emergency",
     "My IV pump is beeping",
@@ -16,9 +16,12 @@ button_data = {
     "I need supplies",
     "Bathroom/Shower",
     "Ice Chips/Water",
+    "I want to see my baby",
+    "I need to talk to the social worker",
     "I have questions",
     "I want to know about going home"
 ],
+
 
     # --- Direct Actions & Simple Sub-menus ---
     "I'm having an emergency": {"action": "Notify Nurse"},
@@ -103,5 +106,6 @@ button_data = {
     "When will I get my discharge paperwork?": {"note": "Once the OB-GYN has put in their notes and discharge orders, your nurse can print out paperwork."},
     "Do I have to take a wheelchair?": {"note": "No, but a staff member has to go with you. If the nursing staff is busy, a transport worker will be the one to escort you out."}
 }
+
 
 
