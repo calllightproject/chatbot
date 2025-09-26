@@ -9,16 +9,17 @@ button_data = {
     "back_text": "⬅ Regresar",
     "unknown_input": "Perdón, no entendí. Por favor use los botones.",
 
-    "main_buttons": [
-        "Tengo una emergencia",
-        "Necesito suministros",
-        "Necesito medicamentos",
-        "Mi bomba de IV está sonando",
-        "Tengo preguntas",
-        "Quiero saber sobre el alta",
-        "Baño / Ducha",
-        "Hielo / Agua"
-    ],
+   "main_buttons": [
+    "Tengo una emergencia",
+    "Mi bomba de IV está sonando",
+    "Necesito medicamentos",
+    "Necesito suministros",
+    "Baño / Ducha",
+    "Hielo / Agua",
+    "Tengo preguntas",
+    "Quiero saber sobre el alta"
+],
+
 
     "Tengo una emergencia": {"action": "Notificar a la enfermera"},
     "Mi bomba de IV está sonando": {"action": "Notificar a la enfermera"},
@@ -98,3 +99,4 @@ button_data = {
     "Parto vaginal": {"note": "Estancia mínima 24 h tras parto vaginal; el ginecólogo autoriza el alta."},
     "Parto por cesárea": {"note": "Estancia mínima 48 h tras cesárea; el ginecólogo indicará el alta si corresponde."}
 }
+
