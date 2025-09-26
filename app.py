@@ -1,4 +1,3 @@
-# These two lines MUST be the very first lines in the file.
 import eventlet
 eventlet.monkey_patch()
 
@@ -10,7 +9,7 @@ from datetime import datetime, date, time, timezone
 from collections import defaultdict
 from email.message import EmailMessage
 
-from flask import Flask, render_template, request, session, redirect, url_for, flash, jsonify
+from flask import Flask, render_template, request, session, redirect, url_for, flash, jsonify, abort
 from flask_socketio import SocketIO, join_room
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import ProgrammingError
@@ -28,7 +27,19 @@ socketio = SocketIO(
     ping_interval=25   # was 10
 )
 
-ALL_ROOMS = [str(room) for room in range(231, 261)]
+# --- Room Configuration ---
+ALL_ROOMS = [str(room) for room in range(231, 260)]
+VALID_ROOMS = set(ALL_ROOMS)
+
+@app.route("/room/<room_number>")
+def patient_room(room_number):
+    room_number = str(room_number)
+    if room_number not in VALID_ROOMS:
+        abort(404)
+    # store the room in session for API fallback
+    session['room_number'] = room_number
+    return render_template("chat.html", room_number=room_number)
+
 
 # --- Database Configuration ---
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -1682,6 +1693,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
