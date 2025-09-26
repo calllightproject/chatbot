@@ -179,7 +179,7 @@
           <button class="complete-btn">Complete</button>
         </li>
       {% else %}
-        <li class="request-item" style="justify-content:center">
+        <li id="empty-state" class="request-item" style="justify-content:center">
           <p>No active requests.</p>
         </li>
       {% endfor %}
@@ -220,7 +220,7 @@
     }
 
     function updateAllTimersAndColors() {
-      const items = document.querySelectorAll('#requests-list .request-item');
+      const items = document.querySelectorAll('#requests-list .request-item[id]');
       const now = new Date();
 
       items.forEach(item => {
@@ -258,13 +258,36 @@
       `;
     }
 
+    // ---- Empty-state management ----
+    function showEmptyStateIfNeeded() {
+      const ul = document.getElementById('requests-list');
+      if (!ul) return;
+      const hasItems = ul.querySelectorAll('li.request-item[id]').length > 0; // real items have an id
+      const empty = document.getElementById('empty-state');
+
+      if (hasItems && empty) {
+        empty.remove();
+      } else if (!hasItems && !empty) {
+        const li = document.createElement('li');
+        li.id = 'empty-state';
+        li.className = 'request-item';
+        li.style.justifyContent = 'center';
+        li.innerHTML = '<p>No active requests.</p>';
+        ul.appendChild(li);
+      }
+    }
+
     function upsertRequestItem(req) {
       const list = document.getElementById('requests-list');
       if (!list || !req || !req.id) return;
 
+      // remove placeholder if present
+      const empty = document.getElementById('empty-state');
+      if (empty) empty.remove();
+
       let li = document.getElementById(req.id);
       if (li) {
-        // Update in place (do not remove)
+        // Update in place
         li.dataset.room = req.room || '';
         li.dataset.request = req.request || '';
         li.dataset.role = req.role || '';
@@ -282,8 +305,10 @@
         li.dataset.role = req.role || '';
         li.dataset.timestamp = req.timestamp || '';
         li.innerHTML = buildRequestHTML(req);
-        document.getElementById('requests-list').prepend(li);
+        list.prepend(li);
       }
+
+      showEmptyStateIfNeeded();
     }
 
     function addRequestToDashboard(data) {
@@ -310,18 +335,16 @@
       }
     });
 
-    // ✅ Updated: remove by id OR by (room, request) for legacy N/A items
+    // Remove by id OR by (room, request) for legacy items
     socket.on('remove_request', function(data) {
       let el = null;
 
-      // 1) Try by id first
       if (data.id) {
         el = document.getElementById(data.id);
       }
 
-      // 2) Fallback: match by (room, request) for legacy N/A rows
       if (!el && (data.request || data.room)) {
-        const items = document.querySelectorAll('#requests-list .request-item');
+        const items = document.querySelectorAll('#requests-list .request-item[id]');
         el = Array.from(items).find(li => {
           const sameText = data.request ? (li.dataset.request || '') === data.request : true;
           const sameRoom = data.room ? (li.dataset.room || '') === data.room : true;
@@ -331,7 +354,9 @@
 
       if (el) {
         el.style.opacity = '0';
-        setTimeout(() => el.remove(), 500);
+        setTimeout(() => { el.remove(); showEmptyStateIfNeeded(); }, 500);
+      } else {
+        showEmptyStateIfNeeded();
       }
     });
 
@@ -378,7 +403,6 @@
         } else if (btn.classList.contains('defer-btn')) {
           socket.emit('defer_request', { id: requestId });
         } else if (btn.classList.contains('complete-btn')) {
-          // ✅ Include request_text so server can resolve legacy N/A requests
           socket.emit('complete_request', {
             request_id: requestId,
             room_number: roomNumber,
@@ -393,8 +417,9 @@
       const btnRefresh = document.getElementById('manual-refresh');
       if (btnRefresh) btnRefresh.addEventListener('click', pollActiveRequests);
 
-      // Start timers + polling
+      // Start timers + initial state check
       updateAllTimersAndColors();
+      showEmptyStateIfNeeded();
       setInterval(updateAllTimersAndColors, 60000);
       setTimeout(pollActiveRequests, 500);
       setInterval(pollActiveRequests, 20000);
@@ -413,9 +438,13 @@
       fetch(`/api/active_requests?${params.toString()}`)
         .then(r => r.ok ? r.json() : Promise.reject())
         .then(json => {
-          const list = json && json.active_requests ? json.active_requests : [];
+          const list = (json && json.active_requests) ? json.active_requests : [];
+          const ul = document.getElementById('requests-list');
+          if (ul) ul.innerHTML = ''; // clear stale items/placeholders
           list.forEach(upsertRequestItem);
           updateAllTimersAndColors();
+          showEmptyStateIfNeeded();
+
           const ts = new Date();
           const el = document.getElementById('last-refresh');
           if (el) el.textContent = `Updated ${ts.toLocaleTimeString()}`;
