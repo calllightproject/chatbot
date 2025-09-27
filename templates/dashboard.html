@@ -194,8 +194,8 @@
   <script type="text/javascript">
     var socket = io();
 
-    // --- Local holding of status so polling doesn't wipe the buttons ---
-    const LocalStatus = new Map(); // request_id -> 'ack' | 'omw' | 'asap'
+    // --- Local status cache; server is source of truth when available ---
+    const LocalStatus = new Map(); // request_id -> 'new' | 'ack' | 'omw' | 'asap' | 'deferred' | 'completed'
 
     let audioContext;
     function playNotificationSound() {
@@ -214,10 +214,14 @@
       } catch (_) {}
     }
 
-    function statusBadgeHTML(st) {
+    function statusLabel(st) {
       if (!st) return '';
-      const label = st === 'ack' ? 'Acknowledged' : (st === 'omw' ? 'On my way' : 'ASAP');
-      return `<span class="chip" style="background:#fff3cd;border-color:#ffe69c;">${label}</span>`;
+      const map = { new:'New', ack:'Acknowledged', omw:'On my way', asap:'ASAP', deferred:'Deferred', completed:'Completed' };
+      return map[st] || '';
+    }
+    function statusBadgeHTML(st) {
+      if (!st || st === 'new') return '';
+      return `<span class="chip" style="background:#fff3cd;border-color:#ffe69c;">${statusLabel(st)}</span>`;
     }
 
     function updateAllTimersAndColors() {
@@ -244,7 +248,11 @@
     function buildRequestHTML(data) {
       const isCNA = (data.role || '') === 'cna';
       const deferBtn = isCNA ? '<button class="defer-btn">Defer to Nurse</button>' : '';
-      const st = LocalStatus.get(data.id); // prefer locally remembered status
+
+      // Server status (prefer), else local cache
+      const st = (data.status && typeof data.status === 'string')
+        ? data.status.toLowerCase()
+        : LocalStatus.get(data.id);
 
       return `
         <p>${(data.request || '')}</p>
@@ -280,6 +288,11 @@
       } else if (st === 'asap') {
         if (ack) ack.disabled = true;
         if (asap) asap.disabled = true;
+      } else if (st === 'completed') {
+        // If completed sneaks into list (should be removed), disable all
+        [ack, omw, asap].forEach(b => b && (b.disabled = true));
+        li.querySelector('.defer-btn')?.setAttribute('disabled', true);
+        li.querySelector('.complete-btn')?.setAttribute('disabled', true);
       }
     }
 
@@ -287,9 +300,13 @@
       const list = document.getElementById('requests-list');
       if (!list || !req || !req.id) return;
 
+      // Seed/overwrite local from server when provided
+      if (req.status) {
+        LocalStatus.set(req.id, (req.status || 'new').toLowerCase());
+      }
+
       let li = document.getElementById(req.id);
       if (li) {
-        // Update in place (do not remove)
         li.dataset.room = req.room || '';
         li.dataset.request = req.request || '';
         li.dataset.role = req.role || '';
@@ -297,7 +314,6 @@
         li.className = 'request-item ' + (req.role || '');
         li.innerHTML = buildRequestHTML(req);
       } else {
-        // Create new
         li = document.createElement('li');
         li.id = req.id;
         li.className = 'request-item ' + (req.role || '');
@@ -310,7 +326,7 @@
         document.getElementById('requests-list').prepend(li);
       }
 
-      applyLocalStatusToItem(li);     // reapply local state after any render
+      applyLocalStatusToItem(li);
     }
 
     function addRequestToDashboard(data) {
@@ -333,11 +349,11 @@
         if (roleSpan) roleSpan.textContent = 'For: NURSE';
         const deferBtn = item.querySelector('.defer-btn');
         if (deferBtn) deferBtn.remove();
-        updateAllTimersAndColors(); // keep original timestamp
+        updateAllTimersAndColors();
       }
     });
 
-    // remove by id OR by (room, request) for legacy N/A items
+    // Remove by id OR by (room, request) for legacy N/A items
     socket.on('remove_request', function(data) {
       let el = null;
       if (data.id) el = document.getElementById(data.id);
@@ -355,7 +371,29 @@
       }
     });
 
-    // --- Click handlers (remember local status) ---
+    // NEW: live status updates from server
+    socket.on('request_status', function(data) {
+      const id = data?.id;
+      const st = (data?.status || '').toLowerCase();
+      if (!id || !st) return;
+
+      LocalStatus.set(id, st);
+      const li = document.getElementById(id);
+      if (li) {
+        // re-render this one item quickly using current dataset values
+        upsertRequestItem({
+          id: id,
+          room: li.dataset.room,
+          request: li.dataset.request,
+          role: li.dataset.role,
+          timestamp: li.dataset.timestamp,
+          status: st
+        });
+        updateAllTimersAndColors();
+      }
+    });
+
+    // --- Click handlers (persist to server + remember locally) ---
     document.addEventListener('DOMContentLoaded', function() {
       const list = document.getElementById('requests-list');
       if (!list) return;
@@ -373,6 +411,9 @@
         const nurseName   = NurseName || '';
 
         function sendAck(status, dashMessage) {
+          // Local first for snappy UI
+          LocalStatus.set(requestId, status);
+          // Server persist + broadcast handled by backend
           socket.emit('acknowledge_request', {
             request_id: requestId,
             room_number: roomNumber,
@@ -385,18 +426,15 @@
 
         if (btn.classList.contains('ack-button')) {
           btn.disabled = true;
-          LocalStatus.set(requestId, 'ack');
           sendAck('ack', "✅ Request acknowledged.");
         } else if (btn.classList.contains('omw-button')) {
           btn.disabled = true;
           const ack = item.querySelector('.ack-button'); if (ack) ack.disabled = true;
-          LocalStatus.set(requestId, 'omw');
           sendAck('omw', "✅ On my way.");
         } else if (btn.classList.contains('asap-button')) {
           btn.disabled = true;
           const ack = item.querySelector('.ack-button'); if (ack) ack.disabled = true;
           const omw = item.querySelector('.omw-button'); if (omw) omw.disabled = true;
-          LocalStatus.set(requestId, 'asap');
           sendAck('asap', "In another room — will be there ASAP.");
         } else if (btn.classList.contains('defer-btn')) {
           socket.emit('defer_request', { id: requestId });
