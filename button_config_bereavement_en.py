@@ -8,20 +8,19 @@ button_data = {
     "nurse_notification": "✅ Nurse has been notified.",
     "back_text": "⬅ Back",
 
-# --- Main Menu Options (Bereavement) ---
-"main_buttons": [
-    "I'm having an emergency",
-    "My IV pump is beeping",
-    "I need medication",
-    "I need supplies",
-    "Bathroom/Shower",
-    "Ice Chips/Water",
-    "I want to see my baby",
-    "I need to talk to the social worker",
-    "I have questions",
-    "I want to know about going home"
-],
-
+    # --- Main Menu Options (Bereavement) ---
+    "main_buttons": [
+        "I'm having an emergency",
+        "My IV pump is beeping",
+        "I need medication",
+        "I need supplies",
+        "Bathroom/Shower",
+        "Ice Chips/Water",
+        "I want to see my baby",
+        "I need to talk to the social worker",
+        "I have questions",
+        "I want to know about going home"
+    ],
 
     # --- Direct Actions & Simple Sub-menus ---
     "I'm having an emergency": {"action": "Notify Nurse"},
@@ -85,6 +84,18 @@ button_data = {
     "Gas pain": {"action": "Notify Nurse"},
     "Constipation": {"action": "Notify Nurse"},
 
+    # --- Bereavement-specific actions ---
+    "I want to see my baby": {
+        "note": "We’re contacting your nurse to help you see your baby.",
+        "options": [],
+        "action": "Notify Nurse"
+    },
+    "I need to talk to the social worker": {
+        "note": "We’re paging the social worker to support you.",
+        "options": [],
+        "action": "Notify Nurse"
+    },
+
     # --- Questions Category ---
     "I have questions": {
         "note": "If your question is not listed, your nurse will be in as soon as possible.",
@@ -106,6 +117,3 @@ button_data = {
     "When will I get my discharge paperwork?": {"note": "Once the OB-GYN has put in their notes and discharge orders, your nurse can print out paperwork."},
     "Do I have to take a wheelchair?": {"note": "No, but a staff member has to go with you. If the nursing staff is busy, a transport worker will be the one to escort you out."}
 }
-
-
-
