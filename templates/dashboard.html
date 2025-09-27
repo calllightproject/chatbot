@@ -46,11 +46,7 @@
       margin: 0 0 6px 0;
       font-size: 1.5rem;
     }
-    .subline {
-      margin: 0 0 8px 0;
-      font-size: 0.95rem;
-      color: #555;
-    }
+    .subline { margin: 0 0 8px 0; font-size: 0.95rem; color: #555; }
     .chip-row { display:flex; flex-wrap:wrap; gap:6px; margin: 6px 0 0 0; }
     .chip { padding:6px 10px; border-radius:9999px; background:#eef2f7; border:1px solid #d7dde6; font-size:.85rem; color:#334155; }
 
@@ -80,7 +76,7 @@
     .request-item.nurse { border-left: 6px solid #d43f27; }
 
     .request-item p { margin:0; font-size:1.05rem; flex-grow:1; }
-    .meta { display:flex; gap:10px; align-items:center; white-space:nowrap; font-size:.9rem; color:#555; }
+    .meta { display:flex; gap:10px; align-items:center; white-space:nowrap; font-size:.9rem; color:#555; flex-wrap:wrap; }
     .role-span { font-size:.9rem; color:#555; }
     .timestamp { font-size:.9rem; color:#555; }
 
@@ -166,7 +162,7 @@
             data-timestamp="{{ request.timestamp|default('') }}">
           <p>{{ request.request|default('') }}</p>
           <div class="meta">
-            <span>Room: {{ request.room|default('') }}</span>
+            <span>Room: {{ request.room|default('—') }}</span>
             <span class="role-span">For: {{ request.role|default('')|upper }}</span>
             <span class="timestamp"></span>
           </div>
@@ -179,7 +175,7 @@
           <button class="complete-btn">Complete</button>
         </li>
       {% else %}
-        <li id="empty-state" class="request-item" style="justify-content:center">
+        <li class="request-item" style="justify-content:center">
           <p>No active requests.</p>
         </li>
       {% endfor %}
@@ -188,7 +184,6 @@
 
   <!-- Context for JS -->
   <script>
-    // Template context exposed to JS (safe defaults)
     const NurseContext = {{ nurse_context|default(false)|tojson }};
     const NurseName    = {{ nurse_name|default('')|tojson }};
     const NurseShift   = {{ shift|default('day')|tojson }};
@@ -199,14 +194,14 @@
   <script type="text/javascript">
     var socket = io();
 
+    // --- Local holding of status so polling doesn't wipe the buttons ---
+    const LocalStatus = new Map(); // request_id -> 'ack' | 'omw' | 'asap'
+
     let audioContext;
     function playNotificationSound() {
       try {
-        if (!audioContext) {
-          audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        }
+        if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
         if (audioContext.state === 'suspended') audioContext.resume();
-
         const osc = audioContext.createOscillator();
         const gain = audioContext.createGain();
         osc.connect(gain); gain.connect(audioContext.destination);
@@ -219,8 +214,14 @@
       } catch (_) {}
     }
 
+    function statusBadgeHTML(st) {
+      if (!st) return '';
+      const label = st === 'ack' ? 'Acknowledged' : (st === 'omw' ? 'On my way' : 'ASAP');
+      return `<span class="chip" style="background:#fff3cd;border-color:#ffe69c;">${label}</span>`;
+    }
+
     function updateAllTimersAndColors() {
-      const items = document.querySelectorAll('#requests-list .request-item[id]');
+      const items = document.querySelectorAll('#requests-list .request-item');
       const now = new Date();
 
       items.forEach(item => {
@@ -243,12 +244,15 @@
     function buildRequestHTML(data) {
       const isCNA = (data.role || '') === 'cna';
       const deferBtn = isCNA ? '<button class="defer-btn">Defer to Nurse</button>' : '';
+      const st = LocalStatus.get(data.id); // prefer locally remembered status
+
       return `
         <p>${(data.request || '')}</p>
         <div class="meta">
-          <span>Room: ${(data.room || '')}</span>
+          <span>Room: ${(data.room || '—')}</span>
           <span class="role-span">For: ${(data.role || '').toUpperCase()}</span>
           <span class="timestamp"></span>
+          ${statusBadgeHTML(st)}
         </div>
         <button class="ack-button">Acknowledge</button>
         <button class="omw-button">On my way</button>
@@ -258,22 +262,24 @@
       `;
     }
 
-    // ---- Empty-state management ----
-    function showEmptyStateIfNeeded() {
-      const ul = document.getElementById('requests-list');
-      if (!ul) return;
-      const hasItems = ul.querySelectorAll('li.request-item[id]').length > 0; // real items have an id
-      const empty = document.getElementById('empty-state');
+    function applyLocalStatusToItem(li) {
+      const id = li?.dataset?.id;
+      if (!id) return;
+      const st = LocalStatus.get(id);
+      if (!st) return;
 
-      if (hasItems && empty) {
-        empty.remove();
-      } else if (!hasItems && !empty) {
-        const li = document.createElement('li');
-        li.id = 'empty-state';
-        li.className = 'request-item';
-        li.style.justifyContent = 'center';
-        li.innerHTML = '<p>No active requests.</p>';
-        ul.appendChild(li);
+      const ack = li.querySelector('.ack-button');
+      const omw = li.querySelector('.omw-button');
+      const asap = li.querySelector('.asap-button');
+
+      if (st === 'ack') {
+        if (ack) ack.disabled = true;
+      } else if (st === 'omw') {
+        if (ack) ack.disabled = true;
+        if (omw) omw.disabled = true;
+      } else if (st === 'asap') {
+        if (ack) ack.disabled = true;
+        if (asap) asap.disabled = true;
       }
     }
 
@@ -281,13 +287,9 @@
       const list = document.getElementById('requests-list');
       if (!list || !req || !req.id) return;
 
-      // remove placeholder if present
-      const empty = document.getElementById('empty-state');
-      if (empty) empty.remove();
-
       let li = document.getElementById(req.id);
       if (li) {
-        // Update in place
+        // Update in place (do not remove)
         li.dataset.room = req.room || '';
         li.dataset.request = req.request || '';
         li.dataset.role = req.role || '';
@@ -305,10 +307,10 @@
         li.dataset.role = req.role || '';
         li.dataset.timestamp = req.timestamp || '';
         li.innerHTML = buildRequestHTML(req);
-        list.prepend(li);
+        document.getElementById('requests-list').prepend(li);
       }
 
-      showEmptyStateIfNeeded();
+      applyLocalStatusToItem(li);     // reapply local state after any render
     }
 
     function addRequestToDashboard(data) {
@@ -335,32 +337,25 @@
       }
     });
 
-    // Remove by id OR by (room, request) for legacy items
+    // remove by id OR by (room, request) for legacy N/A items
     socket.on('remove_request', function(data) {
       let el = null;
-
-      if (data.id) {
-        el = document.getElementById(data.id);
-      }
-
+      if (data.id) el = document.getElementById(data.id);
       if (!el && (data.request || data.room)) {
-        const items = document.querySelectorAll('#requests-list .request-item[id]');
+        const items = document.querySelectorAll('#requests-list .request-item');
         el = Array.from(items).find(li => {
           const sameText = data.request ? (li.dataset.request || '') === data.request : true;
           const sameRoom = data.room ? (li.dataset.room || '') === data.room : true;
           return sameText && sameRoom;
         });
       }
-
       if (el) {
         el.style.opacity = '0';
-        setTimeout(() => { el.remove(); showEmptyStateIfNeeded(); }, 500);
-      } else {
-        showEmptyStateIfNeeded();
+        setTimeout(() => el.remove(), 500);
       }
     });
 
-    // --- Click handlers (includes request_text on complete) ---
+    // --- Click handlers (remember local status) ---
     document.addEventListener('DOMContentLoaded', function() {
       const list = document.getElementById('requests-list');
       if (!list) return;
@@ -390,15 +385,18 @@
 
         if (btn.classList.contains('ack-button')) {
           btn.disabled = true;
+          LocalStatus.set(requestId, 'ack');
           sendAck('ack', "✅ Request acknowledged.");
         } else if (btn.classList.contains('omw-button')) {
           btn.disabled = true;
           const ack = item.querySelector('.ack-button'); if (ack) ack.disabled = true;
+          LocalStatus.set(requestId, 'omw');
           sendAck('omw', "✅ On my way.");
         } else if (btn.classList.contains('asap-button')) {
           btn.disabled = true;
           const ack = item.querySelector('.ack-button'); if (ack) ack.disabled = true;
           const omw = item.querySelector('.omw-button'); if (omw) omw.disabled = true;
+          LocalStatus.set(requestId, 'asap');
           sendAck('asap', "In another room — will be there ASAP.");
         } else if (btn.classList.contains('defer-btn')) {
           socket.emit('defer_request', { id: requestId });
@@ -411,15 +409,17 @@
           });
           btn.disabled = true;
         }
+
+        // update badge/disabled state immediately
+        applyLocalStatusToItem(item);
       });
 
       // Manual refresh
       const btnRefresh = document.getElementById('manual-refresh');
       if (btnRefresh) btnRefresh.addEventListener('click', pollActiveRequests);
 
-      // Start timers + initial state check
+      // Start timers + polling
       updateAllTimersAndColors();
-      showEmptyStateIfNeeded();
       setInterval(updateAllTimersAndColors, 60000);
       setTimeout(pollActiveRequests, 500);
       setInterval(pollActiveRequests, 20000);
@@ -438,13 +438,9 @@
       fetch(`/api/active_requests?${params.toString()}`)
         .then(r => r.ok ? r.json() : Promise.reject())
         .then(json => {
-          const list = (json && json.active_requests) ? json.active_requests : [];
-          const ul = document.getElementById('requests-list');
-          if (ul) ul.innerHTML = ''; // clear stale items/placeholders
+          const list = json && json.active_requests ? json.active_requests : [];
           list.forEach(upsertRequestItem);
           updateAllTimersAndColors();
-          showEmptyStateIfNeeded();
-
           const ts = new Date();
           const el = document.getElementById('last-refresh');
           if (el) el.textContent = `Updated ${ts.toLocaleTimeString()}`;
