@@ -600,17 +600,18 @@ def _emit_received_for(room_number: str, user_text: str, kind: str):
 
 @app.route("/chat", methods=["GET", "POST"])
 def handle_chat():
-    # Pathway override via URL
+    # --- Force STANDARD unless URL explicitly says bereavement ---
     qp = (request.args.get("pathway") or "").strip().lower()
-    if qp in ("standard", "bereavement"):
-        session["pathway"] = qp
-        pathway = qp
+    if qp == "bereavement":
+        session["pathway"] = "bereavement"
+        pathway = "bereavement"
     else:
-        # ✅ Default to STANDARD when no pathway is provided in the URL
+        # Any other case (including no param) => standard
         session["pathway"] = "standard"
         pathway = "standard"
 
     lang = session.get("language", "en")
+
 
     # Load the correct button config module based on pathway + language
     config_module_name = (
@@ -1723,6 +1724,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
