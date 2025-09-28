@@ -313,7 +313,12 @@
 
     function upsertRequestItem(req) {
       const list = document.getElementById('requests-list');
-      if (!list || !req || !req.id) return;
+      if (!list || !req) return;
+
+      // --- NEW: synthesize an id if API didn't send one ---
+      if (!req.id) {
+        req.id = 'key:' + makeCompositeKey(req.room, req.request);
+      }
 
       let li = document.getElementById(req.id);
       if (li) {
@@ -395,7 +400,7 @@
       }
     });
 
-    // Live status from server (if backend emits 'request_status')
+    // If backend emits a live status event
     socket.on('request_status', function(data) {
       const id = data?.id;
       const st = (data?.status || '').toLowerCase();
@@ -478,7 +483,7 @@
       setInterval(pollActiveRequests, 20000);
     });
 
-    // Stable polling: update in place, append new, remove missing
+    // Stable polling: update in place, append new, remove missing, reconcile new IDs
     function pollActiveRequests() {
       const params = new URLSearchParams();
       if (NurseContext && NurseName) {
@@ -497,21 +502,48 @@
           // newest first for consistent visual order
           incoming.sort((a, b) => (new Date(b.timestamp||0)) - (new Date(a.timestamp||0)));
 
-          // Track incoming IDs
-          const incomingIds = new Set(incoming.map(x => x.id));
+          // Build incoming id set and composite-key map
+          const incomingIds = new Set();
+          const incomingByKey = new Map(); // `${room}::${text}` -> item
+          incoming.forEach(it => {
+            // synthesize id if missing so later steps work consistently
+            if (!it.id) it.id = 'key:' + makeCompositeKey(it.room, it.request);
+            if (it.id) incomingIds.add(it.id);
+            incomingByKey.set(makeCompositeKey(it.room, it.request), it);
+          });
 
-          // Remove items that disappeared
           const list = document.getElementById('requests-list');
+
+          // For each existing li, decide if it should be removed or reconciled to a new id
           Array.from(list.querySelectorAll('.request-item')).forEach(li => {
-            const id = li.dataset.id;
-            if (!id) return; // placeholder row
-            if (!incomingIds.has(id)) {
+            const id   = li.dataset.id || '';
+            const room = li.dataset.room || '';
+            const text = li.dataset.request || '';
+            const key  = makeCompositeKey(room, text);
+
+            const stillById  = id && incomingIds.has(id);
+            const stillByKey = incomingByKey.has(key);
+
+            // If present but under a new id, reconcile DOM id & carry status forward
+            if (!stillById && stillByKey) {
+              const newer = incomingByKey.get(key);
+              if (newer && newer.id) {
+                // Migrate DOM id and dataset
+                li.id = newer.id;
+                li.dataset.id = newer.id;
+
+                // Carry forward local status from old id (or key)
+                const st = getStatusFor(id, room, text);
+                if (st) setStatusFor(newer.id, room, text, st);
+              }
+            } else if (!stillById && !stillByKey && id) {
+              // Truly gone -> remove
               li.style.opacity = '0';
               setTimeout(() => li.remove(), 300);
             }
           });
 
-          // Upsert incoming items without replacing existing nodes
+          // Upsert incoming items (append new; update existing in place)
           incoming.forEach(upsertRequestItem);
 
           updateAllTimersAndColors();
