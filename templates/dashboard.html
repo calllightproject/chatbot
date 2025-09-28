@@ -165,7 +165,6 @@
             <span>Room: {{ request.room|default('—') }}</span>
             <span class="role-span">For: {{ request.role|default('')|upper }}</span>
             <span class="timestamp"></span>
-            <!-- dedicated badge span so we can update text without re-rendering -->
             <span class="status-badge chip" style="display:none;"></span>
           </div>
           <button class="ack-button">Acknowledge</button>
@@ -196,8 +195,25 @@
   <script type="text/javascript">
     var socket = io();
 
-    // Local status cache. Server can seed it; we NEVER wipe an existing disabled UI by re-rendering the li.
-    const LocalStatus = new Map(); // id -> 'new'|'ack'|'omw'|'asap'|'deferred'|'completed'
+    // Local caches
+    const LocalStatus = new Map();        // request_id -> status
+    const LocalStatusByKey = new Map();   // `${room}::${request_text}` -> status
+
+    // ---- Helpers for composite-key tracking ----
+    function makeCompositeKey(room, text) {
+      return `${room || ''}::${(text || '').trim()}`.toLowerCase();
+    }
+    function setStatusFor(id, room, text, status) {
+      if (id) LocalStatus.set(id, status);
+      const k = makeCompositeKey(room, text);
+      if (k) LocalStatusByKey.set(k, status);
+    }
+    function getStatusFor(id, room, text) {
+      if (id && LocalStatus.has(id)) return LocalStatus.get(id);
+      const k = makeCompositeKey(room, text);
+      if (k && LocalStatusByKey.has(k)) return LocalStatusByKey.get(k);
+      return null;
+    }
 
     let audioContext;
     function playNotificationSound() {
@@ -240,7 +256,6 @@
     function buildRequestHTML(data) {
       const isCNA = (data.role || '') === 'cna';
       const deferBtn = isCNA ? '<button class="defer-btn">Defer to Nurse</button>' : '';
-
       return `
         <p>${(data.request || '')}</p>
         <div class="meta">
@@ -258,10 +273,12 @@
     }
 
     function applyLocalStatusToItem(li) {
-      const id = li?.dataset?.id;
-      if (!id) return;
+      const id   = li?.dataset?.id;
+      const room = li?.dataset?.room || '';
+      const text = li?.dataset?.request || '';
 
-      const st = LocalStatus.get(id); // 'ack'|'omw'|'asap'|'deferred'|'completed'
+      const st = getStatusFor(id, room, text); // try id first, then room::text
+
       const ack = li.querySelector('.ack-button');
       const omw = li.querySelector('.omw-button');
       const asap = li.querySelector('.asap-button');
@@ -298,33 +315,25 @@
       const list = document.getElementById('requests-list');
       if (!list || !req || !req.id) return;
 
-      // If server provided a status, seed it—but don't overwrite an existing local state for the same id.
-      if (req.status && !LocalStatus.has(req.id)) {
-        LocalStatus.set(req.id, (req.status || 'new').toLowerCase());
-      }
-
       let li = document.getElementById(req.id);
       if (li) {
-        // --- UPDATE IN PLACE (do NOT replace innerHTML) ---
+        // --- Update in place (no innerHTML replacement) ---
         li.dataset.room = req.room || '';
         li.dataset.request = req.request || '';
         li.dataset.role = req.role || '';
         li.dataset.timestamp = req.timestamp || '';
         li.className = 'request-item ' + (req.role || '');
 
-        // Update visible text fields
         const p = li.querySelector('p');
         if (p) p.textContent = req.request || '';
-
         const meta = li.querySelector('.meta');
         if (meta) {
           const spans = meta.querySelectorAll('span');
           if (spans[0]) spans[0].textContent = `Room: ${req.room || '—'}`;
           if (spans[1]) spans[1].textContent = `For: ${(req.role || '').toUpperCase()}`;
-          // timestamp recalculated separately
         }
       } else {
-        // --- CREATE NEW (append to keep order stable) ---
+        // --- Create new (append to keep order stable) ---
         li = document.createElement('li');
         li.id = req.id;
         li.className = 'request-item ' + (req.role || '');
@@ -335,6 +344,11 @@
         li.dataset.timestamp = req.timestamp || '';
         li.innerHTML = buildRequestHTML(req);
         document.getElementById('requests-list').appendChild(li);
+      }
+
+      // If the server provided a status, seed under both keys
+      if (req.status) {
+        setStatusFor(req.id, req.room, req.request, (req.status || 'new').toLowerCase());
       }
 
       applyLocalStatusToItem(li);
@@ -381,20 +395,20 @@
       }
     });
 
-    // Live status from server (optional if backend emits 'request_status')
+    // Live status from server (if backend emits 'request_status')
     socket.on('request_status', function(data) {
       const id = data?.id;
       const st = (data?.status || '').toLowerCase();
       if (!id || !st) return;
 
-      LocalStatus.set(id, st);
       const li = document.getElementById(id);
-      if (li) {
-        applyLocalStatusToItem(li);
-      }
+      const room = li ? li.dataset.room : '';
+      const text = li ? li.dataset.request : '';
+      setStatusFor(id, room, text, st);
+      if (li) applyLocalStatusToItem(li);
     });
 
-    // --- Click handlers (remember locally; backend will persist/broadcast if implemented) ---
+    // --- Click handlers ---
     document.addEventListener('DOMContentLoaded', function() {
       const list = document.getElementById('requests-list');
       if (!list) return;
@@ -410,13 +424,14 @@
         const roomNumber  = item.dataset.room || '';
         const dashRoom    = item.dataset.room || '';
         const nurseName   = NurseName || '';
+        const reqText     = item.dataset.request || '';
 
         function sendAck(status, dashMessage) {
-          // local first
-          LocalStatus.set(requestId, status);
+          // Save under both ID and composite key for resilience
+          setStatusFor(requestId, roomNumber, reqText, status);
           applyLocalStatusToItem(item);
 
-          // server persist/broadcast (if available)
+          // Server persist/broadcast (if implemented)
           socket.emit('acknowledge_request', {
             request_id: requestId,
             room_number: roomNumber,
@@ -446,7 +461,7 @@
             request_id: requestId,
             room_number: roomNumber,
             nurse_name: nurseName,
-            request_text: item.dataset.request || ""
+            request_text: reqText
           });
           btn.disabled = true;
         }
@@ -479,7 +494,7 @@
         .then(json => {
           const incoming = (json && json.active_requests) ? json.active_requests : [];
 
-          // newest first (optional; keeps visual order consistent)
+          // newest first for consistent visual order
           incoming.sort((a, b) => (new Date(b.timestamp||0)) - (new Date(a.timestamp||0)));
 
           // Track incoming IDs
@@ -496,7 +511,7 @@
             }
           });
 
-          // Upsert incoming items without replacing innerHTML for existing rows
+          // Upsert incoming items without replacing existing nodes
           incoming.forEach(upsertRequestItem);
 
           updateAllTimersAndColors();
