@@ -600,14 +600,15 @@ def _emit_received_for(room_number: str, user_text: str, kind: str):
 
 @app.route("/chat", methods=["GET", "POST"])
 def handle_chat():
-    # Session default
-    pathway = session.get("pathway", "standard")
-
-    # ✅ Allow URL override so /chat?pathway=standard or /chat?pathway=bereavement
+    # Pathway override via URL
     qp = (request.args.get("pathway") or "").strip().lower()
     if qp in ("standard", "bereavement"):
         session["pathway"] = qp
         pathway = qp
+    else:
+        # ✅ Default to STANDARD when no pathway is provided in the URL
+        session["pathway"] = "standard"
+        pathway = "standard"
 
     lang = session.get("language", "en")
 
@@ -1722,6 +1723,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
