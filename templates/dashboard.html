@@ -153,7 +153,8 @@
             data-room="{{ request.room|default('') }}"
             data-request="{{ request.request|default('') }}"
             data-role="{{ request.role|default('') }}"
-            data-timestamp="{{ request.timestamp|default('') }}">
+            data-timestamp="{{ request.timestamp|default('') }}"
+            data-last-seen="{{ (request.timestamp|default('')) }}">
           <p>{{ request.request|default('') }}</p>
           <div class="meta">
             <span>Room: {{ request.room|default('—') }}</span>
@@ -193,9 +194,10 @@
     const LocalStatus = new Map();        // request_id -> status
     const LocalStatusByKey = new Map();   // `${room}::${request_text}` -> status
 
-    // ---- Helpers for composite-key tracking ----
+    // ---- Helpers ----
+    function normalizeText(s) { return (s || '').replace(/\s+/g, ' ').trim(); }
     function makeCompositeKey(room, text) {
-      return `${(room || '').trim()}::${(text || '').replace(/\s+/g,' ').trim()}`.toLowerCase();
+      return `${(room || '').trim()}::${normalizeText(text)}`.toLowerCase();
     }
     function setStatusFor(id, room, text, status) {
       if (id) LocalStatus.set(id, status);
@@ -229,7 +231,6 @@
     function updateAllTimersAndColors() {
       const items = document.querySelectorAll('#requests-list .request-item');
       const now = new Date();
-
       items.forEach(item => {
         const raw = item.dataset.timestamp || '';
         const ts = raw ? new Date(raw) : null;
@@ -271,9 +272,9 @@
       const room = li?.dataset?.room || '';
       const text = li?.dataset?.request || '';
 
-      // --- DOM-pinned status wins ---
+      // Prefer DOM-pinned; fall back to memory maps
       let st = (li?.dataset?.localStatus || '').toLowerCase().trim();
-      if (!st) st = getStatusFor(id, room, text); // fall back to memory maps
+      if (!st) st = getStatusFor(id, room, text);
 
       const ack = li.querySelector('.ack-button');
       const omw = li.querySelector('.omw-button');
@@ -301,8 +302,8 @@
       }
 
       if (badge) {
-        const map = { ack:'Acknowledged', omw:'On my way', asap:'ASAP', deferred:'Deferred', completed:'Completed' };
-        const label = map[st];
+        const map = { ack:'Acknowledged', omw:'On my way', asap:'ASAP', deferred:'Deferred', completed:'Completed', pending:'Pending sync' };
+        const label = map[st] || (li.dataset.pendingSync ? 'Pending sync' : '');
         if (label) { badge.textContent = label; badge.style.display = 'inline-flex'; }
       }
     }
@@ -318,9 +319,10 @@
       if (li) {
         // Update in place (keep node so DOM-pinned status survives)
         li.dataset.room = req.room || '';
-        li.dataset.request = req.request || '';
+        li.dataset.request = normalizeText(req.request || '');
         li.dataset.role = req.role || '';
         li.dataset.timestamp = req.timestamp || '';
+        li.dataset.lastSeen = String(Date.now());
         li.className = 'request-item ' + (req.role || '');
 
         const p = li.querySelector('p');
@@ -338,18 +340,20 @@
         li.className = 'request-item ' + (req.role || '');
         li.dataset.id = req.id || '';
         li.dataset.room = req.room || '';
-        li.dataset.request = req.request || '';
+        li.dataset.request = normalizeText(req.request || '');
         li.dataset.role = req.role || '';
         li.dataset.timestamp = req.timestamp || '';
+        li.dataset.lastSeen = String(Date.now());
         li.innerHTML = buildRequestHTML(req);
         document.getElementById('requests-list').appendChild(li);
       }
 
-      // If server provided a status, seed it and pin to DOM
+      // If server provided a status, trust it and pin locally
       if (req.status) {
         const s = (req.status || 'new').toLowerCase();
         setStatusFor(req.id, req.room, req.request, s);
         li.dataset.localStatus = s;
+        delete li.dataset.pendingSync;
       }
 
       applyLocalStatusToItem(li);
@@ -385,7 +389,7 @@
       if (!el && (data.request || data.room)) {
         const items = document.querySelectorAll('#requests-list .request-item');
         el = Array.from(items).find(li => {
-          const sameText = data.request ? (li.dataset.request || '') === data.request : true;
+          const sameText = data.request ? (li.dataset.request || '') === normalizeText(data.request) : true;
           const sameRoom = data.room ? (li.dataset.room || '') === data.room : true;
           return sameText && sameRoom;
         });
@@ -396,7 +400,6 @@
       }
     });
 
-    // Optional server status channel
     socket.on('request_status', function(data) {
       const id = data?.id;
       const st = (data?.status || '').toLowerCase();
@@ -408,7 +411,8 @@
       setStatusFor(id, room, text, st);
 
       if (li) {
-        li.dataset.localStatus = st; // pin to DOM
+        li.dataset.localStatus = st;      // pin to DOM
+        delete li.dataset.pendingSync;
         applyLocalStatusToItem(li);
       }
     });
@@ -436,6 +440,7 @@
           setStatusFor(requestId, roomNumber, reqText, status);
           // Pin to DOM so polls cannot wipe it
           item.dataset.localStatus = status;
+          delete item.dataset.pendingSync;
 
           applyLocalStatusToItem(item);
 
@@ -471,8 +476,9 @@
             request_text: reqText
           });
           btn.disabled = true;
-          // Also pin completed locally to prevent UI re-enable
+          // Pin completed locally to prevent UI re-enable
           item.dataset.localStatus = 'completed';
+          delete item.dataset.pendingSync;
           applyLocalStatusToItem(item);
         }
       });
@@ -486,6 +492,9 @@
       setInterval(updateAllTimersAndColors, 60000);
       setTimeout(pollActiveRequests, 500);
       setInterval(pollActiveRequests, 20000);
+
+      // Periodic cleanup for stale rows
+      setInterval(cleanupStaleRows, 60 * 1000);
     });
 
     // Stable polling: update in place, append new, remove missing, reconcile new IDs
@@ -528,22 +537,36 @@
             const stillById  = id && incomingIds.has(id);
             const stillByKey = incomingByKey.has(key);
 
-            // Same request, new id -> update node id, carry map & DOM status forward
+            if (stillById || stillByKey) {
+              li.dataset.lastSeen = String(Date.now());
+              delete li.dataset.pendingSync;
+            }
+
+            // Same request, new id -> update node id, carry status forward
             if (!stillById && stillByKey) {
               const newer = incomingByKey.get(key);
               if (newer && newer.id) {
                 const oldStatus = li.dataset.localStatus || getStatusFor(id, room, text);
                 li.id = newer.id;
                 li.dataset.id = newer.id;
+                li.dataset.lastSeen = String(Date.now());
                 if (oldStatus) {
                   setStatusFor(newer.id, room, text, oldStatus);
-                  li.dataset.localStatus = oldStatus; // DOM-pinned survives either way
+                  li.dataset.localStatus = oldStatus; // DOM-pinned survives
                 }
               }
             } else if (!stillById && !stillByKey && id) {
-              // Truly gone -> remove
-              li.style.opacity = '0';
-              setTimeout(() => li.remove(), 300);
+              // If clinician already interacted, DO NOT remove on poll—mark pending
+              if (li.dataset.localStatus) {
+                li.dataset.pendingSync = '1';
+                const badge = li.querySelector('.status-badge');
+                if (badge) { badge.textContent = 'Pending sync'; badge.style.display = 'inline-flex'; }
+                li.classList.add('status-warn');
+              } else {
+                // OK to remove quietly (never touched by user)
+                li.style.opacity = '0';
+                setTimeout(() => li.remove(), 300);
+              }
             }
           });
 
@@ -560,6 +583,27 @@
           const el = document.getElementById('last-refresh');
           if (el) el.textContent = `Update failed`;
         });
+    }
+
+    // Cleanup for truly stale items
+    function cleanupStaleRows() {
+      const now = Date.now();
+      const STALE_MS_UNTOUCHED = 5 * 60 * 1000;   // 5 minutes
+      const STALE_MS_TOUCHED   = 60 * 60 * 1000;  // 60 minutes
+
+      document.querySelectorAll('#requests-list .request-item').forEach(li => {
+        const lastSeen = Number(li.dataset.lastSeen || 0);
+        const local = !!li.dataset.localStatus;
+        if (!lastSeen) return;
+
+        if (!local && now - lastSeen > STALE_MS_UNTOUCHED) {
+          li.style.opacity = '0';
+          setTimeout(() => li.remove(), 300);
+        } else if (local && now - lastSeen > STALE_MS_TOUCHED) {
+          li.style.opacity = '0';
+          setTimeout(() => li.remove(), 300);
+        }
+      });
     }
   </script>
 </body>
