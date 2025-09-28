@@ -600,105 +600,134 @@ def _emit_received_for(room_number: str, user_text: str, kind: str):
 
 @app.route("/chat", methods=["GET", "POST"])
 def handle_chat():
+    # Session default
     pathway = session.get("pathway", "standard")
+
+    # ✅ Allow URL override so /chat?pathway=standard or /chat?pathway=bereavement
+    qp = (request.args.get("pathway") or "").strip().lower()
+    if qp in ("standard", "bereavement"):
+        session["pathway"] = qp
+        pathway = qp
+
     lang = session.get("language", "en")
-    config_module_name = f"button_config_bereavement_{lang}" if pathway == "bereavement" else f"button_config_{lang}"
+
+    # Load the correct button config module based on pathway + language
+    config_module_name = (
+        f"button_config_bereavement_{lang}"
+        if pathway == "bereavement"
+        else f"button_config_{lang}"
+    )
     try:
         button_config = importlib.import_module(config_module_name)
         button_data = button_config.button_data
     except (ImportError, AttributeError) as e:
         print(f"ERROR: Could not load configuration module '{config_module_name}'. Error: {e}")
-        return f"Error: Configuration file '{config_module_name}.py' is missing or invalid. Please contact support."
+        return (
+            f"Error: Configuration file '{config_module_name}.py' is missing or invalid. "
+            "Please contact support."
+        )
 
+    # Resolve room number from ?room=, session, or POST
     room_number = _current_room()
+
     # If POST carried a room value, persist it (works even if the URL lacks ?room=)
     room_from_form = (request.form.get("room") or "").strip() if request.method == "POST" else ""
     if room_from_form and _valid_room(room_from_form):
         session["room_number"] = room_from_form
         room_number = room_from_form
 
-
-
+    # Keep session in sync with the resolved room
     if room_number and session.get("room_number") != room_number:
         session["room_number"] = room_number
 
-    if request.method == 'POST':
+    if request.method == "POST":
+        # Free-text note path
         if request.form.get("action") == "send_note":
             note_text = (request.form.get("custom_note") or "").strip()
             if note_text:
                 role = route_note_intelligently(note_text)  # "nurse" or "cna"
                 reply_message = button_data.get(f"{role}_notification", "Your request has been sent.")
-                # Persist + notify (your existing behavior inside process_request)
-                session['reply'] = process_request(
+
+                # Persist + notify
+                session["reply"] = process_request(
                     role=role,
                     subject="Custom Patient Note",
                     user_input=note_text,
-                    reply_message=reply_message
+                    reply_message=reply_message,
                 )
-                session['options'] = button_data["main_buttons"]
+                session["options"] = button_data["main_buttons"]
 
-                # NEW: broadcast to patient page that the request was received
+                # Notify patient page that the request was received
                 if room_number:
                     _emit_received_for(room_number, note_text, kind="note")
             else:
-                session['reply'] = button_data.get("empty_custom_note", "Please type a message in the box.")
-                session['options'] = button_data["main_buttons"]
+                session["reply"] = button_data.get("empty_custom_note", "Please type a message in the box.")
+                session["options"] = button_data["main_buttons"]
 
+        # Button click path
         else:
             user_input = (request.form.get("user_input") or "").strip()
-            if user_input == button_data.get("back_text", "⬅ Back"):
-                session.pop('reply', None)
-                session.pop('options', None)
-                return redirect(url_for('handle_chat'))
 
+            # Back / home
+            if user_input == button_data.get("back_text", "⬅ Back"):
+                session.pop("reply", None)
+                session.pop("options", None)
+                return redirect(url_for("handle_chat", room=room_number) if room_number else url_for("handle_chat"))
+
+            # Known button
             if user_input in button_data:
                 button_info = button_data[user_input]
-                session['reply'] = button_info.get("question") or button_info.get("note", "")
-                session['options'] = button_info.get("options", [])
+                session["reply"] = button_info.get("question") or button_info.get("note", "")
+                session["options"] = button_info.get("options", [])
 
                 back_text = button_data.get("back_text", "⬅ Back")
-                if session['options'] and back_text not in session['options']:
-                    session['options'].append(back_text)
-                elif not session['options']:
-                    session['options'] = button_data["main_buttons"]
+                if session["options"] and back_text not in session["options"]:
+                    session["options"].append(back_text)
+                elif not session["options"]:
+                    session["options"] = button_data["main_buttons"]
 
+                # Action button -> notify CNA/Nurse + log
                 if "action" in button_info:
                     action = button_info["action"]
                     role = "cna" if action == "Notify CNA" else "nurse"
                     subject = f"{role.upper()} Request"
-                    notification_message = button_info.get("note", button_data[f"{role}_notification"])
+                    notification_message = button_info.get("note", button_data.get(f"{role}_notification", "Your request has been sent."))
 
-                    # Persist + notify (your existing behavior inside process_request)
-                    session['reply'] = process_request(
+                    # Persist + notify
+                    session["reply"] = process_request(
                         role=role,
                         subject=subject,
                         user_input=user_input,
-                        reply_message=notification_message
+                        reply_message=notification_message,
                     )
-                    session['options'] = button_data["main_buttons"]
+                    session["options"] = button_data["main_buttons"]
 
-                    # NEW: emit "received" for button-driven requests too
+                    # Let patient UI know we received a button-driven request
                     if room_number:
                         _emit_received_for(room_number, user_input, kind="option")
-            else:
-                session['reply'] = button_data.get(
-                    "fallback_unrecognized",
-                    "I'm sorry, I didn't understand that. Please use the buttons provided."
-                )
-                session['options'] = button_data["main_buttons"]
 
-        return redirect(url_for('handle_chat', room=room_number) if room_number else url_for('handle_chat'))
+            # Unknown input
+            else:
+                session["reply"] = button_data.get(
+                    "fallback_unrecognized",
+                    "I'm sorry, I didn't understand that. Please use the buttons provided.",
+                )
+                session["options"] = button_data["main_buttons"]
+
+        # Always redirect after POST (PRG)
+        return redirect(url_for("handle_chat", room=room_number) if room_number else url_for("handle_chat"))
 
     # --- GET: render page ---
-    reply = session.pop('reply', button_data["greeting"])
-    options = session.pop('options', button_data["main_buttons"])
+    reply = session.pop("reply", button_data["greeting"])
+    options = session.pop("options", button_data["main_buttons"])
     return render_template(
         "chat.html",
         reply=reply,
         options=options,
         button_data=button_data,
-        room_number=room_number  # needed by chat.html Socket.IO connect
+        room_number=room_number,  # used by chat.html Socket.IO connect
     )
+
 
 
 @app.route("/reset-language")
@@ -1693,6 +1722,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
