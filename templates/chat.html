@@ -160,7 +160,7 @@
     <div id="live-status"></div>
 
     <div class="options">
-      <!-- ✅ Keep ?room= in POST action -->
+      <!-- Keep ?room= in POST action -->
       <form method="POST" action="{{ url_for('handle_chat', room=room_number) }}" style="display: contents;">
         {% for option in options %}
           <button type="submit" name="user_input" value="{{ option }}">{{ option }}</button>
@@ -169,7 +169,7 @@
     </div>
 
     <div class="note-section">
-      <!-- ✅ Keep ?room= in POST action -->
+      <!-- Keep ?room= in POST action -->
       <form method="POST" action="{{ url_for('handle_chat', room=room_number) }}">
         <input type="hidden" name="action" value="send_note">
         <label for="custom_note" class="note-label">{{ button_data.get('custom_note_placeholder', 'Or send a custom note to your nurse:') }}</label>
@@ -188,11 +188,11 @@
   <!-- Socket.IO -->
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script>
-    // Template var (may be empty/None if not set on server)
+    // ---------- room resolution (server var or URL fallback) ----------
     const TEMPLATE_ROOM = "{{ room_number or '' }}";
-    // URL fallback: /chat?room=241
-    const urlRoom = new URLSearchParams(location.search).get('room') || '';
-    // Final choice
+    const urlParams = new URLSearchParams(location.search);
+    const urlRoomRaw = urlParams.get('room') || '';
+    const urlRoom = /^\d+$/.test(urlRoomRaw) ? urlRoomRaw : '';
     const ROOM_NUMBER = (TEMPLATE_ROOM && TEMPLATE_ROOM !== 'None') ? TEMPLATE_ROOM : urlRoom;
 
     const statusEl = document.getElementById('live-status');
@@ -208,17 +208,49 @@
       setTimeout(() => el.remove(), 2800);
     }
 
-    console.log("[patient] ROOM_NUMBER=", ROOM_NUMBER);
+    console.log("[patient] ROOM_NUMBER=", ROOM_NUMBER || "(none)");
     if (!ROOM_NUMBER) showStatus("No room number found. Try /chat?room=241");
 
-    // Connect to the /patient namespace
-    const socket = io("/patient", { query: { room_id: ROOM_NUMBER } });
+    // ---------- robust /patient connection (iPhone-friendly) ----------
+    // 1) Pass room_id in query so server can auto-join on connect
+    // 2) Also explicitly emit patient:join after connect (handles reconnects where query may be dropped)
+    const patientSocket = io('/patient', {
+      query: { room_id: ROOM_NUMBER || '' },
+      transports: ['websocket', 'polling'], // iOS Safari often prefers an explicit list
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelayMax: 5000
+    });
 
-    // Nudge helpers (start only after 'request:received')
+    patientSocket.on('connect', function () {
+      if (ROOM_NUMBER) {
+        patientSocket.emit('patient:join', { room_id: String(ROOM_NUMBER) });
+      }
+      showStatus("Connected for Room " + (ROOM_NUMBER || '—'));
+    });
+
+    // Confirm joined
+    patientSocket.on('patient:joined', function (payload) {
+      if (String(payload.room_id) === String(ROOM_NUMBER)) {
+        showStatus("Live updates enabled for Room " + ROOM_NUMBER);
+        cancelNudge();
+      }
+    });
+
+    // Join problems
+    patientSocket.on('patient:error', function (err) {
+      console.warn('[patient:error]', err);
+      showStatus("Connection ok, but room join failed.");
+    });
+
+    patientSocket.on('connect_error', function (err) {
+      console.error('[patient] connect_error:', err);
+      showStatus("Connection error: " + (err && err.message ? err.message : "unknown"));
+    });
+
+    // ---------- patient-facing status updates ----------
     let nudgeTimer = null;
-    function cancelNudge() {
-      if (nudgeTimer) { clearTimeout(nudgeTimer); nudgeTimer = null; }
-    }
+    function cancelNudge() { if (nudgeTimer) { clearTimeout(nudgeTimer); nudgeTimer = null; } }
     function startNudge(ms) {
       cancelNudge();
       nudgeTimer = setTimeout(() => {
@@ -227,43 +259,14 @@
       }, ms);
     }
 
-    // On connect, explicitly join the patient room
-    socket.on("connect", () => {
-      showStatus("Connected for Room " + ROOM_NUMBER);
-      if (ROOM_NUMBER) {
-        socket.emit("patient:join", { room_id: ROOM_NUMBER });
-      }
-    });
-
-    // Confirm we actually joined the room group
-    socket.on("patient:joined", (data) => {
-      if (String(data.room_id) === String(ROOM_NUMBER)) {
-        showStatus("Live updates enabled for Room " + ROOM_NUMBER);
-        cancelNudge(); // ensure no stray timers
-      }
-    });
-
-    // Join problems (e.g., invalid/missing room)
-    socket.on("patient:error", (data) => {
-      console.warn("[patient:error]", data);
-      showStatus("Connection ok, but room join failed.");
-    });
-
-    socket.on("connect_error", (err) => {
-      console.error("[patient] connect_error:", err);
-      showStatus("Connection error: " + (err && err.message ? err.message : "unknown"));
-    });
-
-    // Patient-facing status updates
-    socket.on("request:received", (data) => {
+    patientSocket.on('request:received', function (data) {
       if (String(data.room_id) !== String(ROOM_NUMBER)) return;
       showStatus("Your request has been received by the nurse station.");
       toast("Request received.");
-      // Start a later nudge only after we know the request was received
-      startNudge(6 * 60 * 1000); // 6 minutes; adjust as desired
+      startNudge(6 * 60 * 1000); // 6 minutes
     });
 
-    socket.on("request:status", (data) => {
+    patientSocket.on('request:status', function (data) {
       if (String(data.room_id) !== String(ROOM_NUMBER)) return;
       cancelNudge();
       const who = data.nurse ? ` (${data.nurse})` : "";
@@ -283,14 +286,14 @@
       }
     });
 
-    socket.on("request:done", (data) => {
+    patientSocket.on('request:done', function (data) {
       if (String(data.room_id) !== String(ROOM_NUMBER)) return;
       cancelNudge();
       showStatus("All set — your request has been marked complete.");
       toast("Request completed.");
     });
 
-    socket.on("disconnect", () => {
+    patientSocket.on('disconnect', function () {
       showStatus("Disconnected. Trying to reconnect…");
     });
   </script>
