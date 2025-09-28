@@ -160,7 +160,6 @@
             <span>Room: {{ request.room|default('—') }}</span>
             <span class="role-span">For: {{ request.role|default('')|upper }}</span>
             <span class="timestamp"></span>
-            <span class="status-badge chip" style="display:none;"></span>
           </div>
           <button class="ack-button">Acknowledge</button>
           <button class="omw-button">On my way</button>
@@ -194,7 +193,6 @@
     const LocalStatus = new Map();        // request_id -> status
     const LocalStatusByKey = new Map();   // `${room}::${request_text}` -> status
 
-    // ---- Helpers ----
     function normalizeText(s) { return (s || '').replace(/\s+/g, ' ').trim(); }
     function makeCompositeKey(room, text) {
       return `${(room || '').trim()}::${normalizeText(text)}`.toLowerCase();
@@ -257,7 +255,6 @@
           <span>Room: ${(data.room || '—')}</span>
           <span class="role-span">For: ${(data.role || '').toUpperCase()}</span>
           <span class="timestamp"></span>
-          <span class="status-badge chip" style="display:none;"></span>
         </div>
         <button class="ack-button">Acknowledge</button>
         <button class="omw-button">On my way</button>
@@ -279,11 +276,9 @@
       const ack = li.querySelector('.ack-button');
       const omw = li.querySelector('.omw-button');
       const asap = li.querySelector('.asap-button');
-      const badge = li.querySelector('.status-badge');
 
       // Reset UI
       [ack, omw, asap].forEach(b => b && (b.disabled = false));
-      if (badge) { badge.style.display = 'none'; badge.textContent = ''; }
 
       if (!st) return;
 
@@ -300,12 +295,6 @@
         li.querySelector('.defer-btn')?.setAttribute('disabled', true);
         li.querySelector('.complete-btn')?.setAttribute('disabled', true);
       }
-
-      if (badge) {
-        const map = { ack:'Acknowledged', omw:'On my way', asap:'ASAP', deferred:'Deferred', completed:'Completed', pending:'Pending sync' };
-        const label = map[st] || (li.dataset.pendingSync ? 'Pending sync' : '');
-        if (label) { badge.textContent = label; badge.style.display = 'inline-flex'; }
-      }
     }
 
     function upsertRequestItem(req) {
@@ -317,7 +306,7 @@
 
       let li = document.getElementById(req.id);
       if (li) {
-        // Update in place (keep node so DOM-pinned status survives)
+        // Update in place
         li.dataset.room = req.room || '';
         li.dataset.request = normalizeText(req.request || '');
         li.dataset.role = req.role || '';
@@ -436,9 +425,7 @@
         const reqText     = item.dataset.request || '';
 
         function sendAck(status, dashMessage) {
-          // Save under both ID and composite key
           setStatusFor(requestId, roomNumber, reqText, status);
-          // Pin to DOM so polls cannot wipe it
           item.dataset.localStatus = status;
           delete item.dataset.pendingSync;
 
@@ -476,7 +463,6 @@
             request_text: reqText
           });
           btn.disabled = true;
-          // Pin completed locally to prevent UI re-enable
           item.dataset.localStatus = 'completed';
           delete item.dataset.pendingSync;
           applyLocalStatusToItem(item);
@@ -497,7 +483,7 @@
       setInterval(cleanupStaleRows, 60 * 1000);
     });
 
-    // Stable polling: update in place, append new, remove missing, reconcile new IDs
+    // Polling reconciliation
     function pollActiveRequests() {
       const params = new URLSearchParams();
       if (NurseContext && NurseName) {
@@ -512,13 +498,10 @@
         .then(r => r.ok ? r.json() : Promise.reject())
         .then(json => {
           const incoming = (json && json.active_requests) ? json.active_requests : [];
-
-          // newest first for consistent visual order
           incoming.sort((a, b) => (new Date(b.timestamp||0)) - (new Date(a.timestamp||0)));
 
-          // Build incoming id set and composite-key map
           const incomingIds = new Set();
-          const incomingByKey = new Map(); // `${room}::${text}` -> item
+          const incomingByKey = new Map();
           incoming.forEach(it => {
             if (!it.id) it.id = 'key:' + makeCompositeKey(it.room, it.request);
             incomingIds.add(it.id);
@@ -527,7 +510,6 @@
 
           const list = document.getElementById('requests-list');
 
-          // Reconcile existing DOM items against incoming
           Array.from(list.querySelectorAll('.request-item')).forEach(li => {
             const id   = li.dataset.id || '';
             const room = li.dataset.room || '';
@@ -542,7 +524,6 @@
               delete li.dataset.pendingSync;
             }
 
-            // Same request, new id -> update node id, carry status forward
             if (!stillById && stillByKey) {
               const newer = incomingByKey.get(key);
               if (newer && newer.id) {
@@ -552,25 +533,20 @@
                 li.dataset.lastSeen = String(Date.now());
                 if (oldStatus) {
                   setStatusFor(newer.id, room, text, oldStatus);
-                  li.dataset.localStatus = oldStatus; // DOM-pinned survives
+                  li.dataset.localStatus = oldStatus;
                 }
               }
             } else if (!stillById && !stillByKey && id) {
-              // If clinician already interacted, DO NOT remove on poll—mark pending
               if (li.dataset.localStatus) {
                 li.dataset.pendingSync = '1';
-                const badge = li.querySelector('.status-badge');
-                if (badge) { badge.textContent = 'Pending sync'; badge.style.display = 'inline-flex'; }
                 li.classList.add('status-warn');
               } else {
-                // OK to remove quietly (never touched by user)
                 li.style.opacity = '0';
                 setTimeout(() => li.remove(), 300);
               }
             }
           });
 
-          // Upsert incoming items (append new; update existing in place)
           incoming.forEach(upsertRequestItem);
 
           updateAllTimersAndColors();
@@ -585,7 +561,6 @@
         });
     }
 
-    // Cleanup for truly stale items
     function cleanupStaleRows() {
       const now = Date.now();
       const STALE_MS_UNTOUCHED = 5 * 60 * 1000;   // 5 minutes
