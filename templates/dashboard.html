@@ -41,11 +41,7 @@
       align-items: start;
       margin-bottom: 12px;
     }
-    h1 {
-      color: var(--core-blue);
-      margin: 0 0 6px 0;
-      font-size: 1.5rem;
-    }
+    h1 { color: var(--core-blue); margin: 0 0 6px 0; font-size: 1.5rem; }
     .subline { margin: 0 0 8px 0; font-size: 0.95rem; color: #555; }
     .chip-row { display:flex; flex-wrap:wrap; gap:6px; margin: 6px 0 0 0; }
     .chip { padding:6px 10px; border-radius:9999px; background:#eef2f7; border:1px solid #d7dde6; font-size:.85rem; color:#334155; }
@@ -57,9 +53,7 @@
       transition: background-color .2s ease; white-space:nowrap; cursor:pointer;
     }
     .link-btn:hover, .btn:hover { background:#093582; }
-    .seg {
-      display:inline-flex; border:1px solid var(--border); border-radius:10px; overflow:hidden; background:#fff;
-    }
+    .seg { display:inline-flex; border:1px solid var(--border); border-radius:10px; overflow:hidden; background:#fff; }
     .seg a {
       padding:8px 10px; text-decoration:none; color:#0f172a; background:#fff;
       border-right:1px solid var(--border); font-size:.9rem;
@@ -201,7 +195,7 @@
 
     // ---- Helpers for composite-key tracking ----
     function makeCompositeKey(room, text) {
-      return `${room || ''}::${(text || '').trim()}`.toLowerCase();
+      return `${(room || '').trim()}::${(text || '').replace(/\s+/g,' ').trim()}`.toLowerCase();
     }
     function setStatusFor(id, room, text, status) {
       if (id) LocalStatus.set(id, status);
@@ -277,7 +271,9 @@
       const room = li?.dataset?.room || '';
       const text = li?.dataset?.request || '';
 
-      const st = getStatusFor(id, room, text); // try id first, then room::text
+      // --- DOM-pinned status wins ---
+      let st = (li?.dataset?.localStatus || '').toLowerCase().trim();
+      if (!st) st = getStatusFor(id, room, text); // fall back to memory maps
 
       const ack = li.querySelector('.ack-button');
       const omw = li.querySelector('.omw-button');
@@ -315,14 +311,12 @@
       const list = document.getElementById('requests-list');
       if (!list || !req) return;
 
-      // --- NEW: synthesize an id if API didn't send one ---
-      if (!req.id) {
-        req.id = 'key:' + makeCompositeKey(req.room, req.request);
-      }
+      // Synthesize id if API didn't send one
+      if (!req.id) req.id = 'key:' + makeCompositeKey(req.room, req.request);
 
       let li = document.getElementById(req.id);
       if (li) {
-        // --- Update in place (no innerHTML replacement) ---
+        // Update in place (keep node so DOM-pinned status survives)
         li.dataset.room = req.room || '';
         li.dataset.request = req.request || '';
         li.dataset.role = req.role || '';
@@ -338,7 +332,7 @@
           if (spans[1]) spans[1].textContent = `For: ${(req.role || '').toUpperCase()}`;
         }
       } else {
-        // --- Create new (append to keep order stable) ---
+        // Create new
         li = document.createElement('li');
         li.id = req.id;
         li.className = 'request-item ' + (req.role || '');
@@ -351,9 +345,11 @@
         document.getElementById('requests-list').appendChild(li);
       }
 
-      // If the server provided a status, seed under both keys
+      // If server provided a status, seed it and pin to DOM
       if (req.status) {
-        setStatusFor(req.id, req.room, req.request, (req.status || 'new').toLowerCase());
+        const s = (req.status || 'new').toLowerCase();
+        setStatusFor(req.id, req.room, req.request, s);
+        li.dataset.localStatus = s;
       }
 
       applyLocalStatusToItem(li);
@@ -400,7 +396,7 @@
       }
     });
 
-    // If backend emits a live status event
+    // Optional server status channel
     socket.on('request_status', function(data) {
       const id = data?.id;
       const st = (data?.status || '').toLowerCase();
@@ -410,7 +406,11 @@
       const room = li ? li.dataset.room : '';
       const text = li ? li.dataset.request : '';
       setStatusFor(id, room, text, st);
-      if (li) applyLocalStatusToItem(li);
+
+      if (li) {
+        li.dataset.localStatus = st; // pin to DOM
+        applyLocalStatusToItem(li);
+      }
     });
 
     // --- Click handlers ---
@@ -432,11 +432,13 @@
         const reqText     = item.dataset.request || '';
 
         function sendAck(status, dashMessage) {
-          // Save under both ID and composite key for resilience
+          // Save under both ID and composite key
           setStatusFor(requestId, roomNumber, reqText, status);
+          // Pin to DOM so polls cannot wipe it
+          item.dataset.localStatus = status;
+
           applyLocalStatusToItem(item);
 
-          // Server persist/broadcast (if implemented)
           socket.emit('acknowledge_request', {
             request_id: requestId,
             room_number: roomNumber,
@@ -469,6 +471,9 @@
             request_text: reqText
           });
           btn.disabled = true;
+          // Also pin completed locally to prevent UI re-enable
+          item.dataset.localStatus = 'completed';
+          applyLocalStatusToItem(item);
         }
       });
 
@@ -506,15 +511,14 @@
           const incomingIds = new Set();
           const incomingByKey = new Map(); // `${room}::${text}` -> item
           incoming.forEach(it => {
-            // synthesize id if missing so later steps work consistently
             if (!it.id) it.id = 'key:' + makeCompositeKey(it.room, it.request);
-            if (it.id) incomingIds.add(it.id);
+            incomingIds.add(it.id);
             incomingByKey.set(makeCompositeKey(it.room, it.request), it);
           });
 
           const list = document.getElementById('requests-list');
 
-          // For each existing li, decide if it should be removed or reconciled to a new id
+          // Reconcile existing DOM items against incoming
           Array.from(list.querySelectorAll('.request-item')).forEach(li => {
             const id   = li.dataset.id || '';
             const room = li.dataset.room || '';
@@ -524,17 +528,17 @@
             const stillById  = id && incomingIds.has(id);
             const stillByKey = incomingByKey.has(key);
 
-            // If present but under a new id, reconcile DOM id & carry status forward
+            // Same request, new id -> update node id, carry map & DOM status forward
             if (!stillById && stillByKey) {
               const newer = incomingByKey.get(key);
               if (newer && newer.id) {
-                // Migrate DOM id and dataset
+                const oldStatus = li.dataset.localStatus || getStatusFor(id, room, text);
                 li.id = newer.id;
                 li.dataset.id = newer.id;
-
-                // Carry forward local status from old id (or key)
-                const st = getStatusFor(id, room, text);
-                if (st) setStatusFor(newer.id, room, text, st);
+                if (oldStatus) {
+                  setStatusFor(newer.id, room, text, oldStatus);
+                  li.dataset.localStatus = oldStatus; // DOM-pinned survives either way
+                }
               }
             } else if (!stillById && !stillByKey && id) {
               // Truly gone -> remove
