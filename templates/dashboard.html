@@ -1,170 +1,279 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Real-Time Request Dashboard</title>
   <style>
-    :root {
-      --core-blue: #00205b;
-      --light-blue: #093582;
-      --white: #ffffff;
-      --gray: #f3f4f6;
-      --ack: #facc15;
-      --omw: #22c55e;
-      --asap: #8b5cf6;
-      --defer: #0ea5e9;
-      --complete: #6b7280;
+    :root{
+      --core-blue:#001e5a;
+      --blue-600:#123a8b;
+      --blue-800:#0b2b6d;
+      --teal:#0fb67a;
+      --purple:#5b3fd6;
+      --amber:#f3c14b;
+      --red:#e23a3a;
+      --ink:#1f2937;
+      --ink-60:#6b7280;
+      --card:#f8fcf8;
+      --card-alt:#fffdf6;
+      --chip:#eef2ff;
+      --border:#e5e7eb;
+      --btn:#0a2f66;
+      --btn-hover:#123a8b;
+      --btn-ghost:#e5e7eb;
     }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      margin: 0;
-      padding: 20px;
-      background: #f7f8fb;
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+      color:var(--ink);
+      background:#f6f7fb;
     }
-    h1 {
-      font-size: 24px;
-      font-weight: 700;
-      margin: 0;
-      color: var(--core-blue);
+    .wrap{max-width:1200px;margin:24px auto;padding:0 16px}
+    header{
+      display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+      margin-bottom:18px
     }
-    .topbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 15px;
+    h1{font-size:28px;color:var(--core-blue);margin:0 8px 0 0}
+    .spacer{flex:1}
+    .btn{
+      appearance:none;border:1px solid transparent;border-radius:10px;
+      padding:12px 18px;font-weight:600;cursor:pointer;
+      color:#fff;background:var(--btn);box-shadow:0 2px 0 rgba(0,0,0,.05)
     }
-    .btn {
-      background: var(--core-blue);
-      color: var(--white);
-      border: none;
-      padding: 10px 16px;
-      border-radius: 8px;
-      font-weight: 600;
-      cursor: pointer;
+    .btn:hover{background:var(--btn-hover)}
+    .btn.ghost{
+      color:#0a2340;background:#fff;border-color:var(--border)
     }
-    .btn:hover {
-      background: var(--light-blue);
-    }
-    .timestamp {
-      font-size: 14px;
-      color: #374151;
-    }
-    .request-card {
-      background: var(--white);
-      border-left: 6px solid var(--core-blue);
-      border-radius: 10px;
-      padding: 16px;
-      margin-bottom: 12px;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-    }
-    .request-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .request-title {
-      font-size: 18px;
-      font-weight: 600;
-      margin: 0 0 4px 0;
-    }
-    .meta {
-      font-size: 14px;
-      color: #374151;
-    }
-    .actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 12px;
-    }
-    .pill {
-      border: none;
-      border-radius: 6px;
-      padding: 8px 14px;
-      font-weight: 600;
-      cursor: pointer;
-      color: var(--white);
-    }
-    .ack { background: var(--ack); color: #111; }
-    .omw { background: var(--omw); }
-    .asap { background: var(--asap); }
-    .defer { background: var(--defer); }
-    .complete { background: var(--complete); }
+    .subtle{color:var(--ink-60);font-size:14px}
 
-    .pill.active {
-      outline: 3px solid rgba(0,0,0,0.15);
+    /* cards */
+    .list{display:flex;flex-direction:column;gap:14px}
+    .card{
+      background:#fff;border:1px solid var(--border);border-left:6px solid #d04a2e;
+      border-radius:12px;padding:18px 16px;display:grid;grid-template-columns:1fr auto;gap:10px;
+      align-items:center
     }
+    .card.nurse{background:#f5fffa;border-left-color:#0fb67a}
+    .card.cna{background:#fffaf7;border-left-color:#f3c14b}
+
+    .title{font-size:20px;font-weight:700;margin-bottom:6px}
+    .meta{font-size:14px;color:var(--ink-60)}
+    .meta b{color:var(--ink);font-weight:600}
+    .actions{display:flex;gap:10px;flex-wrap:wrap;justify-self:end}
+    .pill{
+      border-radius:10px;padding:10px 14px;border:1px solid var(--border);
+      background:#fff;cursor:pointer;font-weight:600
+    }
+    .pill.ack{background:#fff7d8;border-color:#f5d57a}
+    .pill.omw{background:#e8fff4;border-color:#8be0c0}
+    .pill.asap{background:#eee8ff;border-color:#c6b9ff}
+    .pill.defer{background:#e7f8ff;border-color:#9cdcff}
+    .pill.complete{background:#f1f5f9}
+    .pill.active{box-shadow:inset 0 0 0 2px rgba(0,0,0,.12)}
+    .empty{padding:28px;text-align:center;color:var(--ink-60);border:1px dashed var(--border);border-radius:12px;background:#fff}
   </style>
 </head>
 <body>
-  <div class="topbar">
-    <h1>Real-Time Request Dashboard</h1>
-    <div style="display: flex; gap: 10px; align-items: center;">
-      <button class="btn" onclick="refreshDashboard()">Refresh</button>
-      <span class="timestamp">Updated <span id="lastUpdated"></span></span>
-      <button class="btn" onclick="location.href='/my_rooms'">View My Rooms</button>
-      <button class="btn" onclick="location.href='/analytics'">View Analytics</button>
-    </div>
-  </div>
+  <div class="wrap">
+    <header>
+      <h1>Real-Time Request Dashboard</h1>
+      <button id="refreshBtn" class="btn">Refresh</button>
+      <div class="subtle" id="lastUpdated">Updated …</div>
+      <div class="spacer"></div>
+      <a href="/staff-portal" class="btn ghost">View My Rooms</a>
+      <a href="/analytics" class="btn">View Analytics</a>
+    </header>
 
-  <div id="requests"></div>
+    <div id="list" class="list"></div>
+    <div id="empty" class="empty" style="display:none;">No active requests.</div>
+  </div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script>
-    const requestsEl = document.getElementById("requests");
-    const lastUpdated = document.getElementById("lastUpdated");
+    // ---------- State ----------
+    const byId = new Map(); // id -> card element
+    const listEl = document.getElementById('list');
+    const emptyEl = document.getElementById('empty');
+    const lastUpdated = document.getElementById('lastUpdated');
 
-    function renderRequest(req) {
-      const div = document.createElement("div");
-      div.className = "request-card";
-      div.innerHTML = `
-        <div class="request-header">
-          <div>
-            <p class="request-title">${req.text}</p>
-            <p class="meta">Room: ${req.room} &nbsp; For: ${req.role} &nbsp; ${req.time}</p>
-          </div>
-        </div>
-        <div class="actions">
-          <button class="pill ack ${req.status==='ack'?'active':''}" onclick="updateStatus('${req.id}','ack')">Acknowledge</button>
-          <button class="pill omw ${req.status==='omw'?'active':''}" onclick="updateStatus('${req.id}','omw')">On my way</button>
-          <button class="pill asap ${req.status==='asap'?'active':''}" onclick="updateStatus('${req.id}','asap')">Be there ASAP</button>
-          <button class="pill defer" onclick="updateStatus('${req.id}','defer')">Defer to Nurse</button>
-          <button class="pill complete" onclick="updateStatus('${req.id}','done')">Complete</button>
-        </div>
-      `;
-      return div;
+    function nowClock(){
+      const d = new Date();
+      lastUpdated.textContent = `Updated ${d.toLocaleTimeString()}`;
     }
 
-    function refreshDashboard() {
-      lastUpdated.textContent = new Date().toLocaleTimeString();
-      // TODO: fetch current requests from backend
+    function roleToClass(role){
+      return (String(role||'').toLowerCase()==='nurse') ? 'nurse' : 'cna';
     }
 
-    function updateStatus(id, status) {
-      socket.emit("dashboard:update_status", { request_id: id, status: status });
+    function ensureEmptyState(){
+      emptyEl.style.display = listEl.children.length ? 'none' : 'block';
     }
 
-    // Live updates
-    const socket = io("/dashboard");
-    socket.on("connect", () => {
-      refreshDashboard();
-    });
-    socket.on("dashboard:requests", (data) => {
-      requestsEl.innerHTML = "";
-      data.forEach(req => requestsEl.appendChild(renderRequest(req)));
-      refreshDashboard();
-    });
-    socket.on("dashboard:update", (req) => {
-      // Replace or append request
-      const card = renderRequest(req);
-      const existing = document.querySelector(`[data-id="${req.id}"]`);
-      if (existing) {
-        existing.replaceWith(card);
-      } else {
-        requestsEl.prepend(card);
+    function createCard(data){
+      const card = document.createElement('div');
+      card.className = `card ${roleToClass(data.role)}`;
+      card.dataset.id = data.id;
+
+      const left = document.createElement('div');
+      const title = document.createElement('div');
+      title.className = 'title';
+      title.textContent = data.request || '(no text)';
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      const when = data.timestamp ? timeAgo(new Date(data.timestamp)) : 'Just now';
+      meta.innerHTML = `Room: <b>${data.room || '—'}</b> &nbsp; For: <b>${(data.role||'').toUpperCase()}</b> &nbsp; ${when}`;
+      left.appendChild(title);
+      left.appendChild(meta);
+
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+
+      // helper to make an action button
+      const mk = (label, cls, handler) => {
+        const b = document.createElement('button');
+        b.className = `pill ${cls}`;
+        b.textContent = label;
+        b.addEventListener('click', (e)=>{ e.preventDefault(); handler(b, data); });
+        return b;
+      };
+
+      // Ack/OMW/ASAP — local hold + notify server (patient gets status on /patient namespace)
+      const ackBtn  = mk('Acknowledge','ack', (btn,d)=>{ setActive(btn, actions); emitStatus(d,'ack'); });
+      const omwBtn  = mk('On my way','omw', (btn,d)=>{ setActive(btn, actions); emitStatus(d,'omw'); });
+      const asapBtn = mk('Be there ASAP','asap', (btn,d)=>{ setActive(btn, actions); emitStatus(d,'asap'); });
+
+      // Defer to Nurse (only changes role; server will broadcast request_updated)
+      const deferBtn = mk('Defer to Nurse','defer', (_btn,d)=>{
+        socket.emit('defer_request', { id: d.id });
+      });
+
+      // Complete (server will broadcast remove_request)
+      const doneBtn = mk('Complete','complete', (_btn,d)=>{
+        socket.emit('complete_request', { request_id: d.id });
+      });
+
+      actions.append(ackBtn, omwBtn, asapBtn, deferBtn, doneBtn);
+
+      card.appendChild(left);
+      card.appendChild(actions);
+      return card;
+    }
+
+    function setActive(clickedBtn, container){
+      // Clear previous active in the status group (ack/omw/asap only)
+      container.querySelectorAll('.pill.ack, .pill.omw, .pill.asap').forEach(b=>b.classList.remove('active'));
+      clickedBtn.classList.add('active');
+    }
+
+    function addOrUpdateCard(data){
+      if (!data || !data.id) return;
+      let card = byId.get(data.id);
+      if (!card){
+        card = createCard(data);
+        byId.set(data.id, card);
+        listEl.insertBefore(card, listEl.firstChild); // newest on top
+      }else{
+        // update meta/role class
+        card.className = `card ${roleToClass(data.role)}`;
+        const meta = card.querySelector('.meta');
+        const when = data.timestamp ? timeAgo(new Date(data.timestamp)) : 'Just now';
+        meta.innerHTML = `Room: <b>${data.room || '—'}</b> &nbsp; For: <b>${(data.role||'').toUpperCase()}</b> &nbsp; ${when}`;
       }
+      ensureEmptyState();
+      nowClock();
+    }
+
+    function removeCard(id){
+      const card = byId.get(id);
+      if (card){
+        card.remove();
+        byId.delete(id);
+        ensureEmptyState();
+        nowClock();
+      }
+    }
+
+    function timeAgo(d){
+      const s = Math.floor((Date.now()-d.getTime())/1000);
+      if (s < 5) return 'Just now';
+      if (s < 60) return `${s}s ago`;
+      const m = Math.floor(s/60);
+      if (m < 60) return `${m}m ago`;
+      const h = Math.floor(m/60);
+      return `${h}h ago`;
+    }
+
+    // ---------- SocketIO ----------
+    const socket = io(); // default namespace for the dashboard
+    socket.on('connect', ()=>{ /* optional: join a room if you ever need */ });
+
+    // New request -> add card
+    socket.on('new_request', (data)=>{
+      // expected: { id, room, request, role, timestamp }
+      addOrUpdateCard(data);
     });
+
+    // Defer/update -> change role, keep card
+    socket.on('request_updated', (data)=>{
+      // expected: { id, new_role, new_timestamp }
+      const card = byId.get(data.id);
+      if (!card) return;
+      const meta = card.querySelector('.meta');
+      const parts = meta.innerHTML.split('&nbsp;'); // keep room + time, swap role
+      // Rebuild meta using stored room and new role
+      const roomMatch = /Room:\s*<b>(.*?)<\/b>/i.exec(meta.innerHTML);
+      const when = data.new_timestamp ? timeAgo(new Date(data.new_timestamp)) : 'Just now';
+      const room = roomMatch ? roomMatch[1] : '—';
+      card.className = `card ${roleToClass(data.new_role)}`;
+      meta.innerHTML = `Room: <b>${room}</b> &nbsp; For: <b>${String(data.new_role||'').toUpperCase()}</b> &nbsp; ${when}`;
+    });
+
+    // Completed -> remove card
+    socket.on('remove_request', (data)=>{
+      // expected: { id }
+      removeCard(data.id);
+    });
+
+    // When we click ack/omw/asap, tell the server (so patient can get live status)
+    function emitStatus(d, status){
+      socket.emit('acknowledge_request', {
+        id: d.id || d.request_id,        // legacy/new safe
+        request_id: d.id || d.request_id,
+        room_number: d.room,
+        status: status,
+        role: (d.role||'nurse').toLowerCase()
+      });
+    }
+
+    // ---------- Initial load (keeps you safe if socket connected after) ----------
+    async function loadInitial(){
+      try{
+        const res = await fetch('/api/active_requests');
+        const json = await res.json();
+        listEl.innerHTML = '';
+        byId.clear();
+        (json.active_requests || []).forEach(r=>{
+          addOrUpdateCard({
+            id: r.id,
+            room: r.room,
+            request: r.request,
+            role: r.role,
+            timestamp: r.timestamp
+          });
+        });
+        ensureEmptyState();
+        nowClock();
+      }catch(e){
+        console.error('Failed to load active requests', e);
+      }
+    }
+
+    document.getElementById('refreshBtn').addEventListener('click', loadInitial);
+
+    // boot
+    loadInitial();
   </script>
 </body>
 </html>
