@@ -2,318 +2,169 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Real-Time Request Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    :root{
-      --blue:#00205b;
-      --blue-2:#0b3a82;
-      --green:#63c38d;
-      --purple:#6b4fd8;
-      --yellow:#f7d774;
-      --gray:#6b7280;
-      --chip:#eef6ff;
-      --panel:#f8fbf7;
-      --danger:#ef4444;
-      --border:#e5e7eb;
+    :root {
+      --core-blue: #00205b;
+      --light-blue: #093582;
+      --white: #ffffff;
+      --gray: #f3f4f6;
+      --ack: #facc15;
+      --omw: #22c55e;
+      --asap: #8b5cf6;
+      --defer: #0ea5e9;
+      --complete: #6b7280;
     }
-    *{box-sizing:border-box}
-    body{
-      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-      margin:0;padding:24px;background:#f6f7fb;color:#111827;
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #f7f8fb;
     }
-    .top{
-      display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:18px
+    h1 {
+      font-size: 24px;
+      font-weight: 700;
+      margin: 0;
+      color: var(--core-blue);
     }
-    h1{margin:0;font-size:28px;color:var(--blue)}
-    .btn{
-      background:var(--blue);color:#fff;border:none;border-radius:12px;
-      padding:12px 18px;font-weight:600;cursor:pointer
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 15px;
     }
-    .btn:hover{background:var(--blue-2)}
-    .ghost{background:#fff;color:var(--blue);border:2px solid var(--blue)}
-    .right{margin-left:auto;display:flex;gap:12px}
-    .stamp{color:#374151;font-size:14px}
-    ul#requests-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px}
-    .request-item{
-      background:#fff;border:1px solid var(--border);border-left:10px solid #e76f51;border-radius:14px;
-      padding:18px;display:flex;flex-direction:column;gap:12px
+    .btn {
+      background: var(--core-blue);
+      color: var(--white);
+      border: none;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
     }
-    .request-item.nurse{background:var(--panel);border-left-color:#e76f51}
-    .request-item.cna{background:#fff;border-left-color:#0ea5e9}
-    .row{display:flex;gap:18px;flex-wrap:wrap;align-items:center}
-    .title{font-size:20px;font-weight:700}
-    .meta{color:#4b5563;font-size:14px;display:flex;gap:16px;flex-wrap:wrap}
-    .actions{display:flex;gap:10px;flex-wrap:wrap}
-    .pill{
-      border:none;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer
+    .btn:hover {
+      background: var(--light-blue);
     }
-    .pill.yellow{background:var(--yellow)}
-    .pill.green{background:var(--green);color:#0f5132}
-    .pill.purple{background:var(--purple);color:#fff}
-    .pill.gray{background:#64748b;color:#fff}
-    .pill.teal{background:#0ea5e9;color:#fff}
-    .pill:hover{filter:brightness(0.95)}
-    .pill.is-active{outline:3px solid rgba(0,0,0,.12)}
-    .chips{display:flex;gap:10px;flex-wrap:wrap}
-    .chip{background:var(--chip);border:1px solid #dbeafe;color:#1d4ed8;border-radius:999px;padding:6px 10px;font-size:12px}
-    .empty{padding:40px;text-align:center;color:#6b7280;border:2px dashed #d1d5db;border-radius:14px;background:#fff}
+    .timestamp {
+      font-size: 14px;
+      color: #374151;
+    }
+    .request-card {
+      background: var(--white);
+      border-left: 6px solid var(--core-blue);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+    .request-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .request-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin: 0 0 4px 0;
+    }
+    .meta {
+      font-size: 14px;
+      color: #374151;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .pill {
+      border: none;
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--white);
+    }
+    .ack { background: var(--ack); color: #111; }
+    .omw { background: var(--omw); }
+    .asap { background: var(--asap); }
+    .defer { background: var(--defer); }
+    .complete { background: var(--complete); }
+
+    .pill.active {
+      outline: 3px solid rgba(0,0,0,0.15);
+    }
   </style>
 </head>
 <body>
-  <div class="top">
+  <div class="topbar">
     <h1>Real-Time Request Dashboard</h1>
-    <button id="refresh" class="btn">Refresh</button>
-    <div class="stamp">Updated <span id="stamp"></span></div>
-    <div class="right">
-      <a href="{{ url_for('staff_portal') }}" class="btn ghost">View My Rooms</a>
-      <a href="{{ url_for('analytics') }}" class="btn">View Analytics</a>
+    <div style="display: flex; gap: 10px; align-items: center;">
+      <button class="btn" onclick="refreshDashboard()">Refresh</button>
+      <span class="timestamp">Updated <span id="lastUpdated"></span></span>
+      <button class="btn" onclick="location.href='/my_rooms'">View My Rooms</button>
+      <button class="btn" onclick="location.href='/analytics'">View Analytics</button>
     </div>
   </div>
 
-  <ul id="requests-list">
-    {% if active_requests and active_requests|length > 0 %}
-      {% for r in active_requests %}
-      <li id="{{ r.id }}"
-          class="request-item {{ 'nurse' if (r.role|lower)=='nurse' else 'cna' }}"
-          data-id="{{ r.id }}"
-          data-room="{{ r.room or '' }}"
-          data-request="{{ r.request or '' }}"
-          data-role="{{ r.role or '' }}"
-          data-timestamp="{{ r.timestamp or '' }}">
-        <div class="row">
-          <div class="title">{{ r.request }}</div>
-        </div>
-        <div class="row meta">
-          <div>Room: <strong>{{ r.room or '—' }}</strong></div>
-          <div>For: <strong>{{ (r.role or '')|upper }}</strong></div>
-          <div><span class="ago">Just now</span></div>
-        </div>
-        <div class="row actions">
-          <button class="pill yellow ack-button">Acknowledge</button>
-          <button class="pill green omw-button">On my way</button>
-          <button class="pill purple asap-button">Be there ASAP</button>
-          <button class="pill teal defer-button">Defer to Nurse</button>
-          <button class="pill gray complete-btn">Complete</button>
-        </div>
-        <div class="chips">
-          {% if r.role and r.role|lower == 'nurse' %}<span class="chip">NURSE</span>{% else %}<span class="chip">CNA</span>{% endif %}
-          {% if r.room %}<span class="chip">Room {{ r.room }}</span>{% endif %}
-        </div>
-      </li>
-      {% endfor %}
-    {% else %}
-      <div class="empty">No active requests.</div>
-    {% endif %}
-  </ul>
+  <div id="requests"></div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script>
-    // ----- utils -----
-    function nowStamp(){
-      const d=new Date();
-      document.getElementById('stamp').textContent=d.toLocaleTimeString();
-    }
-    nowStamp();
-    document.getElementById('refresh').addEventListener('click',()=>location.reload());
+    const requestsEl = document.getElementById("requests");
+    const lastUpdated = document.getElementById("lastUpdated");
 
-    // time-ago refresher (lightweight)
-    function renderAgo(ts){
-      if(!ts) return 'Just now';
-      const t=new Date(ts); const diff=(Date.now()-t.getTime())/1000;
-      if(diff<60) return 'Just now';
-      const m=Math.floor(diff/60); if(m<60) return `${m}m ago`;
-      const h=Math.floor(m/60); return `${h}h ago`;
-    }
-    function refreshAgo(){
-      document.querySelectorAll('#requests-list .request-item').forEach(li=>{
-        const ts=li.dataset.timestamp||'';
-        const el=li.querySelector('.ago'); if(el) el.textContent=renderAgo(ts);
-      });
-    }
-    setInterval(refreshAgo, 30_000); refreshAgo();
-
-    // ----- Socket.IO -----
-    var socket = io();
-
-    // ---- Persisted state keyed by request id ----
-    function _stateKey(id){ return `reqState:${id}`; }
-    function loadBtnState(id){
-      try { return JSON.parse(localStorage.getItem(_stateKey(id))) || {}; }
-      catch { return {}; }
-    }
-    function saveBtnState(id, state){ localStorage.setItem(_stateKey(id), JSON.stringify(state||{})); }
-    function clearBtnState(id){ localStorage.removeItem(_stateKey(id)); }
-    function applyBtnState(li, state){
-      const map = { ack: '.ack-button', omw: '.omw-button', asap: '.asap-button', complete: '.complete-btn' };
-      Object.entries(map).forEach(([k, sel])=>{
-        const btn = li.querySelector(sel); if(!btn) return;
-        const on = !!state[k];
-        btn.disabled = on;
-        if(on) btn.classList.add('is-active'); else btn.classList.remove('is-active');
-      });
-    }
-
-    // ---- Build/update items ----
-    function buildRequestHTML(req){
-      const isNurse = (String(req.role||'').toLowerCase()==='nurse');
-      const chips = `
-        <div class="chips">
-          <span class="chip">${isNurse?'NURSE':'CNA'}</span>
-          ${req.room ? `<span class="chip">Room ${req.room}</span>`:''}
-        </div>`;
-      return `
-        <div class="row"><div class="title">${escapeHtml(req.request||'')}</div></div>
-        <div class="row meta">
-          <div>Room: <strong>${req.room || '—'}</strong></div>
-          <div>For: <strong>${(req.role||'').toUpperCase()}</strong></div>
-          <div><span class="ago">${renderAgo(req.timestamp)}</span></div>
+    function renderRequest(req) {
+      const div = document.createElement("div");
+      div.className = "request-card";
+      div.innerHTML = `
+        <div class="request-header">
+          <div>
+            <p class="request-title">${req.text}</p>
+            <p class="meta">Room: ${req.room} &nbsp; For: ${req.role} &nbsp; ${req.time}</p>
+          </div>
         </div>
-        <div class="row actions">
-          <button class="pill yellow ack-button">Acknowledge</button>
-          <button class="pill green omw-button">On my way</button>
-          <button class="pill purple asap-button">Be there ASAP</button>
-          <button class="pill teal defer-button">Defer to Nurse</button>
-          <button class="pill gray complete-btn">Complete</button>
+        <div class="actions">
+          <button class="pill ack ${req.status==='ack'?'active':''}" onclick="updateStatus('${req.id}','ack')">Acknowledge</button>
+          <button class="pill omw ${req.status==='omw'?'active':''}" onclick="updateStatus('${req.id}','omw')">On my way</button>
+          <button class="pill asap ${req.status==='asap'?'active':''}" onclick="updateStatus('${req.id}','asap')">Be there ASAP</button>
+          <button class="pill defer" onclick="updateStatus('${req.id}','defer')">Defer to Nurse</button>
+          <button class="pill complete" onclick="updateStatus('${req.id}','done')">Complete</button>
         </div>
-        ${chips}
       `;
+      return div;
     }
 
-    function upsertRequestItem(req){
-      const list=document.getElementById('requests-list'); if(!list||!req||!req.id) return;
-      let li=document.getElementById(req.id);
-      const cls = 'request-item ' + (String(req.role||'').toLowerCase()==='nurse' ? 'nurse' : 'cna');
-
-      if(li){
-        li.className=cls;
-        li.dataset.room=req.room||'';
-        li.dataset.request=req.request||'';
-        li.dataset.role=req.role||'';
-        li.dataset.timestamp=req.timestamp||'';
-        li.innerHTML=buildRequestHTML(req);
-      }else{
-        li=document.createElement('li');
-        li.id=req.id;
-        li.className=cls;
-        li.dataset.id=req.id;
-        li.dataset.room=req.room||'';
-        li.dataset.request=req.request||'';
-        li.dataset.role=req.role||'';
-        li.dataset.timestamp=req.timestamp||'';
-        li.innerHTML=buildRequestHTML(req);
-        list.prepend(li);
-      }
-      // apply persisted state for THIS id
-      applyBtnState(li, loadBtnState(req.id));
+    function refreshDashboard() {
+      lastUpdated.textContent = new Date().toLocaleTimeString();
+      // TODO: fetch current requests from backend
     }
 
-    function addRequestToDashboard(req){ upsertRequestItem(req); refreshAgo(); nowStamp(); }
-
-    // Simple escaper for request text
-    function escapeHtml(s){
-      return String(s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    function updateStatus(id, status) {
+      socket.emit("dashboard:update_status", { request_id: id, status: status });
     }
 
-    // ---- Socket events ----
-    socket.on('new_request', (data)=>{
-      if(data && data.id) clearBtnState(data.id);   // brand-new: wipe any stale state
-      addRequestToDashboard(data);
-      try{ audio && audio.play && audio.play(); }catch{}
+    // Live updates
+    const socket = io("/dashboard");
+    socket.on("connect", () => {
+      refreshDashboard();
     });
-
-    socket.on('request_updated', (data)=>{
-      // role changed (e.g., defer)
-      const el=document.getElementById(data.id); if(!el) return;
-      const req={
-        id:data.id,
-        room:el.dataset.room,
-        request:el.dataset.request,
-        role:data.new_role || el.dataset.role,
-        timestamp:data.new_timestamp || el.dataset.timestamp
-      };
-      upsertRequestItem(req);
-      nowStamp();
+    socket.on("dashboard:requests", (data) => {
+      requestsEl.innerHTML = "";
+      data.forEach(req => requestsEl.appendChild(renderRequest(req)));
+      refreshDashboard();
     });
-
-    socket.on('remove_request', (data)=>{
-      const id = data && (data.id || data.request_id);
-      if(!id) return;
-      const el=document.getElementById(id);
-      if(el) el.remove();
-      clearBtnState(id);
-      nowStamp();
-    });
-
-    // (legacy text-only status update to a room)
-    socket.on('status_update', (_)=>{ nowStamp(); });
-
-    // ---- Button clicks (event delegation) ----
-    document.getElementById('requests-list').addEventListener('click', function(e){
-      const btn = e.target.closest('button'); if(!btn) return;
-      const item = e.target.closest('.request-item'); if(!item) return;
-
-      const requestId = item.dataset.id || '';
-      const roomNumber = item.dataset.room || '';
-      const requestText = item.dataset.request || '';
-      const role = (item.dataset.role || '').toLowerCase();
-      const nurseName = ''; // (optional) fill from your UI if you capture it
-
-      const current = loadBtnState(requestId);
-
-      function sendAck(status, message){
-        socket.emit('acknowledge_request', {
-          request_id: requestId,
-          room: roomNumber,            // for legacy dashboard channel
-          room_number: roomNumber,     // for patient emit path
-          message: message,
-          status: status,
-          role: role === 'cna' ? 'cna' : 'nurse',
-          nurse_name: nurseName
-        });
-      }
-
-      if(btn.classList.contains('ack-button')){
-        btn.disabled = true;
-        current.ack = true;
-        saveBtnState(requestId, current);
-        sendAck('ack', '✅ Request acknowledged.');
-      }
-      else if(btn.classList.contains('omw-button')){
-        btn.disabled = true;
-        const ack = item.querySelector('.ack-button'); if(ack) ack.disabled = true;
-        current.omw = true; current.ack = true;
-        saveBtnState(requestId, current);
-        sendAck('omw', '✅ On my way.');
-      }
-      else if(btn.classList.contains('asap-button')){
-        btn.disabled = true;
-        const ack = item.querySelector('.ack-button'); if(ack) ack.disabled = true;
-        const omw = item.querySelector('.omw-button'); if(omw) omw.disabled = true;
-        current.asap = true; current.ack = true; current.omw = true;
-        saveBtnState(requestId, current);
-        sendAck('asap', 'In another room — will be there ASAP.');
-      }
-      else if(btn.classList.contains('defer-button')){
-        // Only meaningful for CNA → Nurse handoff, but backend accepts it universally
-        socket.emit('defer_request', { id: requestId });
-      }
-      else if(btn.classList.contains('complete-btn')){
-        btn.disabled = true;
-        current.complete = true;
-        saveBtnState(requestId, current);
-        socket.emit('complete_request', {
-          request_id: requestId,
-          room_number: roomNumber,
-          nurse_name: nurseName,
-          role: role || 'nurse',
-          request_text: requestText
-        });
+    socket.on("dashboard:update", (req) => {
+      // Replace or append request
+      const card = renderRequest(req);
+      const existing = document.querySelector(`[data-id="${req.id}"]`);
+      if (existing) {
+        existing.replaceWith(card);
+      } else {
+        requestsEl.prepend(card);
       }
     });
-
-    // ---- tiny audio cue on new request ----
-    const audio = new Audio('data:audio/mp3;base64,//uQZAAAAAAAAAAAAAAAAAAAA...');
   </script>
 </body>
 </html>
