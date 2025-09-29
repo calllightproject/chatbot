@@ -1,298 +1,352 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Real-Time Request Dashboard</title>
   <style>
     :root{
-      --navy:#00205b;
-      --ink:#111827;
-      --ink-60:#6b7280;
-      --bg:#f7f8fb;
-      --card:#ffffff;
-      --border:#e5e7eb;
+      --core-blue:#00205b;
+      --link-blue:#062c8f;
+      --pill-yellow:#fde68a;
+      --pill-green:#b7f3c9;
+      --pill-purple:#c7b8ff;
+      --pill-cyan:#bfefff;
+      --pill-gray:#c7ccd4;
 
-      --btn:#0a2f66;
-      --btn-hover:#103a81;
-
-      --ack:#fde68a;      /* yellow */
-      --omw:#bbf7d0;      /* green */
-      --asap:#c4b5fd;     /* purple */
-      --defer:#7dd3fc;    /* cyan */
-      --complete:#cbd5e1; /* gray */
-
-      --left-nurse:#ef4444; /* red */
-      --left-cna:#f59e0b;   /* amber */
+      --card-nurse:#ffe9ec;   /* soft pink */
+      --card-cna:#fff4de;     /* soft cream */
+      --card-default:#f3fff5; /* minty green */
+      --card-border:#e8eaf0;
+      --text:#0b1728;
+      --muted:#6b7280;
     }
-
     *{box-sizing:border-box}
     body{
-      margin:0;background:var(--bg);color:var(--ink);
+      margin:0;
       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+      background:#f7f8fb;
+      color:var(--text);
     }
 
-    /* Top bar */
-    .shell{padding:24px}
-    .top{
-      display:flex;align-items:center;gap:12px;flex-wrap:wrap;
-      justify-content:space-between;margin-bottom:16px
+    .topbar{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:16px 22px;
     }
-    .title{font-weight:800;font-size:28px;color:var(--navy)}
-    .right{display:flex;align-items:center;gap:12px}
+    .title{
+      font-size:32px;
+      font-weight:800;
+      color:var(--core-blue);
+      letter-spacing:.3px;
+    }
+    .top-actions{
+      display:flex; gap:12px; align-items:center;
+    }
     .btn{
-      background:var(--navy);color:#fff;border:1px solid var(--navy);
-      padding:10px 16px;border-radius:10px;font-weight:700;cursor:pointer
+      background:var(--core-blue);
+      color:#fff; border:0; padding:10px 16px;
+      border-radius:10px; font-weight:700; cursor:pointer;
     }
-    .btn:hover{background:#082b74}
-    .updated{font-size:12px;color:var(--ink-60)}
+    .btn-link{
+      background:var(--core-blue);
+      color:#fff; text-decoration:none; padding:10px 16px;
+      border-radius:10px; font-weight:700; display:inline-block;
+    }
+    .subtle{
+      color:var(--muted); font-size:14px; margin-left:10px;
+    }
 
-    /* Cards */
-    .list{display:flex;flex-direction:column;gap:16px}
+    .wrap{padding:0 22px 32px}
+
     .card{
-      background:var(--card);border:1px solid var(--border);border-radius:12px;
-      padding:18px 16px;position:relative;box-shadow:0 1px 3px rgba(0,0,0,.04)
+      border:1px solid var(--card-border);
+      border-left:8px solid #36b37e;
+      border-radius:16px;
+      margin:16px 0;
+      padding:22px;
+      background:var(--card-default);
+      box-shadow:0 1px 2px rgba(0,0,0,.03);
+      display:flex; align-items:center; justify-content:space-between; gap:16px;
     }
-    .card::before{
-      content:"";position:absolute;left:0;top:0;bottom:0;width:6px;border-radius:12px 0 0 12px;
-      background:var(--left-nurse)
-    }
-    .card.role-cna::before{background:var(--left-cna)}
-    .row{
-      display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap
-    }
-    .req{font-size:18px;font-weight:700}
-    .meta{font-size:14px;color:var(--ink-60)}
-    .actions{display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap}
-    .pill{
-      border:none;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer;color:#111827
-    }
-    .pill-ack{background:var(--ack)}
-    .pill-omw{background:var(--omw)}
-    .pill-asap{background:var(--asap)}
-    .pill-defer{background:var(--defer)}
-    .pill-complete{background:var(--complete)}
-    .empty{color:var(--ink-60);font-size:14px;margin-top:12px}
+    .card.role-nurse{ background:var(--card-nurse); border-left-color:#f43f5e; }
+    .card.role-cna{   background:var(--card-cna);   border-left-color:#ff9f1a; }
 
-    /* “My rooms / Analytics” buttons (top-right) */
-    .link{background:var(--navy);color:#fff;text-decoration:none;padding:10px 16px;border-radius:10px;font-weight:700;border:1px solid var(--navy)}
-    .link:hover{background:#082b74}
+    .left{
+      min-width:0; /* wrap nicely */
+    }
+    .req-text{
+      font-size:28px; font-weight:800; margin:0 0 8px 0;
+      color:#0c1222;
+    }
+    .meta{
+      display:flex; gap:22px; flex-wrap:wrap; align-items:center; color:var(--muted);
+      font-size:16px;
+    }
+    .meta b{ color:#1f2937; }
+    .status-pill{
+      display:inline-block; padding:6px 12px; border-radius:999px;
+      background:#eef2ff; color:#3730a3; font-weight:700; font-size:16px;
+      margin-left:8px;
+    }
+
+    .actions{ display:flex; gap:12px; flex-wrap:wrap; }
+    .pill-btn{
+      border:0; border-radius:999px; padding:12px 18px; font-weight:800; cursor:pointer;
+      font-size:18px;
+    }
+    .ack{ background:var(--pill-yellow); }
+    .omw{ background:var(--pill-green); }
+    .asap{ background:var(--pill-purple); }
+    .defer{ background:var(--pill-cyan); }
+    .complete{ background:var(--pill-gray); }
+
+    /* tiny chips under buttons (optional nurse/room chips like your older screen) */
+    .chips{ margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; }
+    .chip{
+      font-size:12px; color:#274060; background:#e8eefc; padding:6px 10px; border-radius:999px;
+      border:1px solid #d7e2ff;
+    }
+
+    /* empty state */
+    .empty{
+      text-align:center; color:var(--muted); margin:36px 0 18px;
+      font-size:18px;
+    }
   </style>
 </head>
 <body>
-<div class="shell">
-  <div class="top">
+  <div class="topbar">
     <div class="title">Real-Time Request Dashboard</div>
-    <div class="right">
+    <div class="top-actions">
       <button id="refreshBtn" class="btn">Refresh</button>
-      <span id="updated" class="updated">Updated {{ (active_requests|length > 0) and (active_requests[0].timestamp or '') }}</span>
-      <a class="link" href="/staff-portal">View My Rooms</a>
-      <a class="link" href="/analytics">View Analytics</a>
+      <span id="updatedAt" class="subtle">Updated —</span>
+      <a class="btn-link" href="{{ url_for('staff_portal') }}">View My Rooms</a>
+      <a class="btn-link" href="{{ url_for('analytics') }}">View Analytics</a>
     </div>
   </div>
 
-  <div id="list" class="list">
-    {% if active_requests and active_requests|length > 0 %}
-      {% for r in active_requests %}
-        <div class="card role-{{ (r.role or 'nurse')|lower }}"
-             id="req-{{ r.id }}"
-             data-id="{{ r.id }}"
-             data-room="{{ r.room or '' }}"
-             data-role="{{ (r.role or '')|lower }}"
-             data-ts="{{ r.timestamp or '' }}">
-          <div class="row">
-            <div class="req">{{ r.request }}</div>
+  <div class="wrap">
+    <div id="cards"></div>
+    <div id="empty" class="empty" style="display:none">No active requests.</div>
+  </div>
+
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script>
+    // ----- Utilities -----
+    function nowStamp(){
+      const d=new Date();
+      const p=n=>String(n).padStart(2,'0');
+      return `${(d.getHours()%12)||12}:${p(d.getMinutes())}:${p(d.getSeconds())} ${d.getHours()<12?'AM':'PM'}`;
+    }
+    function timeAgo(iso){
+      if(!iso) return '';
+      const t=new Date(iso).getTime();
+      const s=Math.max(0,Math.floor((Date.now()-t)/1000));
+      if(s<60) return 'Just now';
+      const m=Math.floor(s/60); if(m<60) return `${m}m ago`;
+      const h=Math.floor(m/60); if(h<24) return `${h}h ago`;
+      const d=Math.floor(h/24); return `${d}d ago`;
+    }
+    function roleClass(role){
+      const r=(role||'').toLowerCase();
+      if(r==='nurse') return 'role-nurse';
+      if(r==='cna')   return 'role-cna';
+      return '';
+    }
+    function statusLabel(st){
+      if(!st) return '';
+      const s=st.toLowerCase();
+      if(s==='ack') return 'Acknowledged';
+      if(s==='omw') return 'On my way';
+      if(s==='asap')return 'Be there ASAP';
+      return '';
+    }
+
+    // ----- DOM -----
+    const cardsEl = document.getElementById('cards');
+    const emptyEl = document.getElementById('empty');
+    const updatedEl = document.getElementById('updatedAt');
+
+    const state = {
+      items: new Map(),       // id -> item {id,room,request,role,timestamp}
+      status: new Map(),      // id -> 'ack'|'omw'|'asap'
+    };
+
+    function setUpdated(){
+      updatedEl.textContent = `Updated ${nowStamp()}`;
+    }
+
+    function ensureEmpty(){
+      emptyEl.style.display = state.items.size ? 'none' : 'block';
+    }
+
+    function cardHTML(item){
+      const st = state.status.get(item.id) || '';
+      const stText = statusLabel(st);
+      return `
+        <div class="card ${roleClass(item.role)}" id="req-${item.id}">
+          <div class="left">
+            <h3 class="req-text">${escapeHtml(item.request || '—')}</h3>
             <div class="meta">
-              Room: {{ r.room or '—' }} &nbsp;&nbsp; For: {{ (r.role or '')|upper }} &nbsp;&nbsp;
-              <span class="ago"></span>
+              <span>Room: <b>${escapeHtml(item.room || '—')}</b></span>
+              <span>For: <b>${String(item.role||'').toUpperCase()}</b></span>
+              <span>${timeAgo(item.timestamp)}</span>
+              ${stText ? `<span class="status-pill">${stText}</span>` : ``}
             </div>
           </div>
-          <div class="actions">
-            <button class="pill pill-ack" data-action="ack">Acknowledge</button>
-            <button class="pill pill-omw" data-action="omw">On my way</button>
-            <button class="pill pill-asap" data-action="asap">Be there ASAP</button>
-            {% if (r.role or '')|lower == 'cna' %}
-              <button class="pill pill-defer" data-action="defer">Defer to Nurse</button>
-            {% endif %}
-            <button class="pill pill-complete" data-action="complete">Complete</button>
+
+          <div class="right">
+            <div class="actions">
+              <button class="pill-btn ack" onclick="sendStatus('${item.id}','${item.room}','${item.role}','ack')">Acknowledge</button>
+              <button class="pill-btn omw" onclick="sendStatus('${item.id}','${item.room}','${item.role}','omw')">On my way</button>
+              <button class="pill-btn asap" onclick="sendStatus('${item.id}','${item.room}','${item.role}','asap')">Be there ASAP</button>
+              <button class="pill-btn defer" onclick="deferToNurse('${item.id}')">Defer to Nurse</button>
+              <button class="pill-btn complete" onclick="completeReq('${item.id}','${item.room}','${item.role}')">Complete</button>
+            </div>
+            <div class="chips">
+              <span class="chip">${String(item.role||'').toUpperCase()}</span>
+              <span class="chip">Room ${escapeHtml(item.room || '—')}</span>
+            </div>
           </div>
         </div>
-      {% endfor %}
-    {% else %}
-      <div class="empty">No active requests.</div>
-    {% endif %}
-  </div>
-</div>
-
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-<script>
-  // --- Helpers ---------------------------------------------------------------
-  const listEl = document.getElementById('list');
-  const updatedEl = document.getElementById('updated');
-  const refreshBtn = document.getElementById('refreshBtn');
-  refreshBtn.onclick = () => location.reload();
-
-  function timeAgo(ts){
-    if(!ts) return "";
-    const t = new Date(ts);
-    const s = Math.max(1, Math.floor((Date.now()-t.getTime())/1000));
-    if(s<60) return "Just now";
-    const m = Math.floor(s/60);
-    if(m<60) return m+"m ago";
-    const h = Math.floor(m/60);
-    return h+"h ago";
-  }
-  function refreshAllAgo(){
-    document.querySelectorAll('.card').forEach(card=>{
-      const ts = card.dataset.ts;
-      const span = card.querySelector('.ago');
-      if(span) span.textContent = timeAgo(ts);
-    });
-  }
-  setInterval(refreshAllAgo, 15000); // every 15s
-  refreshAllAgo();
-
-  function cardHTML(data){
-    const role = (data.role||'nurse').toLowerCase();
-    const deferBtn = role==='cna'
-      ? `<button class="pill pill-defer" data-action="defer">Defer to Nurse</button>`
-      : ``;
-    return `
-      <div class="card role-${role}" id="req-${data.id}"
-           data-id="${data.id}" data-room="${data.room||''}"
-           data-role="${role}" data-ts="${data.timestamp||''}">
-        <div class="row">
-          <div class="req">${escapeHtml(data.request||'')}</div>
-          <div class="meta">
-            Room: ${data.room || '—'} &nbsp;&nbsp; For: ${(data.role||'').toUpperCase()} &nbsp;&nbsp;
-            <span class="ago">${timeAgo(data.timestamp||'')}</span>
-          </div>
-        </div>
-        <div class="actions">
-          <button class="pill pill-ack" data-action="ack">Acknowledge</button>
-          <button class="pill pill-omw" data-action="omw">On my way</button>
-          <button class="pill pill-asap" data-action="asap">Be there ASAP</button>
-          ${deferBtn}
-          <button class="pill pill-complete" data-action="complete">Complete</button>
-        </div>
-      </div>`;
-  }
-  function escapeHtml(s){
-    return String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
-  }
-
-  function wireCard(card){
-    card.querySelectorAll('.actions .pill').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        const action = btn.dataset.action;
-        const id = card.dataset.id;
-        const room = card.dataset.room || null;
-        const role = (card.dataset.role || 'nurse').toLowerCase();
-
-        if(action==='defer'){
-          socket.emit('defer_request', { id });
-          // Optimistic role flip in UI
-          card.classList.remove('role-cna'); card.classList.add('role-nurse');
-          card.dataset.role = 'nurse';
-          // If it didn’t actually change on the server we’ll be corrected by request_updated
-          return;
-        }
-
-        if(action==='complete'){
-          socket.emit('complete_request', {
-            request_id: id,
-            room_number: room,
-            role: role
-          });
-          // Remove optimistically; server will also emit remove_request
-          card.remove();
-          if(!document.querySelector('.card')){
-            listEl.insertAdjacentHTML('beforeend', `<div class="empty">No active requests.</div>`);
-          }
-          return;
-        }
-
-        // ack | omw | asap
-        socket.emit('acknowledge_request', {
-          room: 'dashboard',       // join/broadcast room (server supports this)
-          request_id: id,
-          room_number: room,
-          status: action,          // 'ack' | 'omw' | 'asap'
-          role: role
-        });
-
-        // Keep visual feedback (button stays slightly “pressed” feel)
-        card.querySelectorAll('.actions .pill').forEach(b=>b.style.outline='');
-        btn.style.outline = '3px solid rgba(17,24,39,.25)';
-      });
-    });
-  }
-
-  // Wire any server-rendered cards
-  document.querySelectorAll('.card').forEach(wireCard);
-
-  // --- Socket.IO live updates -----------------------------------------------
-  const socket = io(); // default namespace
-  socket.on('connect', ()=>{
-    socket.emit('join', { room: 'dashboard' });
-  });
-
-  // New request arrives
-  socket.on('new_request', (data)=>{
-    // Remove "empty" placeholder if present
-    const empty = document.querySelector('.empty');
-    if(empty) empty.remove();
-
-    // Prepend newest on top
-    listEl.insertAdjacentHTML('afterbegin', cardHTML(data));
-    wireCard(document.getElementById('req-'+data.id));
-    updatedEl.textContent = 'Updated Just now';
-  });
-
-  // Request removed (completed)
-  socket.on('remove_request', (data)=>{
-    const id = data && (data.id || data.request_id);
-    if(!id) return;
-    const el = document.getElementById('req-'+id);
-    if(el){ el.remove(); }
-    if(!document.querySelector('.card')){
-      listEl.insertAdjacentHTML('beforeend', `<div class="empty">No active requests.</div>`);
+      `;
     }
-    updatedEl.textContent = 'Updated Just now';
-  });
 
-  // Request updated (e.g., CNA → Nurse via “Defer”)
-  socket.on('request_updated', (data)=>{
-    const id = data && (data.id || data.request_id);
-    if(!id) return;
-    const el = document.getElementById('req-'+id);
-    if(!el) return;
-    if(data.new_role){
-      const role = (data.new_role||'nurse').toLowerCase();
-      el.dataset.role = role;
-      el.classList.toggle('role-cna', role==='cna');
-      el.classList.toggle('role-nurse', role!=='cna');
-      // Add/remove Defer button based on new role
-      const actions = el.querySelector('.actions');
-      const hasDefer = !!actions.querySelector('[data-action="defer"]');
-      if(role==='cna' && !hasDefer){
-        const btn = document.createElement('button');
-        btn.className = 'pill pill-defer';
-        btn.dataset.action = 'defer';
-        btn.textContent = 'Defer to Nurse';
-        actions.insertBefore(btn, actions.querySelector('[data-action="complete"]'));
-        wireCard(el); // rewire new button
-      }else if(role!=='cna' && hasDefer){
-        actions.querySelector('[data-action="defer"]').remove();
+    function renderAll(){
+      const parts=[];
+      state.items.forEach(it=>parts.push(cardHTML(it)));
+      cardsEl.innerHTML = parts.join('');
+      ensureEmpty();
+      setUpdated();
+    }
+
+    function upsert(item){
+      // normalize
+      const norm = {
+        id: item.id || item.request_id || String(Date.now()),
+        room: item.room || '',
+        request: item.request || item.user_input || '',
+        role: (item.role || item.category || 'nurse'),
+        timestamp: item.timestamp || new Date().toISOString(),
+      };
+      state.items.set(norm.id, norm);
+      // keep any existing status pill
+      if(!state.status.has(norm.id) && item.status){
+        state.status.set(norm.id, item.status);
       }
+      // re-render single card
+      const el = document.getElementById(`req-${norm.id}`);
+      if(el){
+        el.outerHTML = cardHTML(norm);
+      }else{
+        const div=document.createElement('div');
+        div.innerHTML=cardHTML(norm);
+        cardsEl.prepend(div.firstElementChild);
+      }
+      ensureEmpty();
+      setUpdated();
     }
-    if(data.new_timestamp){
-      el.dataset.ts = data.new_timestamp;
-      const ago = el.querySelector('.ago');
-      if(ago) ago.textContent = timeAgo(data.new_timestamp);
+
+    function removeById(id){
+      state.items.delete(id);
+      state.status.delete(id);
+      const el=document.getElementById(`req-${id}`);
+      if(el) el.remove();
+      ensureEmpty();
+      setUpdated();
     }
-    updatedEl.textContent = 'Updated Just now';
-  });
-</script>
+
+    function updateRole(id, newRole){
+      const item = state.items.get(id);
+      if(!item) return;
+      item.role = newRole || item.role;
+      upsert(item);
+    }
+
+    // escape helper for HTML
+    function escapeHtml(s){
+      return String(s||'').replace(/[&<>"']/g, m => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+      }[m]));
+    }
+
+    // ----- Socket.IO (DEFAULT namespace) -----
+    const socket = io(); // IMPORTANT: default namespace for dashboard
+
+    // stream new items live
+    socket.on('new_request', (data) => {
+      upsert(data);
+    });
+
+    socket.on('remove_request', (data) => {
+      if(data && data.id) removeById(data.id);
+    });
+
+    socket.on('request_updated', (data) => {
+      // used for "defer to nurse"
+      if(data && data.id){
+        if (data.new_role) updateRole(data.id, data.new_role);
+        setUpdated();
+      }
+    });
+
+    // ----- Actions -----
+    function sendStatus(id, room, role, status){
+      // keep the pill on the card immediately
+      state.status.set(id, status);
+      const item = state.items.get(id);
+      if(item){ upsert(item); } // re-render card with pill
+
+      socket.emit('acknowledge_request', {
+        request_id: id,
+        room: 'manager_dashboard',   // legacy broadcast room (safe)
+        message: status === 'ack' ? 'Acknowledged'
+                : status === 'omw' ? 'On my way'
+                : 'Be there ASAP',
+        status: status,
+        room_number: room,
+        role: (role||'nurse')
+      });
+    }
+
+    function deferToNurse(id){
+      socket.emit('defer_request', { id });
+    }
+
+    function completeReq(id, room, role){
+      socket.emit('complete_request', {
+        request_id: id,
+        room_number: room,
+        role: (role||'nurse')
+      });
+    }
+
+    // ----- Initial load + manual refresh -----
+    const initial = {{ active_requests|tojson|safe }};
+    (initial || []).forEach(upsert);
+    ensureEmpty();
+    setUpdated();
+
+    document.getElementById('refreshBtn').addEventListener('click', async () => {
+      try{
+        const r = await fetch('{{ url_for("api_active_requests") }}');
+        const j = await r.json();
+        state.items.clear();
+        state.status.clear();
+        (j.active_requests||[]).forEach(upsert);
+      }catch(e){
+        console.error(e);
+      }finally{
+        setUpdated();
+      }
+    });
+
+    // keep “time ago” text fresh every minute
+    setInterval(() => {
+      state.items.forEach(it => upsert(it));
+    }, 60_000);
+  </script>
 </body>
 </html>
