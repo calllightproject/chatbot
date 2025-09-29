@@ -1,352 +1,596 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Real-Time Request Dashboard</title>
+  <title>
+    {% if nurse_context|default(false) %}
+      My Rooms — {{ nurse_name|default('') }}
+    {% else %}
+      Real-Time Request Dashboard
+    {% endif %}
+  </title>
   <style>
-    :root{
-      --core-blue:#00205b;
-      --link-blue:#062c8f;
-      --pill-yellow:#fde68a;
-      --pill-green:#b7f3c9;
-      --pill-purple:#c7b8ff;
-      --pill-cyan:#bfefff;
-      --pill-gray:#c7ccd4;
+    :root {
+      --core-blue: #00205b;
+      --accent-blue: #007eb4;
+      --neutral-gray-text: #303235;
+      --light-gray-background: #f5f5f5;
+      --white: #ffffff;
+      --border:#e5e7eb;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      padding: 20px;
+      background-color: var(--light-gray-background);
+      color: var(--neutral-gray-text);
+    }
+    .dashboard-container {
+      max-width: 980px;
+      margin: 20px auto;
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      border:1px solid var(--border);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.06);
+    }
+    .header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: start;
+      margin-bottom: 12px;
+    }
+    h1 { color: var(--core-blue); margin: 0 0 6px 0; font-size: 1.5rem; }
+    .subline { margin: 0 0 8px 0; font-size: 0.95rem; color: #555; }
+    .chip-row { display:flex; flex-wrap:wrap; gap:6px; margin: 6px 0 0 0; }
+    .chip { padding:6px 10px; border-radius:9999px; background:#eef2f7; border:1px solid #d7dde6; font-size:.85rem; color:#334155; }
 
-      --card-nurse:#ffe9ec;   /* soft pink */
-      --card-cna:#fff4de;     /* soft cream */
-      --card-default:#f3fff5; /* minty green */
-      --card-border:#e8eaf0;
-      --text:#0b1728;
-      --muted:#6b7280;
+    .actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-self:end; }
+    .link-btn, .btn {
+      display:inline-block; padding:8px 12px; border-radius:8px; text-decoration:none;
+      border:1px solid var(--core-blue); background: var(--core-blue); color:#fff; font-size:.9rem;
+      transition: background-color .2s ease; white-space:nowrap; cursor:pointer;
     }
-    *{box-sizing:border-box}
-    body{
-      margin:0;
-      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-      background:#f7f8fb;
-      color:var(--text);
+    .link-btn:hover, .btn:hover { background:#093582; }
+    .seg { display:inline-flex; border:1px solid var(--border); border-radius:10px; overflow:hidden; background:#fff; }
+    .seg a {
+      padding:8px 10px; text-decoration:none; color:#0f172a; background:#fff;
+      border-right:1px solid var(--border); font-size:.9rem;
     }
+    .seg a:last-child { border-right:none; }
+    .seg a.active { background:#e6eef8; color:#0b2a6f; font-weight:600; }
 
-    .topbar{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      padding:16px 22px;
+    #requests-list { list-style:none; padding:0; margin:16px 0 0 0; }
+    .request-item {
+      display:flex; align-items:center; border:1px solid #ddd; padding:15px; margin-bottom:10px;
+      border-radius:8px; background-color:#fff; gap:15px; transition: background-color .5s ease, opacity .3s ease;
     }
-    .title{
-      font-size:32px;
-      font-weight:800;
-      color:var(--core-blue);
-      letter-spacing:.3px;
-    }
-    .top-actions{
-      display:flex; gap:12px; align-items:center;
-    }
-    .btn{
-      background:var(--core-blue);
-      color:#fff; border:0; padding:10px 16px;
-      border-radius:10px; font-weight:700; cursor:pointer;
-    }
-    .btn-link{
-      background:var(--core-blue);
-      color:#fff; text-decoration:none; padding:10px 16px;
-      border-radius:10px; font-weight:700; display:inline-block;
-    }
-    .subtle{
-      color:var(--muted); font-size:14px; margin-left:10px;
-    }
+    .request-item.cna   { border-left: 6px solid var(--accent-blue); }
+    .request-item.nurse { border-left: 6px solid #d43f27; }
 
-    .wrap{padding:0 22px 32px}
+    .request-item p { margin:0; font-size:1.05rem; flex-grow:1; }
+    .meta { display:flex; gap:10px; align-items:center; white-space:nowrap; font-size:.9rem; color:#555; flex-wrap:wrap; }
+    .role-span { font-size:.9rem; color:#555; }
+    .timestamp { font-size:.9rem; color:#555; }
 
-    .card{
-      border:1px solid var(--card-border);
-      border-left:8px solid #36b37e;
-      border-radius:16px;
-      margin:16px 0;
-      padding:22px;
-      background:var(--card-default);
-      box-shadow:0 1px 2px rgba(0,0,0,.03);
-      display:flex; align-items:center; justify-content:space-between; gap:16px;
+    .request-item button {
+      padding:8px 12px; border:none; color:white; border-radius:6px; cursor:pointer; font-size:14px; transition:opacity .25s;
     }
-    .card.role-nurse{ background:var(--card-nurse); border-left-color:#f43f5e; }
-    .card.role-cna{   background:var(--card-cna);   border-left-color:#ff9f1a; }
+    .ack-button    { background-color: #ffc107; color:#000; }
+    .omw-button    { background-color: #28a745; }
+    .asap-button   { background-color: #6f42c1; }
+    .defer-btn     { background-color: #17a2b8; }
+    .complete-btn  { background-color: #6c757d; }
+    .request-item button:disabled { opacity:.5; cursor:not-allowed; }
 
-    .left{
-      min-width:0; /* wrap nicely */
-    }
-    .req-text{
-      font-size:28px; font-weight:800; margin:0 0 8px 0;
-      color:#0c1222;
-    }
-    .meta{
-      display:flex; gap:22px; flex-wrap:wrap; align-items:center; color:var(--muted);
-      font-size:16px;
-    }
-    .meta b{ color:#1f2937; }
-    .status-pill{
-      display:inline-block; padding:6px 12px; border-radius:999px;
-      background:#eef2ff; color:#3730a3; font-weight:700; font-size:16px;
-      margin-left:8px;
-    }
+    .status-new    { background-color: #eefcf1; }
+    .status-warn   { background-color: #fff5dd; }
+    .status-urgent { background-color: #fde8e8; }
 
-    .actions{ display:flex; gap:12px; flex-wrap:wrap; }
-    .pill-btn{
-      border:0; border-radius:999px; padding:12px 18px; font-weight:800; cursor:pointer;
-      font-size:18px;
-    }
-    .ack{ background:var(--pill-yellow); }
-    .omw{ background:var(--pill-green); }
-    .asap{ background:var(--pill-purple); }
-    .defer{ background:var(--pill-cyan); }
-    .complete{ background:var(--pill-gray); }
-
-    /* tiny chips under buttons (optional nurse/room chips like your older screen) */
-    .chips{ margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; }
-    .chip{
-      font-size:12px; color:#274060; background:#e8eefc; padding:6px 10px; border-radius:999px;
-      border:1px solid #d7e2ff;
-    }
-
-    /* empty state */
-    .empty{
-      text-align:center; color:var(--muted); margin:36px 0 18px;
-      font-size:18px;
-    }
+    .toolbar { display:flex; align-items:center; gap:10px; margin-top:8px; }
+    .muted { font-size:.85rem; color:#64748b; }
   </style>
 </head>
 <body>
-  <div class="topbar">
-    <div class="title">Real-Time Request Dashboard</div>
-    <div class="top-actions">
-      <button id="refreshBtn" class="btn">Refresh</button>
-      <span id="updatedAt" class="subtle">Updated —</span>
-      <a class="btn-link" href="{{ url_for('staff_portal') }}">View My Rooms</a>
-      <a class="btn-link" href="{{ url_for('analytics') }}">View Analytics</a>
+
+  <div class="dashboard-container">
+    <div class="header">
+      <div>
+        <h1>
+          {% if nurse_context|default(false) %}
+            My Rooms — {{ nurse_name|default('') }}
+          {% else %}
+            Real-Time Request Dashboard
+          {% endif %}
+        </h1>
+
+        {% if nurse_context|default(false) %}
+          {% set my_rooms = nurse_rooms|default([]) %}
+          {% if my_rooms and my_rooms|length > 0 %}
+            <div class="subline">Assigned rooms today:</div>
+            <div class="chip-row">
+              {% for r in my_rooms %}
+                <span class="chip">{{ r }}</span>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="subline">No rooms assigned yet for today.</div>
+          {% endif %}
+        {% endif %}
+
+        <div class="toolbar">
+          {% if nurse_context|default(false) %}
+            <div class="seg" aria-label="Shift">
+              <a href="{{ day_url }}"   class="{% if shift=='day' %}active{% endif %}">Day</a>
+              <a href="{{ night_url }}" class="{% if shift=='night' %}active{% endif %}">Night</a>
+            </div>
+            <div class="seg" aria-label="Scope">
+              <a href="{{ url_for('staff_dashboard_for_nurse', staff_name=nurse_name, shift=shift, scope='mine') }}" class="{% if scope=='mine' %}active{% endif %}">My Rooms</a>
+              <a href="{{ url_for('staff_dashboard_for_nurse', staff_name=nurse_name, shift=shift, scope='all')  }}" class="{% if scope=='all'  %}active{% endif %}">All</a>
+            </div>
+          {% endif %}
+          <button id="manual-refresh" class="btn" type="button">Refresh</button>
+          <span class="muted" id="last-refresh"></span>
+        </div>
+      </div>
+
+      <div class="actions">
+        {% if nurse_context|default(false) %}
+          <a class="link-btn" href="{{ url_for('dashboard') }}">Manager View</a>
+        {% else %}
+          <a class="link-btn" href="{{ url_for('staff_portal') }}">View My Rooms</a>
+          <a class="link-btn" href="{{ url_for('analytics') }}">View Analytics</a>
+        {% endif %}
+      </div>
     </div>
+
+    <ul id="requests-list">
+      {% for request in active_requests|default([]) %}
+        <li class="request-item {{ request.role|default('') }}"
+            id="{{ request.id|default('') }}"
+            data-id="{{ request.id|default('') }}"
+            data-room="{{ request.room|default('') }}"
+            data-request="{{ request.request|default('') }}"
+            data-role="{{ request.role|default('') }}"
+            data-timestamp="{{ request.timestamp|default('') }}"
+            data-last-seen="{{ (request.timestamp|default('')) }}">
+          <p>{{ request.request|default('') }}</p>
+          <div class="meta">
+            <span>Room: {{ request.room|default('—') }}</span>
+            <span class="role-span">For: {{ request.role|default('')|upper }}</span>
+            <span class="timestamp"></span>
+          </div>
+          <button class="ack-button">Acknowledge</button>
+          <button class="omw-button">On my way</button>
+          <button class="asap-button">Be there ASAP</button>
+          {% if request.role|default('') == 'cna' %}
+            <button class="defer-btn">Defer to Nurse</button>
+          {% endif %}
+          <button class="complete-btn">Complete</button>
+        </li>
+      {% else %}
+        <li class="request-item" style="justify-content:center">
+          <p>No active requests.</p>
+        </li>
+      {% endfor %}
+    </ul>
   </div>
 
-  <div class="wrap">
-    <div id="cards"></div>
-    <div id="empty" class="empty" style="display:none">No active requests.</div>
-  </div>
+  <!-- Context for JS -->
+  <script>
+    const NurseContext = {{ nurse_context|default(false)|tojson }};
+    const NurseName    = {{ nurse_name|default('')|tojson }};
+    const NurseShift   = {{ shift|default('day')|tojson }};
+    const NurseScope   = {{ scope|default('all')|tojson }};
+  </script>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script>
-    // ----- Utilities -----
-    function nowStamp(){
-      const d=new Date();
-      const p=n=>String(n).padStart(2,'0');
-      return `${(d.getHours()%12)||12}:${p(d.getMinutes())}:${p(d.getSeconds())} ${d.getHours()<12?'AM':'PM'}`;
-    }
-    function timeAgo(iso){
-      if(!iso) return '';
-      const t=new Date(iso).getTime();
-      const s=Math.max(0,Math.floor((Date.now()-t)/1000));
-      if(s<60) return 'Just now';
-      const m=Math.floor(s/60); if(m<60) return `${m}m ago`;
-      const h=Math.floor(m/60); if(h<24) return `${h}h ago`;
-      const d=Math.floor(h/24); return `${d}d ago`;
-    }
-    function roleClass(role){
-      const r=(role||'').toLowerCase();
-      if(r==='nurse') return 'role-nurse';
-      if(r==='cna')   return 'role-cna';
-      return '';
-    }
-    function statusLabel(st){
-      if(!st) return '';
-      const s=st.toLowerCase();
-      if(s==='ack') return 'Acknowledged';
-      if(s==='omw') return 'On my way';
-      if(s==='asap')return 'Be there ASAP';
-      return '';
+  <script type="text/javascript">
+    var socket = io();
+
+    // Local caches
+    const LocalStatus = new Map();        // request_id -> status
+    const LocalStatusByKey = new Map();   // `${room}::${request_text}` -> status (used only for ID reconciliation)
+
+    function normalizeText(s) { return (s || '').replace(/\s+/g, ' ').trim(); }
+    function makeCompositeKey(room, text) {
+      return `${(room || '').trim()}::${normalizeText(text)}`.toLowerCase();
     }
 
-    // ----- DOM -----
-    const cardsEl = document.getElementById('cards');
-    const emptyEl = document.getElementById('empty');
-    const updatedEl = document.getElementById('updatedAt');
-
-    const state = {
-      items: new Map(),       // id -> item {id,room,request,role,timestamp}
-      status: new Map(),      // id -> 'ack'|'omw'|'asap'
-    };
-
-    function setUpdated(){
-      updatedEl.textContent = `Updated ${nowStamp()}`;
+    // RECORD status to caches (id always; composite for reconciliation only)
+    function setStatusFor(id, room, text, status) {
+      if (id) LocalStatus.set(id, status);
+      const k = makeCompositeKey(room, text);
+      if (k) LocalStatusByKey.set(k, status);
     }
 
-    function ensureEmpty(){
-      emptyEl.style.display = state.items.size ? 'none' : 'block';
+    // 🔧 READ status — **only by id** so brand-new requests never inherit old state
+    function getStatusFor(id/*, room, text */) {
+      if (id && LocalStatus.has(id)) return LocalStatus.get(id);
+      return null;
     }
 
-    function cardHTML(item){
-      const st = state.status.get(item.id) || '';
-      const stText = statusLabel(st);
+    // cleanup helpers
+    function clearStatusFor(id, room, text){
+      if (id) LocalStatus.delete(id);
+      const k = makeCompositeKey(room, text);
+      if (k) LocalStatusByKey.delete(k);
+    }
+
+    let audioContext;
+    function playNotificationSound() {
+      try {
+        if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioContext.state === 'suspended') audioContext.resume();
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        osc.connect(gain); gain.connect(audioContext.destination);
+        osc.type = 'sine'; osc.frequency.setValueAtTime(880, audioContext.currentTime);
+        gain.gain.setValueAtTime(0, audioContext.currentTime);
+        gain.gain.linearRampToValueAtTime(0.5, audioContext.currentTime + 0.05);
+        gain.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.5);
+        osc.start(audioContext.currentTime);
+        osc.stop(audioContext.currentTime + 0.5);
+      } catch (_) {}
+    }
+
+    function updateAllTimersAndColors() {
+      const items = document.querySelectorAll('#requests-list .request-item');
+      const now = new Date();
+      items.forEach(item => {
+        const raw = item.dataset.timestamp || '';
+        const ts = raw ? new Date(raw) : null;
+        const minutes = ts ? Math.floor((now - ts) / 60000) : 0;
+
+        const tsEl = item.querySelector('.timestamp');
+        if (tsEl) tsEl.textContent = ts ? (minutes > 0 ? `${minutes}m ago` : 'Just now') : '';
+
+        item.classList.remove('status-new', 'status-warn', 'status-urgent');
+        if (ts) {
+          if (minutes >= 10) item.classList.add('status-urgent');
+          else if (minutes >= 5) item.classList.add('status-warn');
+          else item.classList.add('status-new');
+        }
+      });
+    }
+
+    function buildRequestHTML(data) {
+      const isCNA = (data.role || '') === 'cna';
+      const deferBtn = isCNA ? '<button class="defer-btn">Defer to Nurse</button>' : '';
       return `
-        <div class="card ${roleClass(item.role)}" id="req-${item.id}">
-          <div class="left">
-            <h3 class="req-text">${escapeHtml(item.request || '—')}</h3>
-            <div class="meta">
-              <span>Room: <b>${escapeHtml(item.room || '—')}</b></span>
-              <span>For: <b>${String(item.role||'').toUpperCase()}</b></span>
-              <span>${timeAgo(item.timestamp)}</span>
-              ${stText ? `<span class="status-pill">${stText}</span>` : ``}
-            </div>
-          </div>
-
-          <div class="right">
-            <div class="actions">
-              <button class="pill-btn ack" onclick="sendStatus('${item.id}','${item.room}','${item.role}','ack')">Acknowledge</button>
-              <button class="pill-btn omw" onclick="sendStatus('${item.id}','${item.room}','${item.role}','omw')">On my way</button>
-              <button class="pill-btn asap" onclick="sendStatus('${item.id}','${item.room}','${item.role}','asap')">Be there ASAP</button>
-              <button class="pill-btn defer" onclick="deferToNurse('${item.id}')">Defer to Nurse</button>
-              <button class="pill-btn complete" onclick="completeReq('${item.id}','${item.room}','${item.role}')">Complete</button>
-            </div>
-            <div class="chips">
-              <span class="chip">${String(item.role||'').toUpperCase()}</span>
-              <span class="chip">Room ${escapeHtml(item.room || '—')}</span>
-            </div>
-          </div>
+        <p>${(data.request || '')}</p>
+        <div class="meta">
+          <span>Room: ${(data.room || '—')}</span>
+          <span class="role-span">For: ${(data.role || '').toUpperCase()}</span>
+          <span class="timestamp"></span>
         </div>
+        <button class="ack-button">Acknowledge</button>
+        <button class="omw-button">On my way</button>
+        <button class="asap-button">Be there ASAP</button>
+        ${deferBtn}
+        <button class="complete-btn">Complete</button>
       `;
     }
 
-    function renderAll(){
-      const parts=[];
-      state.items.forEach(it=>parts.push(cardHTML(it)));
-      cardsEl.innerHTML = parts.join('');
-      ensureEmpty();
-      setUpdated();
-    }
+    function applyLocalStatusToItem(li) {
+      const id   = li?.dataset?.id;
+      const room = li?.dataset?.room || '';
+      const text = li?.dataset?.request || '';
 
-    function upsert(item){
-      // normalize
-      const norm = {
-        id: item.id || item.request_id || String(Date.now()),
-        room: item.room || '',
-        request: item.request || item.user_input || '',
-        role: (item.role || item.category || 'nurse'),
-        timestamp: item.timestamp || new Date().toISOString(),
-      };
-      state.items.set(norm.id, norm);
-      // keep any existing status pill
-      if(!state.status.has(norm.id) && item.status){
-        state.status.set(norm.id, item.status);
+      // 👇 Prefer DOM-pinned; otherwise only check id-based cache (NO composite fallback)
+      let st = (li?.dataset?.localStatus || '').toLowerCase().trim();
+      if (!st) st = getStatusFor(id);
+
+      const ack = li.querySelector('.ack-button');
+      const omw = li.querySelector('.omw-button');
+      const asap = li.querySelector('.asap-button');
+
+      [ack, omw, asap].forEach(b => b && (b.disabled = false));
+
+      if (!st) return;
+
+      if (st === 'ack') {
+        if (ack) ack.disabled = true;
+      } else if (st === 'omw') {
+        if (ack) ack.disabled = true;
+        if (omw) omw.disabled = true;
+      } else if (st === 'asap') {
+        if (ack) ack.disabled = true;
+        if (asap) asap.disabled = true;
+      } else if (st === 'completed') {
+        [ack, omw, asap].forEach(b => b && (b.disabled = true));
+        li.querySelector('.defer-btn')?.setAttribute('disabled', true);
+        li.querySelector('.complete-btn')?.setAttribute('disabled', true);
       }
-      // re-render single card
-      const el = document.getElementById(`req-${norm.id}`);
-      if(el){
-        el.outerHTML = cardHTML(norm);
-      }else{
-        const div=document.createElement('div');
-        div.innerHTML=cardHTML(norm);
-        cardsEl.prepend(div.firstElementChild);
+    }
+
+    function upsertRequestItem(req) {
+      const list = document.getElementById('requests-list');
+      if (!list || !req) return;
+
+      if (!req.id) req.id = 'key:' + makeCompositeKey(req.room, req.request);
+
+      let li = document.getElementById(req.id);
+      if (li) {
+        li.dataset.room = req.room || '';
+        li.dataset.request = normalizeText(req.request || '');
+        li.dataset.role = req.role || '';
+        li.dataset.timestamp = req.timestamp || '';
+        li.dataset.lastSeen = String(Date.now());
+        li.className = 'request-item ' + (req.role || '');
+
+        const p = li.querySelector('p');
+        if (p) p.textContent = req.request || '';
+        const meta = li.querySelector('.meta');
+        if (meta) {
+          const spans = meta.querySelectorAll('span');
+          if (spans[0]) spans[0].textContent = `Room: ${req.room || '—'}`;
+          if (spans[1]) spans[1].textContent = `For: ${(req.role || '').toUpperCase()}`;
+        }
+      } else {
+        li = document.createElement('li');
+        li.id = req.id;
+        li.className = 'request-item ' + (req.role || '');
+        li.dataset.id = req.id || '';
+        li.dataset.room = req.room || '';
+        li.dataset.request = normalizeText(req.request || '');
+        li.dataset.role = req.role || '';
+        li.dataset.timestamp = req.timestamp || '';
+        li.dataset.lastSeen = String(Date.now());
+        li.innerHTML = buildRequestHTML(req);
+        document.getElementById('requests-list').appendChild(li);
       }
-      ensureEmpty();
-      setUpdated();
+
+      // If server provided a status, trust it (rare for new_request)
+      if (req.status) {
+        const s = (req.status || 'new').toLowerCase();
+        setStatusFor(req.id, req.room, req.request, s);
+        li.dataset.localStatus = s;
+        delete li.dataset.pendingSync;
+      }
+
+      applyLocalStatusToItem(li);
     }
 
-    function removeById(id){
-      state.items.delete(id);
-      state.status.delete(id);
-      const el=document.getElementById(`req-${id}`);
-      if(el) el.remove();
-      ensureEmpty();
-      setUpdated();
+    function addRequestToDashboard(data) {
+      upsertRequestItem(data);
+      updateAllTimersAndColors();
     }
 
-    function updateRole(id, newRole){
-      const item = state.items.get(id);
-      if(!item) return;
-      item.role = newRole || item.role;
-      upsert(item);
-    }
-
-    // escape helper for HTML
-    function escapeHtml(s){
-      return String(s||'').replace(/[&<>"']/g, m => ({
-        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-      }[m]));
-    }
-
-    // ----- Socket.IO (DEFAULT namespace) -----
-    const socket = io(); // IMPORTANT: default namespace for dashboard
-
-    // stream new items live
-    socket.on('new_request', (data) => {
-      upsert(data);
+    // --- Socket events ---
+    socket.on('new_request', function(data) {
+      addRequestToDashboard(data);
+      playNotificationSound();
     });
 
-    socket.on('remove_request', (data) => {
-      if(data && data.id) removeById(data.id);
-    });
-
-    socket.on('request_updated', (data) => {
-      // used for "defer to nurse"
-      if(data && data.id){
-        if (data.new_role) updateRole(data.id, data.new_role);
-        setUpdated();
+    socket.on('request_updated', function(data) {
+      const item = document.getElementById(data.id || '');
+      if (item) {
+        item.classList.remove('cna');
+        item.classList.add('nurse');
+        const roleSpan = item.querySelector('.role-span');
+        if (roleSpan) roleSpan.textContent = 'For: NURSE';
+        const deferBtn = item.querySelector('.defer-btn');
+        if (deferBtn) deferBtn.remove();
+        updateAllTimersAndColors();
       }
     });
 
-    // ----- Actions -----
-    function sendStatus(id, room, role, status){
-      // keep the pill on the card immediately
-      state.status.set(id, status);
-      const item = state.items.get(id);
-      if(item){ upsert(item); } // re-render card with pill
+    socket.on('remove_request', function(data) {
+      let el = null;
+      if (data.id) el = document.getElementById(data.id);
+      if (!el && (data.request || data.room)) {
+        const items = document.querySelectorAll('#requests-list .request-item');
+        el = Array.from(items).find(li => {
+          const sameText = data.request ? (li.dataset.request || '') === normalizeText(data.request) : true;
+          const sameRoom = data.room ? (li.dataset.room || '') === data.room : true;
+          return sameText && sameRoom;
+        });
+      }
+      if (el) {
+        // clear caches so future different requests don't inherit state
+        clearStatusFor(el.dataset.id, el.dataset.room, el.dataset.request);
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 300);
+      }
+    });
 
-      socket.emit('acknowledge_request', {
-        request_id: id,
-        room: 'manager_dashboard',   // legacy broadcast room (safe)
-        message: status === 'ack' ? 'Acknowledged'
-                : status === 'omw' ? 'On my way'
-                : 'Be there ASAP',
-        status: status,
-        room_number: room,
-        role: (role||'nurse')
+    socket.on('request_status', function(data) {
+      const id = data?.id;
+      const st = (data?.status || '').toLowerCase();
+      if (!id || !st) return;
+
+      const li = document.getElementById(id);
+      const room = li ? li.dataset.room : '';
+      const text = li ? li.dataset.request : '';
+      setStatusFor(id, room, text, st);
+
+      if (li) {
+        li.dataset.localStatus = st;
+        delete li.dataset.pendingSync;
+        applyLocalStatusToItem(li);
+      }
+    });
+
+    // --- Click handlers ---
+    document.addEventListener('DOMContentLoaded', function() {
+      const list = document.getElementById('requests-list');
+      if (!list) return;
+
+      list.addEventListener('click', function(e) {
+        const btn = e.target;
+        if (btn.tagName !== 'BUTTON') return;
+
+        const item = btn.closest('.request-item');
+        if (!item) return;
+
+        const requestId   = item.dataset.id || '';
+        const roomNumber  = item.dataset.room || '';
+        const dashRoom    = item.dataset.room || '';
+        const nurseName   = NurseName || '';
+        const reqText     = item.dataset.request || '';
+
+        function sendAck(status, dashMessage) {
+          setStatusFor(requestId, roomNumber, reqText, status);
+          item.dataset.localStatus = status;
+          delete item.dataset.pendingSync;
+
+          applyLocalStatusToItem(item);
+
+          socket.emit('acknowledge_request', {
+            request_id: requestId,
+            room_number: roomNumber,
+            nurse_name: nurseName,
+            status: status,
+            room: dashRoom,
+            message: dashMessage
+          });
+        }
+
+        if (btn.classList.contains('ack-button')) {
+          btn.disabled = true;
+          sendAck('ack', "✅ Request acknowledged.");
+        } else if (btn.classList.contains('omw-button')) {
+          btn.disabled = true;
+          const ack = item.querySelector('.ack-button'); if (ack) ack.disabled = true;
+          sendAck('omw', "✅ On my way.");
+        } else if (btn.classList.contains('asap-button')) {
+          btn.disabled = true;
+          const ack = item.querySelector('.ack-button'); if (ack) ack.disabled = true;
+          const omw = item.querySelector('.omw-button'); if (omw) omw.disabled = true;
+          sendAck('asap', "In another room — will be there ASAP.");
+        } else if (btn.classList.contains('defer-btn')) {
+          socket.emit('defer_request', { id: requestId });
+        } else if (btn.classList.contains('complete-btn')) {
+          socket.emit('complete_request', {
+            request_id: requestId,
+            room_number: roomNumber,
+            nurse_name: nurseName,
+            request_text: reqText
+          });
+          btn.disabled = true;
+          item.dataset.localStatus = 'completed';
+          delete item.dataset.pendingSync;
+          applyLocalStatusToItem(item);
+        }
+      });
+
+      // Manual refresh
+      const btnRefresh = document.getElementById('manual-refresh');
+      if (btnRefresh) btnRefresh.addEventListener('click', pollActiveRequests);
+
+      // Start timers + polling
+      updateAllTimersAndColors();
+      setInterval(updateAllTimersAndColors, 60000);
+      setTimeout(pollActiveRequests, 500);
+      setInterval(pollActiveRequests, 20000);
+
+      // Periodic cleanup for stale rows
+      setInterval(cleanupStaleRows, 60 * 1000);
+    });
+
+    // Polling reconciliation
+    function pollActiveRequests() {
+      const params = new URLSearchParams();
+      if (NurseContext && NurseName) {
+        params.set('staff_name', NurseName);
+        if (NurseShift) params.set('shift', NurseShift);
+        params.set('scope', NurseScope || 'mine');
+      } else {
+        params.set('scope', 'all');
+      }
+
+      fetch(`/api/active_requests?${params.toString()}`)
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(json => {
+          const incoming = (json && json.active_requests) ? json.active_requests : [];
+          incoming.sort((a, b) => (new Date(b.timestamp||0)) - (new Date(a.timestamp||0)));
+
+          const incomingIds = new Set();
+          const incomingByKey = new Map();
+          incoming.forEach(it => {
+            if (!it.id) it.id = 'key:' + makeCompositeKey(it.room, it.request);
+            incomingIds.add(it.id);
+            incomingByKey.set(makeCompositeKey(it.room, it.request), it);
+          });
+
+          const list = document.getElementById('requests-list');
+
+          Array.from(list.querySelectorAll('.request-item')).forEach(li => {
+            const id   = li.dataset.id || '';
+            const room = li.dataset.room || '';
+            const text = li.dataset.request || '';
+            const key  = makeCompositeKey(room, text);
+
+            const stillById  = id && incomingIds.has(id);
+            const stillByKey = incomingByKey.has(key);
+
+            if (stillById || stillByKey) {
+              li.dataset.lastSeen = String(Date.now());
+              delete li.dataset.pendingSync;
+            }
+
+            if (!stillById && stillByKey) {
+              const newer = incomingByKey.get(key);
+              if (newer && newer.id) {
+                const oldStatus = li.dataset.localStatus || getStatusFor(id);
+                li.id = newer.id;
+                li.dataset.id = newer.id;
+                li.dataset.lastSeen = String(Date.now());
+                if (oldStatus) {
+                  setStatusFor(newer.id, room, text, oldStatus);
+                  li.dataset.localStatus = oldStatus;
+                }
+              }
+            } else if (!stillById && !stillByKey && id) {
+              if (li.dataset.localStatus) {
+                li.dataset.pendingSync = '1';
+                li.classList.add('status-warn');
+              } else {
+                // Clear caches when dropping
+                clearStatusFor(id, room, text);
+                li.style.opacity = '0';
+                setTimeout(() => li.remove(), 300);
+              }
+            }
+          });
+
+          incoming.forEach(upsertRequestItem);
+
+          updateAllTimersAndColors();
+
+          const ts = new Date();
+          const el = document.getElementById('last-refresh');
+          if (el) el.textContent = `Updated ${ts.toLocaleTimeString()}`;
+        })
+        .catch(() => {
+          const el = document.getElementById('last-refresh');
+          if (el) el.textContent = `Update failed`;
+        });
+    }
+
+    function cleanupStaleRows() {
+      const now = Date.now();
+      const STALE_MS_UNTOUCHED = 5 * 60 * 1000;   // 5 minutes
+      const STALE_MS_TOUCHED   = 60 * 60 * 1000;  // 60 minutes
+
+      document.querySelectorAll('#requests-list .request-item').forEach(li => {
+        const lastSeen = Number(li.dataset.lastSeen || 0);
+        const local = !!li.dataset.localStatus;
+        if (!lastSeen) return;
+
+        if (!local && now - lastSeen > STALE_MS_UNTOUCHED) {
+          clearStatusFor(li.dataset.id, li.dataset.room, li.dataset.request);
+          li.style.opacity = '0';
+          setTimeout(() => li.remove(), 300);
+        } else if (local && now - lastSeen > STALE_MS_TOUCHED) {
+          clearStatusFor(li.dataset.id, li.dataset.room, li.dataset.request);
+          li.style.opacity = '0';
+          setTimeout(() => li.remove(), 300);
+        }
       });
     }
-
-    function deferToNurse(id){
-      socket.emit('defer_request', { id });
-    }
-
-    function completeReq(id, room, role){
-      socket.emit('complete_request', {
-        request_id: id,
-        room_number: room,
-        role: (role||'nurse')
-      });
-    }
-
-    // ----- Initial load + manual refresh -----
-    const initial = {{ active_requests|tojson|safe }};
-    (initial || []).forEach(upsert);
-    ensureEmpty();
-    setUpdated();
-
-    document.getElementById('refreshBtn').addEventListener('click', async () => {
-      try{
-        const r = await fetch('{{ url_for("api_active_requests") }}');
-        const j = await r.json();
-        state.items.clear();
-        state.status.clear();
-        (j.active_requests||[]).forEach(upsert);
-      }catch(e){
-        console.error(e);
-      }finally{
-        setUpdated();
-      }
-    });
-
-    // keep “time ago” text fresh every minute
-    setInterval(() => {
-      state.items.forEach(it => upsert(it));
-    }, 60_000);
   </script>
 </body>
 </html>
