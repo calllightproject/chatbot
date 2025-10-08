@@ -90,6 +90,18 @@
 
     .toolbar { display:flex; align-items:center; gap:10px; margin-top:8px; }
     .muted { font-size:.85rem; color:#64748b; }
+
+    /* Empty-state banner */
+    .empty-state {
+      border:1px dashed #d1d5db;
+      background:#fafafa;
+      color:#64748b;
+      border-radius:8px;
+      padding:14px;
+      margin-bottom:10px;
+      text-align:center;
+      font-size:1rem;
+    }
   </style>
 </head>
 <body>
@@ -169,11 +181,14 @@
           {% endif %}
           <button class="complete-btn">Complete</button>
         </li>
-      {% else %}
-        <li class="request-item" style="justify-content:center">
-          <p>No active requests.</p>
-        </li>
       {% endfor %}
+
+      <!-- Empty state lives separately and is toggled by JS -->
+      <li id="empty-state"
+          class="empty-state"
+          style="{% if active_requests and active_requests|length > 0 %}display:none{% endif %}">
+        No active requests.
+      </li>
     </ul>
   </div>
 
@@ -191,31 +206,36 @@
 
     // Local caches
     const LocalStatus = new Map();        // request_id -> status
-    const LocalStatusByKey = new Map();   // `${room}::${request_text}` -> status (used only for ID reconciliation)
+    const LocalStatusByKey = new Map();   // `${room}::${request_text}` -> status (for reconciliation only)
 
     function normalizeText(s) { return (s || '').replace(/\s+/g, ' ').trim(); }
     function makeCompositeKey(room, text) {
       return `${(room || '').trim()}::${normalizeText(text)}`.toLowerCase();
     }
 
-    // RECORD status to caches (id always; composite for reconciliation only)
     function setStatusFor(id, room, text, status) {
       if (id) LocalStatus.set(id, status);
       const k = makeCompositeKey(room, text);
       if (k) LocalStatusByKey.set(k, status);
     }
-
-    // 🔧 READ status — **only by id** so brand-new requests never inherit old state
-    function getStatusFor(id/*, room, text */) {
+    function getStatusFor(id) {
       if (id && LocalStatus.has(id)) return LocalStatus.get(id);
       return null;
     }
-
-    // cleanup helpers
     function clearStatusFor(id, room, text){
       if (id) LocalStatus.delete(id);
       const k = makeCompositeKey(room, text);
       if (k) LocalStatusByKey.delete(k);
+    }
+
+    /* ---------- Empty-state toggle ---------- */
+    function toggleEmptyState() {
+      const list = document.getElementById('requests-list');
+      const empty = document.getElementById('empty-state');
+      if (!list || !empty) return;
+      // Count ONLY real request cards
+      const count = list.querySelectorAll('li.request-item').length;
+      empty.style.display = (count === 0) ? '' : 'none';
     }
 
     let audioContext;
@@ -275,17 +295,12 @@
 
     function applyLocalStatusToItem(li) {
       const id   = li?.dataset?.id;
-      const room = li?.dataset?.room || '';
-      const text = li?.dataset?.request || '';
-
-      // 👇 Prefer DOM-pinned; otherwise only check id-based cache (NO composite fallback)
       let st = (li?.dataset?.localStatus || '').toLowerCase().trim();
       if (!st) st = getStatusFor(id);
 
       const ack = li.querySelector('.ack-button');
       const omw = li.querySelector('.omw-button');
       const asap = li.querySelector('.asap-button');
-
       [ack, omw, asap].forEach(b => b && (b.disabled = false));
 
       if (!st) return;
@@ -342,7 +357,6 @@
         document.getElementById('requests-list').appendChild(li);
       }
 
-      // If server provided a status, trust it (rare for new_request)
       if (req.status) {
         const s = (req.status || 'new').toLowerCase();
         setStatusFor(req.id, req.room, req.request, s);
@@ -351,6 +365,7 @@
       }
 
       applyLocalStatusToItem(li);
+      toggleEmptyState();
     }
 
     function addRequestToDashboard(data) {
@@ -358,7 +373,7 @@
       updateAllTimersAndColors();
     }
 
-    // --- Socket events ---
+    /* ---- Socket events ---- */
     socket.on('new_request', function(data) {
       addRequestToDashboard(data);
       playNotificationSound();
@@ -374,6 +389,7 @@
         const deferBtn = item.querySelector('.defer-btn');
         if (deferBtn) deferBtn.remove();
         updateAllTimersAndColors();
+        toggleEmptyState();
       }
     });
 
@@ -389,10 +405,11 @@
         });
       }
       if (el) {
-        // clear caches so future different requests don't inherit state
         clearStatusFor(el.dataset.id, el.dataset.room, el.dataset.request);
         el.style.opacity = '0';
-        setTimeout(() => el.remove(), 300);
+        setTimeout(() => { el.remove(); toggleEmptyState(); }, 300);
+      } else {
+        toggleEmptyState();
       }
     });
 
@@ -411,9 +428,10 @@
         delete li.dataset.pendingSync;
         applyLocalStatusToItem(li);
       }
+      toggleEmptyState();
     });
 
-    // --- Click handlers ---
+    /* ---- DOM ready ---- */
     document.addEventListener('DOMContentLoaded', function() {
       const list = document.getElementById('requests-list');
       if (!list) return;
@@ -435,7 +453,6 @@
           setStatusFor(requestId, roomNumber, reqText, status);
           item.dataset.localStatus = status;
           delete item.dataset.pendingSync;
-
           applyLocalStatusToItem(item);
 
           socket.emit('acknowledge_request', {
@@ -476,21 +493,19 @@
         }
       });
 
-      // Manual refresh
       const btnRefresh = document.getElementById('manual-refresh');
       if (btnRefresh) btnRefresh.addEventListener('click', pollActiveRequests);
 
-      // Start timers + polling
       updateAllTimersAndColors();
+      toggleEmptyState();
+
       setInterval(updateAllTimersAndColors, 60000);
       setTimeout(pollActiveRequests, 500);
       setInterval(pollActiveRequests, 20000);
-
-      // Periodic cleanup for stale rows
       setInterval(cleanupStaleRows, 60 * 1000);
     });
 
-    // Polling reconciliation
+    /* ---- Polling reconciliation ---- */
     function pollActiveRequests() {
       const params = new URLSearchParams();
       if (NurseContext && NurseName) {
@@ -531,7 +546,7 @@
               delete li.dataset.pendingSync;
             }
 
-            if (!stillById && stillByKey) {
+            if (stillById === false && stillByKey === true) {
               const newer = incomingByKey.get(key);
               if (newer && newer.id) {
                 const oldStatus = li.dataset.localStatus || getStatusFor(id);
@@ -548,7 +563,6 @@
                 li.dataset.pendingSync = '1';
                 li.classList.add('status-warn');
               } else {
-                // Clear caches when dropping
                 clearStatusFor(id, room, text);
                 li.style.opacity = '0';
                 setTimeout(() => li.remove(), 300);
@@ -559,6 +573,7 @@
           incoming.forEach(upsertRequestItem);
 
           updateAllTimersAndColors();
+          toggleEmptyState();
 
           const ts = new Date();
           const el = document.getElementById('last-refresh');
@@ -590,6 +605,8 @@
           setTimeout(() => li.remove(), 300);
         }
       });
+
+      toggleEmptyState();
     }
   </script>
 </body>
