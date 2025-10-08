@@ -15,6 +15,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import ProgrammingError
 from werkzeug.security import generate_password_hash, check_password_hash
 
+
 # --- App Configuration ---
 app = Flask(__name__, template_folder='templates')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "a-strong-fallback-secret-key-for-local-development")
@@ -1632,7 +1633,13 @@ def handle_complete_request(data):
     except Exception as e:
         print(f"ERROR updating completion timestamp: {e}")
 
+@app.get("/healthz")
+def healthz():
+    return {"status": "ok"}, 200
+
+
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
