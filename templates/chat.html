@@ -153,8 +153,9 @@
       <a href="{{ url_for('reset_language') }}" class="language-link">Change Language</a>
     </div>
 
-    <div class="bot-reply">
-      <p>{{ reply }}</p>
+    <!-- Greeting banner that will be replaced by live nurse replies -->
+    <div class="bot-reply" aria-live="polite" aria-atomic="true">
+      <p id="greeting-text" data-default="{{ reply }}">{{ reply }}</p>
     </div>
 
     <div id="live-status"></div>
@@ -195,6 +196,7 @@
     const urlRoom = /^\d+$/.test(urlRoomRaw) ? urlRoomRaw : '';
     const ROOM_NUMBER = (TEMPLATE_ROOM && TEMPLATE_ROOM !== 'None') ? TEMPLATE_ROOM : urlRoom;
 
+    // elements & helpers
     const statusEl = document.getElementById('live-status');
     function showStatus(msg) {
       statusEl.textContent = msg;
@@ -208,15 +210,25 @@
       setTimeout(() => el.remove(), 2800);
     }
 
+    // greeting control
+    const greetingEl = document.getElementById('greeting-text');
+    const defaultGreeting = greetingEl?.dataset?.default || (greetingEl?.textContent ?? "Hello! How can I help you?");
+    function setGreeting(msg) {
+      if (!greetingEl) return;
+      greetingEl.textContent = msg;
+    }
+    function resetGreeting() {
+      if (!greetingEl) return;
+      greetingEl.textContent = defaultGreeting;
+    }
+
     console.log("[patient] ROOM_NUMBER=", ROOM_NUMBER || "(none)");
     if (!ROOM_NUMBER) showStatus("No room number found. Try /chat?room=241");
 
-    // ---------- robust /patient connection (iPhone-friendly) ----------
-    // 1) Pass room_id in query so server can auto-join on connect
-    // 2) Also explicitly emit patient:join after connect (handles reconnects where query may be dropped)
+    // ---------- robust /patient connection ----------
     const patientSocket = io('/patient', {
       query: { room_id: ROOM_NUMBER || '' },
-      transports: ['websocket', 'polling'], // iOS Safari often prefers an explicit list
+      transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelayMax: 5000
@@ -232,6 +244,7 @@
     // Confirm joined
     patientSocket.on('patient:joined', function (payload) {
       if (String(payload.room_id) === String(ROOM_NUMBER)) {
+        resetGreeting(); // restore default on successful (re)join
         showStatus("Live updates enabled for Room " + ROOM_NUMBER);
         cancelNudge();
       }
@@ -259,41 +272,51 @@
       }, ms);
     }
 
+    // server says "we got it"
     patientSocket.on('request:received', function (data) {
       if (String(data.room_id) !== String(ROOM_NUMBER)) return;
+      setGreeting("Nurse station: We received your request.");
       showStatus("Your request has been received by the nurse station.");
       toast("Request received.");
       startNudge(6 * 60 * 1000); // 6 minutes
     });
 
+    // nurse/CNA live status
     patientSocket.on('request:status', function (data) {
       if (String(data.room_id) !== String(ROOM_NUMBER)) return;
       cancelNudge();
       const who = data.nurse ? ` (${data.nurse})` : "";
-      switch ((data.status || "").toLowerCase()) {
-        case "ack":
-          showStatus(`Your nurse/CNA has acknowledged your request${who}.`);
-          toast("Request acknowledged.");
-          break;
-        case "omw":
-          showStatus(`Your nurse/CNA is on their way for your request${who}.`);
-          toast("Nurse/CNA on the way.");
-          break;
-        case "asap":
-          showStatus(`Your nurse/CNA is in another room and will be with you as soon as possible${who}.`);
-          toast("They’ll be there ASAP.");
-          break;
+      const status = (data.status || "").toLowerCase();
+
+      if (status === "ack") {
+        setGreeting(`Nurse${who}: Acknowledged your request.`);
+        showStatus(`Your nurse/CNA has acknowledged your request${who}.`);
+        toast("Request acknowledged.");
+      } else if (status === "omw") {
+        setGreeting(`Nurse${who}: On my way.`);
+        showStatus(`Your nurse/CNA is on their way for your request${who}.`);
+        toast("Nurse/CNA on the way.");
+      } else if (status === "asap") {
+        setGreeting(`Nurse${who}: Be there ASAP.`);
+        showStatus(`Your nurse/CNA is in another room and will be with you as soon as possible${who}.`);
+        toast("They’ll be there ASAP.");
       }
     });
 
+    // request completed
     patientSocket.on('request:done', function (data) {
       if (String(data.room_id) !== String(ROOM_NUMBER)) return;
       cancelNudge();
+      setGreeting("All set — your request is complete.");
       showStatus("All set — your request has been marked complete.");
       toast("Request completed.");
+
+      // Optional: return to default greeting after a short delay
+      setTimeout(resetGreeting, 8000);
     });
 
     patientSocket.on('disconnect', function () {
+      setGreeting("Reconnecting…");
       showStatus("Disconnected. Trying to reconnect…");
     });
   </script>
