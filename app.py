@@ -662,19 +662,61 @@ def handle_chat():
         else:
             user_input = (request.form.get("user_input") or "").strip()
 
-            # Back / home
-            if user_input == button_data.get("back_text", "⬅ Back"):
+            back_text = button_data.get("back_text", "⬅ Back")
+
+            # ----------------------------
+            # SPECIAL FLOW: Shower follow-up
+            # Triggered when user taps "Can I take a shower?"
+            # ----------------------------
+            if user_input == "Can I take a shower?":
+                session["reply"] = (
+                    "Usually yes — but please check with your nurse if you have an IV, "
+                    "had a C-section, or have special instructions."
+                )
+                session["options"] = [
+                    "Yes, I'd like to ask my nurse.",
+                    "No, I understand.",
+                ]
+                # Add Back if you want it here too
+                if back_text not in session["options"]:
+                    session["options"].append(back_text)
+
+            # Patient wants us to notify nurse about shower
+            elif user_input == "Yes, I'd like to ask my nurse.":
+                # craft a clear, actionable message for the nurse dashboard/logs
+                request_text = "Patient would like to ask about taking a shower."
+                # Persist + notify nurse
+                session["reply"] = process_request(
+                    role="nurse",
+                    subject="Shower permission request",
+                    user_input=request_text,
+                    reply_message=button_data.get("nurse_notification", "Your request has been sent."),
+                )
+                session["options"] = button_data["main_buttons"]
+                if room_number:
+                    _emit_received_for(room_number, request_text, kind="option")
+
+            # Patient declines; go back to main
+            elif user_input == "No, I understand.":
+                session["reply"] = "Okay — if you change your mind, just let me know anytime."
+                session["options"] = button_data["main_buttons"]
+
+            # ----------------------------
+            # Back / Home
+            # ----------------------------
+            elif user_input == back_text:
                 session.pop("reply", None)
                 session.pop("options", None)
                 return redirect(url_for("handle_chat", room=room_number) if room_number else url_for("handle_chat"))
 
-            # Known button
-            if user_input in button_data:
+            # ----------------------------
+            # Standard known-button handling via button_data
+            # ----------------------------
+            elif user_input in button_data:
                 button_info = button_data[user_input]
                 session["reply"] = button_info.get("question") or button_info.get("note", "")
                 session["options"] = button_info.get("options", [])
 
-                back_text = button_data.get("back_text", "⬅ Back")
                 if session["options"] and back_text not in session["options"]:
                     session["options"].append(back_text)
                 elif not session["options"]:
@@ -685,7 +727,10 @@ def handle_chat():
                     action = button_info["action"]
                     role = "cna" if action == "Notify CNA" else "nurse"
                     subject = f"{role.upper()} Request"
-                    notification_message = button_info.get("note", button_data.get(f"{role}_notification", "Your request has been sent."))
+                    notification_message = button_info.get(
+                        "note",
+                        button_data.get(f"{role}_notification", "Your request has been sent.")
+                    )
 
                     # Persist + notify
                     session["reply"] = process_request(
@@ -700,7 +745,9 @@ def handle_chat():
                     if room_number:
                         _emit_received_for(room_number, user_input, kind="option")
 
+            # ----------------------------
             # Unknown input
+            # ----------------------------
             else:
                 session["reply"] = button_data.get(
                     "fallback_unrecognized",
@@ -721,6 +768,7 @@ def handle_chat():
         button_data=button_data,
         room_number=room_number,  # used by chat.html Socket.IO connect
     )
+
 
 @app.route("/reset-language")
 def reset_language():
@@ -1641,5 +1689,6 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
