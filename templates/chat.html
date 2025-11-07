@@ -297,10 +297,11 @@
         showStatus(`Your nurse/CNA is on their way for your request${who}.`);
         toast("Nurse/CNA on the way.");
       } else if (status === "asap") {
-        setGreeting(`Nurse${who}: Be there ASAP.`);
-        showStatus(`Your nurse/CNA is in another room and will be with you as soon as possible${who}.`);
-        toast("They’ll be there ASAP.");
-      }
+  const msg = `Your nurse/CNA is in another room and will be with you as soon as possible${who}.`;
+  setGreeting(msg);
+  showStatus(msg);
+  toast("They’ll be there ASAP.");
+}
     });
 
     // request completed
@@ -322,3 +323,4 @@
   </script>
 </body>
 </html>
+
