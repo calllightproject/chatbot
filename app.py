@@ -599,7 +599,6 @@ def handle_chat():
         session["pathway"] = "bereavement"
         pathway = "bereavement"
     else:
-        # Any other case (including no param) => standard
         session["pathway"] = "standard"
         pathway = "standard"
 
@@ -661,7 +660,6 @@ def handle_chat():
         # Button click path
         else:
             user_input = (request.form.get("user_input") or "").strip()
-
             back_text = button_data.get("back_text", "⬅ Back")
 
             # ----------------------------
@@ -674,18 +672,15 @@ def handle_chat():
                     "had a C-section, or have special instructions."
                 )
                 session["options"] = [
-                    "Yes, I'd like to ask my nurse.",
-                    "No, I understand.",
+                    "Ask my nurse about taking a shower",
+                    "Got it, I'll wait for now",
                 ]
-                # Add Back if you want it here too
                 if back_text not in session["options"]:
                     session["options"].append(back_text)
 
             # Patient wants us to notify nurse about shower
-            elif user_input == "Yes, I'd like to ask my nurse.":
-                # craft a clear, actionable message for the nurse dashboard/logs
+            elif user_input == "Ask my nurse about taking a shower":
                 request_text = "Patient would like to ask about taking a shower."
-                # Persist + notify nurse
                 session["reply"] = process_request(
                     role="nurse",
                     subject="Shower permission request",
@@ -697,7 +692,7 @@ def handle_chat():
                     _emit_received_for(room_number, request_text, kind="option")
 
             # Patient declines; go back to main
-            elif user_input == "No, I understand.":
+            elif user_input == "Got it, I'll wait for now":
                 session["reply"] = "Okay — if you change your mind, just let me know anytime."
                 session["options"] = button_data["main_buttons"]
 
@@ -732,7 +727,6 @@ def handle_chat():
                         button_data.get(f"{role}_notification", "Your request has been sent.")
                     )
 
-                    # Persist + notify
                     session["reply"] = process_request(
                         role=role,
                         subject=subject,
@@ -741,7 +735,6 @@ def handle_chat():
                     )
                     session["options"] = button_data["main_buttons"]
 
-                    # Let patient UI know we received a button-driven request
                     if room_number:
                         _emit_received_for(room_number, user_input, kind="option")
 
@@ -1689,6 +1682,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
