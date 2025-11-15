@@ -9,11 +9,35 @@ from datetime import datetime, date, time, timezone
 from collections import defaultdict
 from email.message import EmailMessage
 
-from flask import Flask, render_template, request, session, redirect, url_for, flash, jsonify, abort
+from flask import (
+    Flask,
+    render_template,
+    request,
+    session,
+    redirect,
+    url_for,
+    flash,
+    jsonify,
+    abort,
+)
 from flask_socketio import SocketIO, join_room
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import ProgrammingError
 from werkzeug.security import generate_password_hash, check_password_hash
+
+# -----------------------------
+# Flask app + Socket.IO (Redis)
+# -----------------------------
+app = Flask(__name__)
+app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret-key")
+
+# Use Redis as the message queue so events are shared across workers/processes
+socketio = SocketIO(
+    app,
+    async_mode="eventlet",
+    message_queue=os.getenv("REDIS_URL", "redis://localhost:6379"),
+)
+
 
 
 # --- App Configuration ---
@@ -1682,6 +1706,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
