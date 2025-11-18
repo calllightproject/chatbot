@@ -383,13 +383,191 @@ def send_email_alert(subject, body, room_number):
         print(f"EMAIL disabled or failed: {e}")
 
 # --- Smart Routing Logic ---
-def route_note_intelligently(note_text):
-    NURSE_KEYWORDS = ['pain', 'medication', 'bleeding', 'nausea', 'dizzy', 'sick', 'iv', 'pump', 'staples', 'incision', 'nipple', 'nipples', 'breast', 'baby needs to eat', 'help feeding', 'worried about my baby' 'heavy', 'golf ball', 'meds', 'breastfeeding', 'blood', 'incision', 'rash', 'newborn rash', 'drainage', ]
-    note_lower = note_text.lower()
-    for keyword in NURSE_KEYWORDS:
-        if keyword in note_lower:
-            return 'nurse'
-    return 'cna'
+def route_note_intelligently(note_text: str) -> str:
+    """
+    Very simple, transparent routing:
+    - If note looks like an emergency / red flag -> route to nurse
+    - Else if clearly a CNA-type request (supplies, basic comfort) -> route to cna
+    - Else -> default to nurse
+
+    Returns: "nurse" or "cna"
+    """
+    if not note_text:
+        return "nurse"
+
+    text = note_text.lower().strip()
+
+    # --- 1) Red-flag / emergency-ish phrases (always nurse) ---
+    emergency_keywords = [
+        "chest pain",
+        "can't breathe",
+        "cannot breathe",
+        "short of breath",
+        "shortness of breath",
+        "trouble breathing",
+        "hard to breathe",
+        "vision change",
+        "blurry vision",
+        "double vision",
+        "severe headache",
+        "worst headache",
+        "bad headache",
+        "migraine",
+        "heavy bleeding",
+        "soaked",
+        "soaking pad",
+        "huge clot",
+        "big clot",
+        "pass a clot",
+        "passing clots",
+        "dizzy",
+        "lightheaded",
+        "faint",
+        "fainted",
+        "syncope",
+        "chest tightness",
+        "heart racing",
+        "palpitations",
+        "can’t feel my",
+        "cant feel my",
+        "numb",
+        "tingling",
+        "right upper",
+        "ruq pain",
+        "upper right pain",
+        "severe pain",
+        "can’t walk",
+        "cant walk",
+        "fall",
+        "fell",
+        "emergency",
+        "911",
+    ]
+
+    for phrase in emergency_keywords:
+        if phrase in text:
+            return "nurse"
+
+    # --- 2) Clearly CNA-type / supply / comfort requests ---
+    cna_keywords = [
+        # hygiene / linens / underwear
+        "mesh underwear",
+        "underwear",
+        "pad",
+        "pads",
+        "peribottle",
+        "peri bottle",
+        "perineal bottle",
+        "ice pack",
+        "icepack",
+        "ice chips",
+        "diaper",
+        "diapers",
+        "wipes",
+        "blanket",
+        "blankets",
+        "pillow",
+        "pillows",
+        "towel",
+        "towels",
+        "gown",
+        "hospital gown",
+        "socks",
+
+        # food / drink
+        "water",
+        "ice water",
+        "snack",
+        "snacks",
+        "juice",
+        "apple juice",
+        "cranberry juice",
+        "crackers",
+
+        # room / bed / comfort
+        "room too hot",
+        "room too cold",
+        "hot in here",
+        "cold in here",
+        "light off",
+        "turn off the light",
+        "turn on the light",
+        "lights off",
+        "lights on",
+        "bed up",
+        "bed down",
+        "bed higher",
+        "bed lower",
+        "bed rail",
+        "side rail",
+        "chair",
+        "recliner",
+
+        # bathroom / shower help (non-urgent)
+        "help to the bathroom",
+        "help me to the bathroom",
+        "help to bathroom",
+        "go to the bathroom",
+        "walk to the bathroom",
+        "shower",
+        "take a shower",
+        "help with shower",
+    ]
+
+    for phrase in cna_keywords:
+        if phrase in text:
+            return "cna"
+
+    # --- 3) Nurse-type clinical questions/meds ---
+    nurse_keywords = [
+        "pain med",
+        "pain medication",
+        "tylenol",
+        "ibuprofen",
+        "motrin",
+        "narcotic",
+        "oxy",
+        "oxycodone",
+        "medicine",
+        "medication",
+        "meds",
+        "blood pressure",
+        "bp check",
+        "blood sugar",
+        "insulin",
+        "lactation",
+        "breastfeeding",
+        "breast feed",
+        "cluster feeding",
+        "formula",
+        "supplement",
+        "baby not eating",
+        "baby won’t eat",
+        "baby wont eat",
+        "won't eat",
+        "wont eat",
+        "won’t latch",
+        "wont latch",
+        "won’t wake up",
+        "wont wake up",
+        "newborn rash",
+        "incision",
+        "staples",
+        "stitches",
+        "drainage",
+        "redness",
+        "swelling",
+        "fever",
+        "chills",
+    ]
+
+    for phrase in nurse_keywords:
+        if phrase in text:
+            return "nurse"
+
+    # --- 4) Default: nurse (safer if we're unsure) ---
+    return "nurse"
+
 
 # --- Core Helper Functions ---
 def log_to_audit_trail(event_type, details):
@@ -1682,6 +1860,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
