@@ -384,7 +384,7 @@ def send_email_alert(subject, body, room_number):
 
 # --- Smart Routing Logic ---
 def route_note_intelligently(note_text):
-    NURSE_KEYWORDS = ['pain', 'medication', 'bleeding', 'nausea', 'dizzy', 'sick', 'iv', 'pump', 'staples', 'incision', 'nipple', 'nipples', 'bleeding', 'heavy', 'golf ball', 'meds', 'breastfeeding']
+    NURSE_KEYWORDS = ['pain', 'medication', 'bleeding', 'nausea', 'dizzy', 'sick', 'iv', 'pump', 'staples', 'incision', 'nipple', 'nipples', 'breast', 'baby needs to eat', 'help feeding', 'worried about my baby' 'heavy', 'golf ball', 'meds', 'breastfeeding', 'blood', 'incision', 'rash', 'newborn rash', 'drainage', ]
     note_lower = note_text.lower()
     for keyword in NURSE_KEYWORDS:
         if keyword in note_lower:
@@ -1682,6 +1682,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
