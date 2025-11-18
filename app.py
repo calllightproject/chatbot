@@ -385,188 +385,163 @@ def send_email_alert(subject, body, room_number):
 # --- Smart Routing Logic ---
 def route_note_intelligently(note_text: str) -> str:
     """
-    Very simple, transparent routing:
-    - If note looks like an emergency / red flag -> route to nurse
-    - Else if clearly a CNA-type request (supplies, basic comfort) -> route to cna
-    - Else -> default to nurse
-
-    Returns: "nurse" or "cna"
+    Smarter routing for free-text notes:
+      - Environment / comfort → CNA
+      - Sheets/bed + small mess → CNA
+      - Sheets/bed + heavy bleeding / red flags → Nurse
+      - Toileting / mobility → CNA (unless red-flag symptoms)
+      - Breastfeeding / baby-feeding concerns → Nurse
+      - Formula / bottle refills → CNA
+      - Otherwise: default to Nurse for safety
     """
     if not note_text:
         return "nurse"
 
-    text = note_text.lower().strip()
+    text = note_text.lower()
 
-    # --- 1) Red-flag / emergency-ish phrases (always nurse) ---
-    emergency_keywords = [
-        "chest pain",
-        "can't breathe",
-        "cannot breathe",
-        "short of breath",
-        "shortness of breath",
-        "trouble breathing",
-        "hard to breathe",
-        "vision change",
-        "blurry vision",
-        "double vision",
-        "severe headache",
-        "worst headache",
-        "bad headache",
-        "migraine",
-        "heavy bleeding",
-        "soaked",
-        "soaking pad",
-        "huge clot",
-        "big clot",
-        "pass a clot",
-        "passing clots",
-        "dizzy",
-        "lightheaded",
-        "faint",
-        "fainted",
-        "syncope",
-        "chest tightness",
-        "heart racing",
-        "palpitations",
-        "can’t feel my",
-        "cant feel my",
-        "numb",
-        "tingling",
-        "right upper",
-        "ruq pain",
-        "upper right pain",
-        "severe pain",
-        "can’t walk",
-        "cant walk",
-        "fall",
-        "fell",
-        "emergency",
-        "911",
+    def contains_any(words):
+        return any(w in text for w in words)
+
+    # --- 1) Hard emergency / always-nurse red flags ---
+    emergency_phrases = [
+        "emergency", "911", "code blue", "code help",
+        "can't breathe", "cant breathe", "cannot breathe",
+        "short of breath", "hard to breathe", "trouble breathing"
     ]
 
-    for phrase in emergency_keywords:
-        if phrase in text:
+    nurse_red_flag_symptoms = [
+        # bleeding severity
+        "soaking", "soaked", "a lot of blood", "lots of blood",
+        "tons of blood", "pouring blood", "blood everywhere",
+        "golf ball", "big clot", "large clot", "clots", "filling my pad",
+        "saturating", "pad every hour",
+
+        # neuro / headache / vision
+        "severe headache", "worst headache", "bad headache",
+        "blurry vision", "blurry", "double vision",
+        "seeing spots", "spots in my vision",
+
+        # cardio / resp
+        "chest pain", "chest hurts", "pressure in my chest",
+        "short of breath", "hard to breathe", "trouble breathing",
+        "racing heart", "heart is racing",
+
+        # dizziness / near syncope
+        "very dizzy", "so dizzy", "really dizzy",
+        "lightheaded", "light headed", "almost passed out",
+        "fainting", "passed out", "black out", "blacked out",
+
+        # infection / systemic
+        "fever", "chills", "shaking", "i feel really sick",
+
+        # incision / wound
+        "incision looks", "incision is red", "incision draining",
+        "drainage from my incision", "incision is opening",
+        "staples came out", "staple came out",
+    ]
+
+    # if any emergency phrase or red flag → nurse immediately
+    if contains_any(emergency_phrases) or contains_any(nurse_red_flag_symptoms):
+        return "nurse"
+
+    # Helper so we can re-check later when deciding CNA vs nurse
+    def has_red_flag():
+        return contains_any(nurse_red_flag_symptoms) or contains_any(emergency_phrases)
+
+    # --- 2) Breastfeeding / baby feeding (nurse) ---
+    breastfeeding_terms = [
+        "breastfeeding", "breast feeding", "latch", "won't latch", "wont latch",
+        "nipple", "nipples", "cracked nipple", "mastitis", "engorged",
+        "baby won't eat", "baby wont eat", "baby not eating",
+        "baby won't wake to feed", "baby wont wake to feed",
+        "sleepy baby and won't eat", "sleepy baby and not eating"
+    ]
+
+    if contains_any(breastfeeding_terms):
+        return "nurse"
+
+    # baby feeding but not specifically formula/bottle yet
+    if "baby" in text or "newborn" in text:
+        if contains_any(["won't eat", "wont eat", "not eating", "won't wake", "wont wake", "not waking"]):
             return "nurse"
 
-    # --- 2) Clearly CNA-type / supply / comfort requests ---
-    cna_keywords = [
-        # hygiene / linens / underwear
-        "mesh underwear",
-        "underwear",
-        "pad",
-        "pads",
-        "peribottle",
-        "peri bottle",
-        "perineal bottle",
-        "ice pack",
-        "icepack",
-        "ice chips",
-        "diaper",
-        "diapers",
-        "wipes",
-        "blanket",
-        "blankets",
-        "pillow",
-        "pillows",
-        "towel",
-        "towels",
-        "gown",
-        "hospital gown",
-        "socks",
-
-        # food / drink
-        "water",
-        "ice water",
-        "snack",
-        "snacks",
-        "juice",
-        "apple juice",
-        "cranberry juice",
-        "crackers",
-
-        # room / bed / comfort
-        "room too hot",
-        "room too cold",
-        "hot in here",
-        "cold in here",
-        "light off",
-        "turn off the light",
-        "turn on the light",
-        "lights off",
-        "lights on",
-        "bed up",
-        "bed down",
-        "bed higher",
-        "bed lower",
-        "bed rail",
-        "side rail",
-        "chair",
-        "recliner",
-
-        # bathroom / shower help (non-urgent)
-        "help to the bathroom",
-        "help me to the bathroom",
-        "help to bathroom",
-        "go to the bathroom",
-        "walk to the bathroom",
-        "shower",
-        "take a shower",
-        "help with shower",
-    ]
-
-    for phrase in cna_keywords:
-        if phrase in text:
-            return "cna"
-
-    # --- 3) Nurse-type clinical questions/meds ---
-    nurse_keywords = [
-        "pain med",
-        "pain medication",
-        "tylenol",
-        "ibuprofen",
-        "motrin",
-        "narcotic",
-        "oxy",
-        "oxycodone",
-        "medicine",
-        "medication",
-        "meds",
-        "blood pressure",
-        "bp check",
-        "blood sugar",
-        "insulin",
-        "lactation",
-        "breastfeeding",
-        "breast feed",
-        "cluster feeding",
-        "formula",
-        "supplement",
-        "baby not eating",
-        "baby won’t eat",
-        "baby wont eat",
-        "won't eat",
-        "wont eat",
-        "won’t latch",
-        "wont latch",
-        "won’t wake up",
-        "wont wake up",
-        "newborn rash",
-        "incision",
-        "staples",
-        "stitches",
-        "drainage",
-        "redness",
-        "swelling",
-        "fever",
-        "chills",
-    ]
-
-    for phrase in nurse_keywords:
-        if phrase in text:
+    # --- 3) Formula / bottle refills (CNA unless red flag) ---
+    if contains_any(["formula", "bottle", "more formula", "need formula", "bottle of formula"]):
+        if has_red_flag():
             return "nurse"
+        return "cna"
 
-    # --- 4) Default: nurse (safer if we're unsure) ---
+    # --- 4) Environment / comfort (CNA) ---
+    environment_terms = [
+        "light is too bright", "lights are too bright", "too bright",
+        "room is too cold", "room is cold", "room is hot", "too hot",
+        "temperature", "thermostat",
+        "tv is too loud", "tv too loud", "turn down the tv",
+        "door open", "door closed", "can you close the door",
+        "noise", "noisy", "too loud",
+        "curtain", "blinds", "shade", "window"
+    ]
+    if contains_any(environment_terms):
+        return "cna"
+
+    # --- 5) Bed / sheets / linens + bodily fluids ---
+    bed_terms = [
+        "sheet", "sheets", "bed", "blanket", "blankets",
+        "pillow", "pillows", "mattress", "linens", "linen", "floor"
+    ]
+    fluid_terms = [
+        "blood", "lochia", "pee", "urine", "poop", "stool",
+        "diarrhea", "vomit", "throw up", "threw up", "spit up"
+    ]
+    severe_bleeding_terms = [
+        "a lot of blood", "lots of blood", "so much blood",
+        "soaking", "soaked", "pouring", "everywhere",
+        "golf ball", "big clot", "large clot", "filling my pad",
+        "saturating"
+    ]
+
+    if contains_any(bed_terms) and contains_any(fluid_terms):
+        # If clearly severe or any red-flag context → nurse
+        if contains_any(severe_bleeding_terms) or has_red_flag():
+            return "nurse"
+        # Otherwise (e.g., "there's blood on my sheets") → CNA
+        return "cna"
+
+    # --- 6) Toileting / mobility (CNA unless red flags) ---
+    toileting_terms = [
+        "bathroom", "toilet", "commode", "bedside commode",
+        "help to the bathroom", "help me to the bathroom",
+        "help to toilet", "help me to toilet"
+    ]
+    mobility_terms = [
+        "help me out of bed", "get out of bed", "help me stand",
+        "help me walk", "walk to the nursery", "help me walk to",
+        "ambulate", "walk in the hall"
+    ]
+    if contains_any(toileting_terms) or contains_any(mobility_terms):
+        if has_red_flag():
+            return "nurse"
+        return "cna"
+
+    # --- 7) General supplies / comfort (CNA) ---
+    cna_supply_terms = [
+        "mesh underwear", "underwear", "panties",
+        "pad", "pads", "peribottle", "peri bottle", "perineal bottle",
+        "tucks", "witch hazel", "dermoplast", "spray",
+        "ice pack", "icepack", "ice chips",
+        "diaper", "diapers", "wipes",
+        "blanket", "blankets", "pillow", "pillows",
+        "towel", "towels", "gown", "hospital gown",
+        "socks", "slippers",
+        "snack", "snacks", "juice", "water", "ice water", "hot water",
+        "blue pad", "blue pads", "chux", "white pad", "white pads"
+    ]
+    if contains_any(cna_supply_terms):
+        return "cna"
+
+    # --- 8) If we got here: default to nurse for safety ---
     return "nurse"
+
 
 
 # --- Core Helper Functions ---
@@ -1860,6 +1835,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
