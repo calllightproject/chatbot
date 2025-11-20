@@ -386,203 +386,128 @@ def send_email_alert(subject, body, room_number):
         print(f"EMAIL disabled or failed: {e}")
 
 # --- Smart Routing Logic ---
+# --- Smart Routing Logic (with safer fuzzy + environment priority) ---
 def route_note_intelligently(note_text: str) -> str:
     """
-    Smarter routing for free-text notes:
-      - Environment / comfort → CNA
-      - Sheets/bed + small mess → CNA
-      - Sheets/bed + heavy bleeding / red flags → Nurse
-      - Toileting / mobility → CNA (unless red-flag symptoms)
-      - Breastfeeding / baby-feeding concerns → Nurse
-      - Formula / bottle refills → CNA
-      - Otherwise: default to Nurse for safety
-
-    Also normalizes text, strips filler phrases, and does light fuzzy matching
-    so minor typos still route correctly.
+    Decide 'nurse' vs 'cna' for free-text notes using:
+      - Hard safety rules (blood/pain/incision/breathing => nurse)
+      - Environment rules (light/cold/blankets/TV/etc. => CNA)
+      - Breastfeeding & baby feeding logic
+      - Fuzzy matching for typos ("lite", "brite", "coled", "blankit", etc.)
     """
     if not note_text:
-        return "nurse"
+        return "cna"
 
-    # --- basic normalization + phrase sanitization ---
-    raw = note_text.lower()
+    text = note_text.lower().strip()
+    # normalized for token-based fuzzy matching
+    norm = re.sub(r"[^a-z0-9\s]", " ", text)
+    tokens = [t for t in norm.split() if t]
 
-    # remove non alphanumeric (keep spaces and apostrophes)
-    text = re.sub(r"[^a-z0-9\s']", " ", raw)
-    # collapse extra whitespace
-    text = re.sub(r"\s+", " ", text).strip()
-
-    # remove common filler / polite phrases that don't affect routing
-    filler_phrases = [
-        "just", "kind of", "kinda", "sort of",
-        "maybe", "a little", "a bit",
-        "really", "very", "so",
-        "please", "can i", "could i", "would you",
-        "i think", "i feel like",
-    ]
-    # remove multi-word fillers first
-    for fp in sorted(filler_phrases, key=len, reverse=True):
-        text = text.replace(f" {fp} ", " ")
-
-    text = re.sub(r"\s+", " ", text).strip()
-    tokens = text.split()
-
-    def matches_any(words, threshold: float = 0.82) -> bool:
-        """
-        - Exact substring match for phrases
-        - Fuzzy per-word match for single-word keywords
-        """
-        if not text:
+    def fuzzy_hit(keywords, threshold=0.78):
+        """Return True if any token is fuzzily close to any keyword."""
+        if not tokens:
             return False
-
-        for kw in words:
-            kw_clean = kw.lower()
-            # exact phrase match
-            if kw_clean in text:
+        for kw in keywords:
+            kw_clean = kw.lower().strip()
+            # phrase match (for multiword patterns)
+            if " " in kw_clean and kw_clean in norm:
                 return True
-
-            kw_tokens = kw_clean.split()
-            # for single-word keywords, allow fuzzy match against each token
-            if len(kw_tokens) == 1:
-                for t in tokens:
-                    if difflib.SequenceMatcher(None, t, kw_clean).ratio() >= threshold:
-                        return True
-
+            # token-level fuzzy match
+            for t in tokens:
+                if len(t) < 3:
+                    continue
+                ratio = difflib.SequenceMatcher(None, t, kw_clean).ratio()
+                if ratio >= threshold:
+                    return True
         return False
 
-    # --- 1) Hard emergency / always-nurse red flags ---
-    emergency_phrases = [
-        "emergency", "911", "code blue", "code help",
-        "can't breathe", "cant breathe", "cannot breathe",
-        "short of breath", "hard to breathe", "trouble breathing"
+    # ----------------- 1) EMERGENCY / RED-FLAG -> ALWAYS NURSE -----------------
+    EMERGENCY_PHRASES = [
+        "emergency", "code", "not breathing", "cant breathe", "can't breathe",
+        "hard to breathe", "trouble breathing", "short of breath",
+        "chest pain", "heart racing", "passed out", "fainted", "seizure", "stroke",
+        "call 911"
     ]
 
-    nurse_red_flag_symptoms = [
-        # bleeding severity
-        "soaking", "soaked", "a lot of blood", "lots of blood",
-        "tons of blood", "pouring blood", "blood everywhere",
-        "golf ball", "big clot", "large clot", "clots", "filling my pad",
-        "saturating", "pad every hour",
-
-        # neuro / headache / vision
-        "severe headache", "worst headache", "bad headache",
-        "blurry vision", "blurry", "double vision",
-        "seeing spots", "spots in my vision",
-
-        # cardio / resp
-        "chest pain", "chest hurts", "pressure in my chest",
-        "short of breath", "hard to breathe", "trouble breathing",
-        "racing heart", "heart is racing",
-
-        # dizziness / near syncope
-        "very dizzy", "so dizzy", "really dizzy",
-        "lightheaded", "light headed", "almost passed out",
-        "fainting", "passed out", "black out", "blacked out",
-
-        # infection / systemic
-        "fever", "chills", "shaking", "i feel really sick",
-
-        # incision / wound
-        "incision looks", "incision is red", "incision draining",
-        "drainage from my incision", "incision is opening",
-        "staples came out", "staple came out",
+    BLOOD_KEYWORDS = [
+        "blood", "bleeding", "heavy bleeding", "lots of blood", "gushing",
+        "clots", "golf ball", "soaked", "saturated", "hemorrhage", "hemorrhaging"
     ]
 
-    if matches_any(emergency_phrases) or matches_any(nurse_red_flag_symptoms):
+    PAIN_INCISION_KEYWORDS = [
+        "severe pain", "sharp pain", "really bad pain", "incision", "staples",
+        "stitches", "wound", "infection", "infected", "pus", "drainage", "oozing",
+        "burning pain", "migraine", "severe headache", "vision", "blurry vision",
+        "headache", "dizzy", "lightheaded", "faint", "fainted"
+    ]
+
+    if fuzzy_hit(EMERGENCY_PHRASES, threshold=0.72):
+        return "nurse"
+    if fuzzy_hit(BLOOD_KEYWORDS + PAIN_INCISION_KEYWORDS, threshold=0.72):
+        # ✅ your rule: ANY word resembling blood/pain/incision => nurse
         return "nurse"
 
-    def has_red_flag() -> bool:
-        return matches_any(emergency_phrases) or matches_any(nurse_red_flag_symptoms)
+    # ----------------- 2) BREASTFEEDING & BABY FEEDING -----------------
+    # formula refill (non-clinical) -> CNA, unless it looked like red-flag above
+    if "formula" in text and any(w in text for w in ["more", "extra", "another", "refill", "ran out", "run out"]):
+        return "cna"
 
-    # --- 2) Breastfeeding / baby feeding (nurse) ---
-    breastfeeding_terms = [
-        "breastfeeding", "breast feeding", "latch", "won't latch", "wont latch",
-        "nipple", "nipples", "cracked nipple", "mastitis", "engorged",
-        "baby won't eat", "baby wont eat", "baby not eating",
-        "baby won't wake to feed", "baby wont wake to feed",
-        "sleepy baby and won't eat", "sleepy baby and not eating"
+    FEED_NURSE_KEYWORDS = [
+        "breastfeeding", "breast feeding", "latch", "latching", "nipple", "nipples",
+        "milk", "let down", "engorged", "mastitis", "pump", "pumping",
+        "baby wont eat", "baby won't eat", "baby not eating",
+        "baby wont latch", "baby won't latch"
     ]
-    if matches_any(breastfeeding_terms):
+    if fuzzy_hit(FEED_NURSE_KEYWORDS, threshold=0.72):
+        # ✅ your rule: anything breastfeeding / baby-feeding (unless just more formula) => nurse
         return "nurse"
 
-    # baby feeding but not specifically formula/bottle yet
-    if "baby" in text or "newborn" in text:
-        if matches_any(["won't eat", "wont eat", "not eating", "won't wake", "wont wake", "not waking"]):
-            return "nurse"
+    # ----------------- 3) ENVIRONMENTAL / COMFORT -> CNA -----------------
+    # This is where "lite/brigt/coled/blankit" should land.
+    ENV_KEYWORDS = [
+        "light", "lights", "bright", "dim", "dark", "lamp",
+        "cold", "hot", "warm", "temperature",
+        "blanket", "blankets", "sheet", "sheets", "pillow", "pillows",
+        "room is cold", "too cold", "too hot",
+        "tv", "television", "volume", "loud", "noise", "noisy", "quiet",
+        "curtain", "curtains", "door", "trash", "garbage"
+    ]
 
-    # --- 3) Formula / bottle refills (CNA unless red flag) ---
-    if matches_any(["formula", "bottle", "more formula", "need formula", "bottle of formula"]):
-        if has_red_flag():
-            return "nurse"
+    CNA_CLEANING = [
+        "change my sheets", "change the sheets", "dirty sheet", "dirty sheets",
+        "wet bed", "leaked on bed", "spilled", "spill", "trash is full",
+        "trash can", "clean room", "mess", "messy"
+    ]
+
+    # ✅ your rule: environmental complaints ALWAYS go CNA (unless true emergency above)
+    if fuzzy_hit(ENV_KEYWORDS, threshold=0.70) or fuzzy_hit(CNA_CLEANING, threshold=0.75):
         return "cna"
 
-    # --- 4) Environment / comfort (CNA) ---
-    environment_terms = [
-        "light is too bright", "lights are too bright", "too bright",
-        "room is too cold", "room is cold", "room is hot", "too hot",
-        "temperature", "thermostat",
-        "tv is too loud", "tv too loud", "turn down the tv",
-        "door open", "door closed", "close the door", "shut the door",
-        "noise", "noisy", "too loud",
-        "curtain", "blinds", "shade", "window"
+    # ----------------- 4) GENERAL CLINICAL vs GENERAL SUPPORT -----------------
+    NURSE_KEYWORDS = [
+        "pain", "hurts", "medication", "meds", "nausea", "vomit", "vomiting",
+        "throwing up", "dizzy", "sick", "fever", "chills",
+        "iv", "pump", "staples", "incision", "nipple", "nipples",
+        "breast", "breasts", "rash", "newborn rash", "drainage", "hurt",
+        "blood pressure", "bp"
     ]
-    if matches_any(environment_terms):
+
+    CNA_SUPPORT_KEYWORDS = [
+        "water", "ice", "ice chips", "snacks",
+        "help to the bathroom", "to the bathroom", "help me walk",
+        "help me to the shower", "shower", "help with blankets",
+        "need supplies", "pads", "mesh underwear", "diaper", "diapers",
+        "wipes", "formula", "bottle", "blue pad", "white pad"
+    ]
+
+    if fuzzy_hit(NURSE_KEYWORDS, threshold=0.78):
+        return "nurse"
+    if fuzzy_hit(CNA_SUPPORT_KEYWORDS, threshold=0.78):
         return "cna"
 
-    # --- 5) Bed / sheets / linens + bodily fluids ---
-    bed_terms = [
-        "sheet", "sheets", "bed", "blanket", "blankets",
-        "pillow", "pillows", "mattress", "linens", "linen", "floor"
-    ]
-    fluid_terms = [
-        "blood", "lochia", "pee", "urine", "poop", "stool",
-        "diarrhea", "vomit", "throw up", "threw up", "spit up"
-    ]
-    severe_bleeding_terms = [
-        "a lot of blood", "lots of blood", "so much blood",
-        "soaking", "soaked", "pouring", "everywhere",
-        "golf ball", "big clot", "large clot", "filling my pad",
-        "saturating"
-    ]
+    # ----------------- 5) DEFAULT: CNA (safer workload-wise) -----------------
+    return "cna"
 
-    if matches_any(bed_terms) and matches_any(fluid_terms):
-        if matches_any(severe_bleeding_terms) or has_red_flag():
-            return "nurse"
-        return "cna"
-
-    # --- 6) Toileting / mobility (CNA unless red flags) ---
-    toileting_terms = [
-        "bathroom", "toilet", "commode", "bedside commode",
-        "help to the bathroom", "help me to the bathroom",
-        "help to toilet", "help me to toilet"
-    ]
-    mobility_terms = [
-        "help me out of bed", "get out of bed", "help me stand",
-        "help me walk", "walk to the nursery", "help me walk to",
-        "ambulate", "walk in the hall"
-    ]
-    if matches_any(toileting_terms) or matches_any(mobility_terms):
-        if has_red_flag():
-            return "nurse"
-        return "cna"
-
-    # --- 7) General supplies / comfort (CNA) ---
-    cna_supply_terms = [
-        "mesh underwear", "underwear", "panties",
-        "pad", "pads", "peribottle", "peri bottle", "perineal bottle",
-        "tucks", "witch hazel", "dermoplast", "spray",
-        "ice pack", "icepack", "ice chips",
-        "diaper", "diapers", "wipes",
-        "blanket", "blankets", "pillow", "pillows",
-        "towel", "towels", "gown", "hospital gown",
-        "socks", "slippers",
-        "snack", "snacks", "juice", "water", "ice water", "hot water",
-        "blue pad", "blue pads", "chux", "white pad", "white pads"
-    ]
-    if matches_any(cna_supply_terms):
-        return "cna"
-
-    # --- 8) If we got here: default to nurse for safety ---
-    return "nurse"
 
 
 
@@ -1877,6 +1802,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
