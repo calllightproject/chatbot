@@ -5,6 +5,9 @@ import os
 import json
 import smtplib
 import importlib
+import re
+import difflib
+
 from datetime import datetime, date, time, timezone
 from collections import defaultdict
 from email.message import EmailMessage
@@ -393,14 +396,58 @@ def route_note_intelligently(note_text: str) -> str:
       - Breastfeeding / baby-feeding concerns → Nurse
       - Formula / bottle refills → CNA
       - Otherwise: default to Nurse for safety
+
+    Also normalizes text, strips filler phrases, and does light fuzzy matching
+    so minor typos still route correctly.
     """
     if not note_text:
         return "nurse"
 
-    text = note_text.lower()
+    # --- basic normalization + phrase sanitization ---
+    raw = note_text.lower()
 
-    def contains_any(words):
-        return any(w in text for w in words)
+    # remove non alphanumeric (keep spaces and apostrophes)
+    text = re.sub(r"[^a-z0-9\s']", " ", raw)
+    # collapse extra whitespace
+    text = re.sub(r"\s+", " ", text).strip()
+
+    # remove common filler / polite phrases that don't affect routing
+    filler_phrases = [
+        "just", "kind of", "kinda", "sort of",
+        "maybe", "a little", "a bit",
+        "really", "very", "so",
+        "please", "can i", "could i", "would you",
+        "i think", "i feel like",
+    ]
+    # remove multi-word fillers first
+    for fp in sorted(filler_phrases, key=len, reverse=True):
+        text = text.replace(f" {fp} ", " ")
+
+    text = re.sub(r"\s+", " ", text).strip()
+    tokens = text.split()
+
+    def matches_any(words, threshold: float = 0.82) -> bool:
+        """
+        - Exact substring match for phrases
+        - Fuzzy per-word match for single-word keywords
+        """
+        if not text:
+            return False
+
+        for kw in words:
+            kw_clean = kw.lower()
+            # exact phrase match
+            if kw_clean in text:
+                return True
+
+            kw_tokens = kw_clean.split()
+            # for single-word keywords, allow fuzzy match against each token
+            if len(kw_tokens) == 1:
+                for t in tokens:
+                    if difflib.SequenceMatcher(None, t, kw_clean).ratio() >= threshold:
+                        return True
+
+        return False
 
     # --- 1) Hard emergency / always-nurse red flags ---
     emergency_phrases = [
@@ -440,13 +487,11 @@ def route_note_intelligently(note_text: str) -> str:
         "staples came out", "staple came out",
     ]
 
-    # if any emergency phrase or red flag → nurse immediately
-    if contains_any(emergency_phrases) or contains_any(nurse_red_flag_symptoms):
+    if matches_any(emergency_phrases) or matches_any(nurse_red_flag_symptoms):
         return "nurse"
 
-    # Helper so we can re-check later when deciding CNA vs nurse
-    def has_red_flag():
-        return contains_any(nurse_red_flag_symptoms) or contains_any(emergency_phrases)
+    def has_red_flag() -> bool:
+        return matches_any(emergency_phrases) or matches_any(nurse_red_flag_symptoms)
 
     # --- 2) Breastfeeding / baby feeding (nurse) ---
     breastfeeding_terms = [
@@ -456,17 +501,16 @@ def route_note_intelligently(note_text: str) -> str:
         "baby won't wake to feed", "baby wont wake to feed",
         "sleepy baby and won't eat", "sleepy baby and not eating"
     ]
-
-    if contains_any(breastfeeding_terms):
+    if matches_any(breastfeeding_terms):
         return "nurse"
 
     # baby feeding but not specifically formula/bottle yet
     if "baby" in text or "newborn" in text:
-        if contains_any(["won't eat", "wont eat", "not eating", "won't wake", "wont wake", "not waking"]):
+        if matches_any(["won't eat", "wont eat", "not eating", "won't wake", "wont wake", "not waking"]):
             return "nurse"
 
     # --- 3) Formula / bottle refills (CNA unless red flag) ---
-    if contains_any(["formula", "bottle", "more formula", "need formula", "bottle of formula"]):
+    if matches_any(["formula", "bottle", "more formula", "need formula", "bottle of formula"]):
         if has_red_flag():
             return "nurse"
         return "cna"
@@ -477,11 +521,11 @@ def route_note_intelligently(note_text: str) -> str:
         "room is too cold", "room is cold", "room is hot", "too hot",
         "temperature", "thermostat",
         "tv is too loud", "tv too loud", "turn down the tv",
-        "door open", "door closed", "can you close the door",
+        "door open", "door closed", "close the door", "shut the door",
         "noise", "noisy", "too loud",
         "curtain", "blinds", "shade", "window"
     ]
-    if contains_any(environment_terms):
+    if matches_any(environment_terms):
         return "cna"
 
     # --- 5) Bed / sheets / linens + bodily fluids ---
@@ -500,11 +544,9 @@ def route_note_intelligently(note_text: str) -> str:
         "saturating"
     ]
 
-    if contains_any(bed_terms) and contains_any(fluid_terms):
-        # If clearly severe or any red-flag context → nurse
-        if contains_any(severe_bleeding_terms) or has_red_flag():
+    if matches_any(bed_terms) and matches_any(fluid_terms):
+        if matches_any(severe_bleeding_terms) or has_red_flag():
             return "nurse"
-        # Otherwise (e.g., "there's blood on my sheets") → CNA
         return "cna"
 
     # --- 6) Toileting / mobility (CNA unless red flags) ---
@@ -518,7 +560,7 @@ def route_note_intelligently(note_text: str) -> str:
         "help me walk", "walk to the nursery", "help me walk to",
         "ambulate", "walk in the hall"
     ]
-    if contains_any(toileting_terms) or contains_any(mobility_terms):
+    if matches_any(toileting_terms) or matches_any(mobility_terms):
         if has_red_flag():
             return "nurse"
         return "cna"
@@ -536,7 +578,7 @@ def route_note_intelligently(note_text: str) -> str:
         "snack", "snacks", "juice", "water", "ice water", "hot water",
         "blue pad", "blue pads", "chux", "white pad", "white pads"
     ]
-    if contains_any(cna_supply_terms):
+    if matches_any(cna_supply_terms):
         return "cna"
 
     # --- 8) If we got here: default to nurse for safety ---
@@ -1835,6 +1877,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
