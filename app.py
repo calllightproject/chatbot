@@ -464,7 +464,11 @@ def route_note_intelligently(note_text: str) -> str:
 
     # ----------------- 2) BREASTFEEDING & BABY FEEDING -----------------
     # Formula refill (non-clinical) -> CNA, unless caught above as emergency
-    if "formula" in text and any(w in text for w in ["more", "extra", "another", "refill", "ran out", "run out"]):
+    # (strengthened a bit more for your "more formula for feeding my baby" case)
+    if "formula" in text and any(
+        p in text
+        for p in ["more formula", "need more formula", "extra formula", "another bottle", "refill", "ran out", "run out"]
+    ):
         return "cna"
 
     FEED_NURSE_KEYWORDS = [
@@ -493,6 +497,11 @@ def route_note_intelligently(note_text: str) -> str:
         "dirty sheet", "dirty sheets", "wet bed", "leaked on bed",
         "spilled", "spill", "clean room", "mess", "messy"
     ]
+
+    # 🔒 Special handling for your failing phrase:
+    # "The room is really cold, I need a blanket"
+    if ("room" in text and "cold" in text) or ("cold" in text and "blanket" in text):
+        return "cna"
 
     # special: any sheet/bed-cleaning context → CNA
     if any(w in norm for w in ["sheet", "sheets", "dirty sheets", "dirty sheet"]):
@@ -566,6 +575,7 @@ def route_note_intelligently(note_text: str) -> str:
 
     # ----------------- 7) DEFAULT: CNA (safer workload-wise) -----------------
     return "cna"
+
 
 
 
@@ -1924,6 +1934,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
