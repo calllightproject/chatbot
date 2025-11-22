@@ -569,6 +569,64 @@ def route_note_intelligently(note_text: str) -> str:
 
 
 
+
+def classify_escalation_tier(text: str) -> str:
+    """
+    Classify a request into an escalation tier:
+      - 'emergent' : life-threatening / severe red flags
+      - 'clinical' : symptoms, pain, bleeding, medication, breastfeeding, etc.
+      - 'routine'  : supplies, comfort, room issues, basic help
+    Works on the English-normalized text (english_user_input).
+    """
+    if not text:
+        return "routine"
+
+    t = text.lower().strip()
+
+    # --- EMERGENT / RED-FLAG KEYWORDS ---
+    emergent_phrases = [
+        "emergency",
+        "not breathing", "cant breathe", "can't breathe",
+        "hard to breathe", "trouble breathing", "short of breath",
+        "chest pain",
+        "heart is racing", "heart racing",
+        "passed out", "fainted",
+        "seizure", "stroke",
+        "feel like i'm dying", "feel like im dying",
+        "seeing spots",
+        "call 911",
+    ]
+
+    for phrase in emergent_phrases:
+        if phrase in t:
+            return "emergent"
+
+    # --- CLINICAL / NURSE-LEVEL, BUT NOT FULL EMERGENCY ---
+    clinical_keywords = [
+        "pain", "hurts",
+        "severe headache", "bad headache", "migraine", "headache",
+        "bleeding", "blood", "clots", "golf ball",
+        "incision", "staples", "stitches", "wound",
+        "drainage", "oozing", "infected", "infection",
+        "nausea", "nauseous", "vomit", "vomiting", "throwing up",
+        "dizzy", "lightheaded", "faint",
+        "fever", "chills",
+        "blood pressure", "bp", "bp cuff", "blood pressure cuff",
+        "rash", "newborn rash",
+        "medication", "meds",
+        "breastfeeding", "breast feeding", "latch", "latching",
+        "engorged", "mastitis",
+        "dermoplast",
+    ]
+
+    for kw in clinical_keywords:
+        if kw in t:
+            return "clinical"
+
+    # --- EVERYTHING ELSE: ROUTINE ---
+    # supplies, room comfort, food/water, blankets, shower help, etc.
+    return "routine"
+
 # --- Core Helper Functions ---
 def log_to_audit_trail(event_type, details):
     try:
@@ -636,6 +694,8 @@ def process_request(role, subject, user_input, reply_message):
     """
     Persist the request, emit dashboard updates, and (optionally) email.
     Uses _current_room() to honor ?room=... and validates against 231–260.
+    Also classifies each request into an escalation tier:
+      'emergent' | 'clinical' | 'routine'
     """
     # Language-normalize the user_input for analytics/dashboards
     lang = session.get('language', 'en')
@@ -650,6 +710,9 @@ def process_request(role, subject, user_input, reply_message):
         room_number = None  # store as NULL/None instead of "N/A"
 
     is_first_baby = session.get('is_first_baby')
+
+    # --- NEW: classify escalation tier based on the English text ---
+    tier = classify_escalation_tier(english_user_input)  # 'emergent' | 'clinical' | 'routine'
 
     # Write to DB in background (non-blocking)
     socketio.start_background_task(
@@ -676,6 +739,7 @@ def process_request(role, subject, user_input, reply_message):
         'room': room_number,                   # None if unknown
         'request': english_user_input,
         'role': role,                          # 'nurse' | 'cna'
+        'tier': tier,                          # 'emergent' | 'clinical' | 'routine'
         'timestamp': datetime.now(timezone.utc).isoformat()
     })
 
@@ -1860,6 +1924,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
