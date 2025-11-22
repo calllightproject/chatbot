@@ -392,8 +392,8 @@ def route_note_intelligently(note_text: str) -> str:
       - Environment/cleaning/bedding => CNA
       - Supplies/mobility/help-to-bed/bathroom/shower => CNA
       - Breastfeeding & baby-feeding rules
-      - Fuzzy matching for typos ("lite", "brite", "coled", etc.)
-    NOTE: Per user rule, ANY cold pack / ice pack request -> CNA.
+      - Fuzzy matching for typos, but more conservative for emergencies
+    NOTE: Per your rule, ANY cold pack / ice pack request -> CNA.
     """
     if not note_text:
         return "cna"
@@ -406,26 +406,37 @@ def route_note_intelligently(note_text: str) -> str:
     def contains_any(words):
         return any(w in text for w in words)
 
-    def fuzzy_hit(keywords, threshold=0.78):
-        """Return True if any token is fuzzily close to any keyword."""
+    def fuzzy_hit(keywords, threshold=0.78, require_prefix=False):
+        """
+        Return True if any token is fuzzily close to any keyword.
+        If require_prefix=True, token and keyword must share first letter
+        (prevents 'cold'≈'code', 'feeding'≈'bleeding', etc.).
+        """
         if not tokens:
             return False
+
         for kw in keywords:
             kw_clean = kw.lower().strip()
+            if not kw_clean:
+                continue
+
             # phrase match (for multiword patterns)
             if " " in kw_clean and kw_clean in norm:
                 return True
+
             # token-level fuzzy match (for typos)
             for t in tokens:
                 if len(t) < 3:
                     continue
+                if require_prefix and t[0] != kw_clean[0]:
+                    continue
+
                 ratio = difflib.SequenceMatcher(None, t, kw_clean).ratio()
                 if ratio >= threshold:
                     return True
         return False
 
     # ----------------- 0) COLD PACK / ICE PACK => ALWAYS CNA -----------------
-    # Your rule: ANY cold/ice pack request (even if they mention incision/bottom)
     COLD_PACK_PHRASES = [
         "cold pack", "cold packs", "ice pack", "ice packs", "icepack", "icepacks"
     ]
@@ -443,7 +454,10 @@ def route_note_intelligently(note_text: str) -> str:
 
     BLOOD_KEYWORDS = [
         "blood", "bleeding", "heavy bleeding", "lots of blood", "gushing",
-        "clots", "golf ball", "soaked", "saturated", "hemorrhage", "hemorrhaging"
+        "clots", "golf ball", "soaked", "saturated", "hemorrhage", "hemorrhaging",
+        # explicit soaking-pads patterns (PPH red flags)
+        "soaking pads", "soaking my pads", "pads soaking",
+        "pads are soaked", "pads soaked"
     ]
 
     PAIN_INCISION_KEYWORDS = [
@@ -455,19 +469,28 @@ def route_note_intelligently(note_text: str) -> str:
         "dizzy", "lightheaded", "faint", "fainted"
     ]
 
-    if contains_any(EMERGENCY_PHRASES) or fuzzy_hit(EMERGENCY_PHRASES, threshold=0.72):
+    # Emergencies: very conservative fuzzy (must look almost identical & same first letter)
+    if contains_any(EMERGENCY_PHRASES) or fuzzy_hit(
+        EMERGENCY_PHRASES, threshold=0.90, require_prefix=True
+    ):
         return "nurse"
 
-    # ANYTHING that looks like serious bleeding/pain/incision/vision/etc. → nurse
-    if contains_any(BLOOD_KEYWORDS) or fuzzy_hit(BLOOD_KEYWORDS + PAIN_INCISION_KEYWORDS, threshold=0.72):
+    # Serious bleeding/pain/incision/vision → nurse (also conservative fuzzy)
+    if contains_any(BLOOD_KEYWORDS) or fuzzy_hit(
+        BLOOD_KEYWORDS + PAIN_INCISION_KEYWORDS,
+        threshold=0.85,
+        require_prefix=True,
+    ):
         return "nurse"
 
     # ----------------- 2) BREASTFEEDING & BABY FEEDING -----------------
-    # Formula refill (non-clinical) -> CNA, unless caught above as emergency
-    # (strengthened a bit more for your "more formula for feeding my baby" case)
+    # Formula refill (non-clinical) -> CNA, unless it hit an emergency/pain rule above
     if "formula" in text and any(
         p in text
-        for p in ["more formula", "need more formula", "extra formula", "another bottle", "refill", "ran out", "run out"]
+        for p in [
+            "more formula", "need more formula", "extra formula",
+            "another bottle", "refill", "ran out", "run out"
+        ]
     ):
         return "cna"
 
@@ -478,8 +501,10 @@ def route_note_intelligently(note_text: str) -> str:
         "baby wont eat", "baby won't eat", "baby not eating",
         "baby wont latch", "baby won't latch"
     ]
-    if contains_any(FEED_NURSE_KEYWORDS) or fuzzy_hit(FEED_NURSE_KEYWORDS, threshold=0.72):
-        # anything breastfeeding/baby-feeding (not just formula refills) → nurse
+    if contains_any(FEED_NURSE_KEYWORDS) or fuzzy_hit(
+        FEED_NURSE_KEYWORDS, threshold=0.72
+    ):
+        # anything breastfeeding / baby-feeding (not just formula refills) → nurse
         return "nurse"
 
     # ----------------- 3) ENVIRONMENT / CLEANING / BEDDING -> CNA -----------------
@@ -498,8 +523,7 @@ def route_note_intelligently(note_text: str) -> str:
         "spilled", "spill", "clean room", "mess", "messy"
     ]
 
-    # 🔒 Special handling for your failing phrase:
-    # "The room is really cold, I need a blanket"
+    # special: any room-cold + blanket request → CNA
     if ("room" in text and "cold" in text) or ("cold" in text and "blanket" in text):
         return "cna"
 
@@ -507,11 +531,13 @@ def route_note_intelligently(note_text: str) -> str:
     if any(w in norm for w in ["sheet", "sheets", "dirty sheets", "dirty sheet"]):
         return "cna"
 
-    # special: bed + pad together => bed pad, not perineal pad → CNA
+    # special: bed + pad together => bed pad, not medical pad → CNA
     if "bed" in norm and "pad" in norm:
         return "cna"
 
-    if fuzzy_hit(ENV_KEYWORDS, threshold=0.70) or fuzzy_hit(CNA_CLEANING, threshold=0.75):
+    if fuzzy_hit(ENV_KEYWORDS, threshold=0.70) or fuzzy_hit(
+        CNA_CLEANING, threshold=0.75
+    ):
         return "cna"
 
     # ----------------- 4) MOBILITY / BATHROOM / SHOWER HELP -> CNA -----------------
@@ -525,11 +551,15 @@ def route_note_intelligently(note_text: str) -> str:
         "help getting to the shower", "help me shower",
         "help me to the nursery", "help me to the sink",
     ]
-    if contains_any(MOBILITY_CNA_PHRASES) or fuzzy_hit(MOBILITY_CNA_PHRASES, threshold=0.78):
+    if contains_any(MOBILITY_CNA_PHRASES) or fuzzy_hit(
+        MOBILITY_CNA_PHRASES, threshold=0.78
+    ):
         return "cna"
 
     # bathroom / toilet / shower as general assistance (no red flags) → CNA
-    if any(w in text for w in ["toilet", "bathroom", "shower"]) and not contains_any(PAIN_INCISION_KEYWORDS + EMERGENCY_PHRASES):
+    if any(w in text for w in ["toilet", "bathroom", "shower"]) and not contains_any(
+        PAIN_INCISION_KEYWORDS + EMERGENCY_PHRASES
+    ):
         return "cna"
 
     # incontinence / bed accidents → CNA
@@ -537,7 +567,9 @@ def route_note_intelligently(note_text: str) -> str:
         "peed the bed", "peed in the bed", "peeing the bed",
         "i peed in the hat", "i peed in hat", "urinated in bed"
     ]
-    if contains_any(INCONTINENCE_PHRASES) or fuzzy_hit(INCONTINENCE_PHRASES, threshold=0.78):
+    if contains_any(INCONTINENCE_PHRASES) or fuzzy_hit(
+        INCONTINENCE_PHRASES, threshold=0.78
+    ):
         return "cna"
 
     # ----------------- 5) DEVICES / ROOM EQUIPMENT -----------------
@@ -545,7 +577,9 @@ def route_note_intelligently(note_text: str) -> str:
         "bp cuff", "blood pressure cuff", "cuff isn't working", "cuff isnt working",
         "call light", "call-light", "tv remote", "remote not working",
     ]
-    if contains_any(DEVICE_CNA_PHRASES) or fuzzy_hit(DEVICE_CNA_PHRASES, threshold=0.78):
+    if contains_any(DEVICE_CNA_PHRASES) or fuzzy_hit(
+        DEVICE_CNA_PHRASES, threshold=0.78
+    ):
         return "cna"
 
     # ----------------- 6) GENERAL CLINICAL vs GENERAL SUPPORT -----------------
@@ -1934,6 +1968,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
