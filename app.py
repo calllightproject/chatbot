@@ -386,19 +386,18 @@ def send_email_alert(subject, body, room_number):
         print(f"EMAIL disabled or failed: {e}")
 
 # --- Smart Routing Logic ---
-# --- Smart Routing Logic (with safer fuzzy + environment priority) ---
-# --- Smart Routing Logic (simplified, with your exact phrases) ---
+# --- Smart Routing Logic (rule-based, tuned to your feedback) ---
 def route_note_intelligently(note_text: str) -> str:
     """
     Decide 'nurse' vs 'cna' for free-text notes using:
       - Emergency / red-flag symptoms       -> NURSE
-      - Blood/bleeding/vision/neuro        -> NURSE
-      - Breastfeeding / baby feeding       -> NURSE (except formula refills)
-      - Formula refills                    -> CNA
-      - Toileting / shower / mobility      -> CNA
-      - Environmental / comfort (light, temp, blankets, noise) -> CNA
-      - Supplies                           -> CNA
-      - Otherwise                          -> NURSE (safety default)
+      - Blood/bleeding/vision/neuro         -> NURSE
+      - Breastfeeding & baby-feeding issues -> NURSE (except pure formula refills)
+      - Formula refill / supply             -> CNA
+      - Toileting / shower / mobility       -> CNA
+      - Environmental / comfort             -> CNA
+      - Supplies                            -> CNA
+      - Otherwise                           -> NURSE (safety default)
     """
     if not note_text:
         return "nurse"
@@ -408,9 +407,95 @@ def route_note_intelligently(note_text: str) -> str:
     def has_any(words):
         return any(w in text for w in words)
 
-    # ----------------- 0) YOUR SPECIFIC EXAMPLES (HARD OVERRIDES) -----------------
-    # These are the exact phrases you tested and what you want:
-    if "heart is racing" in text:
+    # ----------------- 0) YOUR SPECIFIC OVERRIDES -----------------
+    # These are "hard rules" based on your exact desired behavior.
+
+    # Soaking pads -> nurse (hemorrhage concern)
+    if "soaking pads" in text or "soaking my pads" in text:
+        return "nurse"
+
+    # BP cuff broken -> CNA (equipment issue, not BP symptom)
+    if "blood pressure cuff" in text and has_any([
+        "not working", "isn't working", "isnt working",
+        "broken", "won't work", "wont work", "stopped working"
+    ]):
+        return "cna"
+
+    # Bottle / feeding supplies (non-clinical) -> CNA
+    if "bottle" in text and has_any(["another", "more", "extra", "refill"]):
+        return "cna"
+
+    # Burp cloths -> CNA
+    if "burp cloth" in text or "burp cloths" in text:
+        return "cna"
+
+    # "I need more nipples" -> CNA (supply; not nipple pain)
+    if "more nipples" in text:
+        return "cna"
+
+    # More pillows specifically for breastfeeding comfort -> CNA (supply)
+    if "pillows" in text and "breastfeed" in text:
+        return "cna"
+
+    # Room cleaning / mess
+    if has_any([
+        "clean the room", "clean my room"
+    ]):
+        return "cna"
+
+    # Bed uncomfortable -> CNA (comfort)
+    if "bed feels uncomfortable" in text or "uncomfortable bed" in text:
+        return "cna"
+
+    # Thermostat adjustments -> CNA
+    if "thermostat" in text:
+        return "cna"
+
+    # Peed the bed / hat -> CNA (cleaning / toileting)
+    if "peed the bed" in text or "peed in the bed" in text:
+        return "cna"
+    if "peed in the hat" in text or "pee in the hat" in text:
+        return "cna"
+
+    # Sheets need to be changed -> CNA
+    if "sheets need to be changed" in text or "change my sheets" in text:
+        return "cna"
+
+    # Help getting to shower / bathroom / walking / nursery / sink / off bed -> CNA
+    if has_any([
+        "need help getting to the shower",
+        "need help going to the shower",
+        "help me to the shower",
+        "help me get to the shower",
+        "help getting to the shower",
+        "help going to the shower",
+        "help me to the bathroom",
+        "help going to the bathroom",
+        "need help going to the bathroom",
+        "need help going to the toilet",
+        "help me to the toilet",
+        "help going to the toilet",
+        "help standing up",
+        "need help standing up",
+        "feel weak and need help walking",
+        "need help walking",
+        "help me walk",
+        "help me walk to the nursery",
+        "help me to the nursery",
+        "help me to the sink",
+        "help getting off the bed",
+        "help me get off the bed",
+        "i can't get out of bed alone",
+        "i cant get out of bed alone"
+    ]):
+        return "cna"
+
+    # "I need more cold packs." -> CNA (comfort supply, not med)
+    if "cold packs" in text and has_any(["more", "another", "extra"]):
+        return "cna"
+
+    # Your earlier specific examples that we want locked in:
+    if "heart is racing" in text or "heart racing" in text:
         return "nurse"
 
     if "feel like i'm dying" in text or "feel like im dying" in text:
@@ -422,12 +507,6 @@ def route_note_intelligently(note_text: str) -> str:
     if "need more formula" in text and "feed" in text:
         return "cna"
 
-    if ("need help going to the shower" in text or
-        "i need help going to the shower" in text or
-        "help me to the shower" in text or
-        "help me get to the shower" in text):
-        return "cna"
-
     if "seeing spots" in text:
         return "nurse"
 
@@ -437,15 +516,15 @@ def route_note_intelligently(note_text: str) -> str:
         "hard to breathe", "trouble breathing", "short of breath",
         "shortness of breath",
         "my chest hurts", "chest pain",
-        "heart is racing", "heart racing",
         "help emergency", "this is an emergency",
         "i passed out", "i fainted", "going to faint",
         "having a seizure", "having seizure",
-        "having a stroke", "call 911"
+        "having a stroke", "stroke symptoms",
+        "call 911"
     ]):
         return "nurse"
 
-    # ----------------- 2) BLOOD / BLEEDING / VISION / NEURO -> NURSE -----------------
+    # ----------------- 2) BLEEDING / VISION / NEURO -> NURSE -----------------
     if has_any([
         "a lot of blood", "lots of blood", "so much blood",
         "blood everywhere", "big clot", "large clot", "golf ball clot",
@@ -474,66 +553,78 @@ def route_note_intelligently(note_text: str) -> str:
         "baby won't wake to feed", "baby wont wake to feed",
         "sleepy baby and won't eat", "sleepy baby and not eating",
         "breastfeeding", "breast feeding", "latch", "latching",
-        "nipple", "nipples", "cracked nipple", "engorged", "mastitis",
-        "milk", "let down", "letdown", "pump", "pumping"
+        "nipple pain", "nipple is cracked", "nipples are cracked",
+        "cracked nipple", "engorged", "mastitis",
+        "milk won't come in", "milk wont come in",
+        "let down", "letdown",
+        "pump hurts", "pumping hurts", "pain with pumping",
+        "pump", "pumping"
     ]):
         return "nurse"
 
-    # ----------------- 5) TOILETING / SHOWER / MOBILITY -> CNA -----------------
+    # ----------------- 5) TOILETING / SHOWER / MOBILITY (generic) -> CNA -----------------
     if has_any([
-        "help me to the bathroom", "help to the bathroom",
+        "help to the bathroom", "help me to the bathroom",
         "help going to the bathroom", "need help going to the bathroom",
-        "need help going to the shower", "help going to the shower",
-        "help me get to the shower", "help me to the shower",
-        "help me walk", "help me get out of bed",
-        "help me stand", "help me walk to the nursery",
-        "commode", "bedside commode"
+        "help me walk", "help me to walk",
+        "help me get out of bed", "help getting out of bed",
+        "bedside commode", "commode"
     ]):
         return "cna"
 
     # ----------------- 6) ENVIRONMENTAL / COMFORT -> CNA -----------------
-    # includes your typo cases like "lite/brigte/coled/blankit"
     if has_any([
-        "light", "lights", "lite", "brite", "bright", "too bright", "dim", "dark",
-        "room is cold", "room feels cold", "cold room", "sooo coled", "coled",
+        "light is too bright", "lights are too bright",
+        "light too bright", "lights too bright",
+        "lights are too dim", "room is too dark", "too dark",
+        "light", "lights", "lite", "brite", "bright",
+        "room is cold", "room feels cold", "cold room",
+        "sooo coled", "coled",
         "room is hot", "too hot", "too warm", "warm in here",
         "tv too loud", "tv is too loud", "volume too loud", "volume high",
         "noise in the hallway", "noisy", "noise in hall",
         "need another blanket", "need more blankets", "blanket", "blankets", "blankit",
-        "change my sheets", "change the sheets", "dirty sheets", "wet bed",
-        "need new pillow", "new pillow", "pillow is flat",
-        "trash is full", "trash can", "garbage", "room is messy", "clean room", "mess"
+        "change my sheets", "dirty sheets", "wet bed",
+        "need new pillow", "new pillow", "pillow is flat", "more pillows",
+        "trash is full", "trash can", "garbage",
+        "room is messy", "clean room", "messy room", "clean up the room"
     ]):
         return "cna"
 
     # ----------------- 7) SUPPLIES / COMFORT ITEMS -> CNA -----------------
     if has_any([
-        "mesh underwear", "underwear", "panties",
-        "pad", "pads", "peribottle", "peri bottle", "perineal bottle",
-        "tucks", "witch hazel", "dermoplast", "spray",
-        "ice pack", "icepack", "ice chips",
+        "mesh underwear", "underwear", "mesh panties",
+        "pads", "peribottle", "peri bottle", "perineal bottle",
+        "tucks", "witch hazel",
+        "ice pack", "ice packs", "icepack", "ice chips",
         "diaper", "diapers", "wipes",
         "towel", "towels", "gown", "hospital gown",
         "socks", "slippers",
         "snack", "snacks", "juice", "water", "ice water", "hot water",
         "blue pad", "blue pads", "white pad", "white pads",
         "baby hat", "baby blanket",
+        "more nipples", "extra nipples",  # already handled above but safe here
+        "burp cloth", "burp cloths",
+        "bottle", "another bottle",
+        "more pillows", "extra pillows"
     ]):
         return "cna"
 
-    # ----------------- 8) GENERAL CLINICAL WORDS -> NURSE -----------------
+    # ----------------- 8) GENERAL CLINICAL WORDS / MEDS -> NURSE -----------------
     if has_any([
-        "pain", "hurts", "medication", "meds",
-        "nausea", "vomit", "vomiting", "throwing up",
+        "pain", "hurts", "really hurts",
+        "medication", "meds", "need my meds",
+        "nausea", "nauseous", "vomit", "vomiting", "throwing up",
         "sick", "fever", "chills",
         "iv", "pump", "staples", "incision",
-        "rash", "drainage", "hurt",
-        "blood pressure", "bp"
+        "rash", "newborn rash", "drainage", "hurt",
+        "blood pressure", "bp",
+        "dermoplast"  # treat as medication -> nurse
     ]):
         return "nurse"
 
     # ----------------- 9) SAFETY DEFAULT -----------------
-    # When in doubt, send to nurse.
+    # When in doubt, send to nurse (safer clinically).
     return "nurse"
 
 
@@ -1831,6 +1922,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
