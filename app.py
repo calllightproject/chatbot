@@ -414,14 +414,10 @@ def route_note_intelligently(note_text: str) -> str:
     if "soaking pads" in text or "soaking my pads" in text:
         return "nurse"
 
-    # BP cuff broken -> CNA (equipment issue, not symptom)
+    # BP cuff / monitor issues -> CNA (equipment, not a symptom)
     if ("blood pressure" in text or "bp" in text) and (
         "cuff" in text or "monitor" in text or "machine" in text
-    ) and has_any([
-        "not working", "isn't working", "isnt working", "broken",
-        "won't work", "wont work", "stopped working", "not functioning",
-        "malfunction", "error", "keeps beeping"
-    ]):
+    ):
         return "cna"
 
     # Bottle / feeding supplies (non-clinical) -> CNA
@@ -496,6 +492,10 @@ def route_note_intelligently(note_text: str) -> str:
         "get out of bed alone",
         "get out of bed by myself"
     ]):
+        return "cna"
+
+    # Generic "help me stand up" variants -> CNA (extra safety)
+    if "stand up" in text and "help" in text:
         return "cna"
 
     # "I need more cold packs." -> CNA (comfort supply, not med)
@@ -634,8 +634,6 @@ def route_note_intelligently(note_text: str) -> str:
     # ----------------- 9) SAFETY DEFAULT -----------------
     # When in doubt, send to nurse (safer clinically).
     return "nurse"
-
-
 
 
 
@@ -1931,6 +1929,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
