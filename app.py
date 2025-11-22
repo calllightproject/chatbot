@@ -414,10 +414,13 @@ def route_note_intelligently(note_text: str) -> str:
     if "soaking pads" in text or "soaking my pads" in text:
         return "nurse"
 
-    # BP cuff broken -> CNA (equipment issue, not BP symptom)
-    if "blood pressure cuff" in text and has_any([
-        "not working", "isn't working", "isnt working",
-        "broken", "won't work", "wont work", "stopped working"
+    # BP cuff broken -> CNA (equipment issue, not symptom)
+    if ("blood pressure" in text or "bp" in text) and (
+        "cuff" in text or "monitor" in text or "machine" in text
+    ) and has_any([
+        "not working", "isn't working", "isnt working", "broken",
+        "won't work", "wont work", "stopped working", "not functioning",
+        "malfunction", "error", "keeps beeping"
     ]):
         return "cna"
 
@@ -486,7 +489,12 @@ def route_note_intelligently(note_text: str) -> str:
         "help getting off the bed",
         "help me get off the bed",
         "i can't get out of bed alone",
-        "i cant get out of bed alone"
+        "i cant get out of bed alone",
+        "i cant get out of bed",
+        "i can't get out of bed",
+        "cannot get out of bed",
+        "get out of bed alone",
+        "get out of bed by myself"
     ]):
         return "cna"
 
@@ -562,7 +570,7 @@ def route_note_intelligently(note_text: str) -> str:
     ]):
         return "nurse"
 
-    # ----------------- 5) TOILETING / SHOWER / MOBILITY (generic) -> CNA -----------------
+    # ----------------- 5) TOILETING / SHOWER / MOBILITY (generic backup) -> CNA -----------------
     if has_any([
         "help to the bathroom", "help me to the bathroom",
         "help going to the bathroom", "need help going to the bathroom",
@@ -603,7 +611,7 @@ def route_note_intelligently(note_text: str) -> str:
         "snack", "snacks", "juice", "water", "ice water", "hot water",
         "blue pad", "blue pads", "white pad", "white pads",
         "baby hat", "baby blanket",
-        "more nipples", "extra nipples",  # already handled above but safe here
+        "more nipples", "extra nipples",
         "burp cloth", "burp cloths",
         "bottle", "another bottle",
         "more pillows", "extra pillows"
@@ -619,13 +627,14 @@ def route_note_intelligently(note_text: str) -> str:
         "iv", "pump", "staples", "incision",
         "rash", "newborn rash", "drainage", "hurt",
         "blood pressure", "bp",
-        "dermoplast"  # treat as medication -> nurse
+        "dermoplast"
     ]):
         return "nurse"
 
     # ----------------- 9) SAFETY DEFAULT -----------------
     # When in doubt, send to nurse (safer clinically).
     return "nurse"
+
 
 
 
@@ -1922,6 +1931,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
