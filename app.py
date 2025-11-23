@@ -392,14 +392,14 @@ def route_note_intelligently(note_text: str) -> str:
       - Environment/cleaning/bedding => CNA
       - Supplies/mobility/help-to-bed/bathroom/shower => CNA
       - Breastfeeding & baby-feeding rules
-      - Fuzzy matching with guardrails (avoid 'trash' -> 'rash' issues)
-
+      - Fuzzy matching for typos ("lite", "brite", "coled", etc.)
     NOTE: Per user rule, ANY cold/ice pack request -> CNA.
     """
     if not note_text:
         return "cna"
 
     text = note_text.lower().strip()
+    # normalized for token-based fuzzy matching
     norm = re.sub(r"[^a-z0-9\s]", " ", text)
     tokens = [t for t in norm.split() if t]
 
@@ -407,24 +407,16 @@ def route_note_intelligently(note_text: str) -> str:
         return any(w in text for w in words)
 
     def fuzzy_hit(keywords, threshold=0.78):
-        """
-        Return True if any token is fuzzily close to any keyword.
-        Guardrail: for very short keywords (<=4 chars like 'rash', 'pain'),
-        require an exact token match to avoid 'trash' -> 'rash', 'complain' -> 'pain'.
-        """
+        """Return True if any token is fuzzily close to any keyword."""
         if not tokens:
             return False
         for kw in keywords:
             kw_clean = kw.lower().strip()
-            # phrase match (multi-word pattern)
+            # phrase match (for multiword patterns)
             if " " in kw_clean and kw_clean in norm:
                 return True
+            # token-level fuzzy match (for typos)
             for t in tokens:
-                # Short keywords: must match exactly as a token
-                if len(kw_clean) <= 4:
-                    if t == kw_clean:
-                        return True
-                    continue
                 if len(t) < 3:
                     continue
                 ratio = difflib.SequenceMatcher(None, t, kw_clean).ratio()
@@ -433,14 +425,15 @@ def route_note_intelligently(note_text: str) -> str:
         return False
 
     # ----------------- 0) COLD PACK / ICE PACK => ALWAYS CNA -----------------
+    # Your rule: ANY cold/ice pack request (even if they mention incision/bottom)
     COLD_PACK_PHRASES = [
-        "cold pack", "cold packs",
-        "ice pack", "ice packs", "icepack", "icepacks"
+        "cold pack", "cold packs", "ice pack", "ice packs", "icepack", "icepacks"
     ]
     if contains_any(COLD_PACK_PHRASES):
         return "cna"
 
     # ----------------- 1) EMERGENCY / RED-FLAG -> ALWAYS NURSE -----------------
+    # Hard cardiopulmonary/neuro red flags
     EMERGENCY_PHRASES = [
         "emergency",
         "not breathing", "cant breathe", "can't breathe",
@@ -462,6 +455,8 @@ def route_note_intelligently(note_text: str) -> str:
         "funny feeling in my chest",
     ]
 
+    # Vision changes: ALL vision changes are emergent
+    # (use token/phrase match to avoid 'television')
     EMERGENT_VISION_PHRASES = [
         "blurry vision", "vision is blurry",
         "vision is weird",
@@ -472,6 +467,7 @@ def route_note_intelligently(note_text: str) -> str:
         "can't see", "cant see",
     ]
 
+    # Serious bleeding / soaking pads
     EMERGENT_BLEEDING_PHRASES = [
         "blood gushing", "gushing blood",
         "blood gushing down my legs",
@@ -481,6 +477,7 @@ def route_note_intelligently(note_text: str) -> str:
         "changing pads every 10 minutes", "changing pads every 20 minutes",
     ]
 
+    # Incision catastrophes → emergent
     INCISION_EMERGENT_TRIGGERS = [
         "incision is leaking", "incision leaking",
         "incision opened", "incision popped", "incision popped open",
@@ -490,9 +487,9 @@ def route_note_intelligently(note_text: str) -> str:
     ]
 
     def has_vision_change():
+        # explicit phrases OR 'vision' as its own word
         if any(p in text for p in EMERGENT_VISION_PHRASES):
             return True
-        # word boundary for generic "vision"
         if re.search(r"\bvision\b", norm):
             return True
         return False
@@ -503,60 +500,54 @@ def route_note_intelligently(note_text: str) -> str:
     def has_catastrophic_incision():
         return "incision" in text and any(p in text for p in INCISION_EMERGENT_TRIGGERS)
 
-    # ALL vision changes -> nurse
     if has_vision_change():
         return "nurse"
 
-    # Soaking pads / gushing blood -> nurse
     if has_emergent_bleeding():
         return "nurse"
 
-    # Incision popped / leaking / pus -> nurse
     if has_catastrophic_incision():
-        return "nurse"
-
-    # Chest + pain/hurts/pressure/tightness -> nurse (even if not literally "chest pain")
-    if "chest" in text and any(w in text for w in ["pain", "hurts", "hurt", "pressure", "tightness", "tight"]):
         return "nurse"
 
     if contains_any(EMERGENCY_PHRASES) or fuzzy_hit(EMERGENCY_PHRASES, threshold=0.72):
         return "nurse"
 
-    # ----------------- 2) GENERAL BLOOD/PAIN/INCISION (but skip BP cuff equipment) -----------------
+    # ----------------- 2) GENERAL BLOOD/PAIN/INCISION/NEURO → NURSE -----------------
     BLOOD_KEYWORDS = [
         "blood", "bleeding",
         "clots", "golf ball", "soaked", "saturated", "hemorrhage", "hemorrhaging"
     ]
+
     PAIN_INCISION_KEYWORDS = [
         "severe pain", "sharp pain", "really bad pain", "terrible pain",
-        "incision", "staples", "stitches", "wound", "infection", "infected",
-        "drainage", "oozing",
+        "incision", "staples", "stitches", "wound", "infection",
+        "infected", "drainage", "oozing",
         "burning pain", "migraine", "severe headache", "headache",
         "dizzy", "lightheaded", "faint", "fainted",
         "rash", "newborn rash",
     ]
 
-    BP_EQUIPMENT_PHRASES = [
-        "blood pressure cuff", "bp cuff", "blood pressure machine"
-    ]
+    if contains_any(BLOOD_KEYWORDS) or fuzzy_hit(BLOOD_KEYWORDS + PAIN_INCISION_KEYWORDS, threshold=0.72):
+        return "nurse"
 
-    if not any(p in text for p in BP_EQUIPMENT_PHRASES):
-        if contains_any(BLOOD_KEYWORDS) or fuzzy_hit(BLOOD_KEYWORDS + PAIN_INCISION_KEYWORDS, threshold=0.72):
-            return "nurse"
+    # ----------------- 3) VERY SPECIFIC SUPPLY PHRASES -----------------
+    # 3a) Burp cloths -> always CNA
+    if "burp cloth" in text:
+        return "cna"
 
-    # ----------------- 3) FORMULA / BABY FEEDING -----------------
-    # Formula refills -> CNA (non-clinical), unless clearly a clinical issue
+    # 3b) Formula: distinguish supply vs clinical
     if "formula" in text:
-        # clinical formula problems
         clinical_formula_flags = [
             "rash", "vomit", "vomiting", "throwing up", "projectile",
             "diarrhea", "allergic", "reaction",
-            "won't eat", "wont eat", "not eating"
+            "won't eat", "wont eat", "not eating",
+            "won't drink", "wont drink", "not drinking",
         ]
+        # Clinical formula concern → nurse
         if any(p in text for p in clinical_formula_flags):
             return "nurse"
 
-        # pure supply / refill
+        # Clearly a refill / more-formula request → CNA
         if (
             "more formula" in text
             or "extra formula" in text
@@ -565,23 +556,29 @@ def route_note_intelligently(note_text: str) -> str:
             or "refill" in text
             or "ran out" in text
             or "run out" in text
-            or ("more" in text and "formula" in text)
+            or "feeding my baby" in text
+            or "feed my baby" in text
+            or "for my baby" in text
         ):
             return "cna"
+        # If it's just "formula" in some vague way, we let later rules decide.
 
+    # ----------------- 4) BREASTFEEDING & BABY FEEDING -----------------
     FEED_NURSE_KEYWORDS = [
-        "breastfeeding", "breast feeding", "breastfeed", "breast feed",
-        "latch", "latching",
+        "breastfeeding", "breast feeding", "latch", "latching",
         "nipple", "nipples", "milk", "let down", "engorged",
         "mastitis", "pump", "pumping",
         "baby wont eat", "baby won't eat", "baby not eating",
         "baby wont latch", "baby won't latch",
         "help me breastfeed", "help with breastfeeding",
+        "supplement with formula", "change formula",
+        "formula made baby sick", "formula upset",
     ]
     if contains_any(FEED_NURSE_KEYWORDS) or fuzzy_hit(FEED_NURSE_KEYWORDS, threshold=0.72):
+        # anything breastfeeding/baby-feeding-clinical → nurse
         return "nurse"
 
-    # ----------------- 4) ENVIRONMENT / CLEANING / BEDDING -> CNA -----------------
+    # ----------------- 5) ENVIRONMENT / CLEANING / BEDDING -> CNA -----------------
     ENV_KEYWORDS = [
         "light", "lights", "bright", "dim", "dark", "lamp",
         "cold", "hot", "warm", "temperature",
@@ -589,6 +586,7 @@ def route_note_intelligently(note_text: str) -> str:
         "tv", "television", "volume", "loud", "noise", "noisy", "quiet",
         "curtain", "curtains", "door",
     ]
+
     CNA_CLEANING = [
         "trash is full", "trash overflowing", "trash can", "garbage",
         "change my sheets", "change the sheets",
@@ -596,22 +594,18 @@ def route_note_intelligently(note_text: str) -> str:
         "spilled", "spill", "clean room", "mess", "messy",
     ]
 
-    # sheet/bed cleaning context -> CNA
-    if any(w in norm for w in ["sheet", "sheets", "dirty sheet", "dirty sheets"]):
+    # special: any sheet/bed-cleaning context → CNA
+    if any(w in norm for w in ["sheet", "sheets", "dirty sheets", "dirty sheet"]):
         return "cna"
 
-    # bed + pad together => bed pad, not perineal pad -> CNA
+    # special: bed + pad together => bed pad, not perineal pad → CNA
     if "bed" in norm and "pad" in norm:
         return "cna"
 
-    # explicit trash / cleaning -> CNA
-    if fuzzy_hit(CNA_CLEANING, threshold=0.70):
+    if fuzzy_hit(ENV_KEYWORDS, threshold=0.70) or fuzzy_hit(CNA_CLEANING, threshold=0.75):
         return "cna"
 
-    if fuzzy_hit(ENV_KEYWORDS, threshold=0.70):
-        return "cna"
-
-    # ----------------- 5) MOBILITY / BATHROOM / SHOWER HELP -> CNA -----------------
+    # ----------------- 6) MOBILITY / BATHROOM / SHOWER HELP -> CNA -----------------
     MOBILITY_CNA_PHRASES = [
         "help getting out of bed", "help out of bed",
         "help me out of bed", "help me stand up", "help standing up",
@@ -627,8 +621,7 @@ def route_note_intelligently(note_text: str) -> str:
         return "cna"
 
     # bathroom / toilet / shower as general assistance (no red flags) → CNA
-    PAIN_INCISION_OR_EMERG = PAIN_INCISION_KEYWORDS + EMERGENCY_PHRASES
-    if any(w in text for w in ["toilet", "bathroom", "shower"]) and not contains_any(PAIN_INCISION_OR_EMERG):
+    if any(w in text for w in ["toilet", "bathroom", "shower"]) and not contains_any(PAIN_INCISION_KEYWORDS + EMERGENCY_PHRASES):
         return "cna"
 
     # incontinence / bed accidents → CNA
@@ -639,7 +632,8 @@ def route_note_intelligently(note_text: str) -> str:
     if contains_any(INCONTINENCE_PHRASES) or fuzzy_hit(INCONTINENCE_PHRASES, threshold=0.78):
         return "cna"
 
-    # ----------------- 6) DEVICES / ROOM EQUIPMENT -----------------
+    # ----------------- 7) DEVICES / ROOM EQUIPMENT -----------------
+    # BP cuff / remotes → CNA    |   IV pump → nurse
     DEVICE_CNA_PHRASES = [
         "bp cuff", "blood pressure cuff", "cuff isn't working", "cuff isnt working",
         "blood pressure machine", "bp machine",
@@ -658,7 +652,7 @@ def route_note_intelligently(note_text: str) -> str:
     if contains_any(DEVICE_CNA_PHRASES) or fuzzy_hit(DEVICE_CNA_PHRASES, threshold=0.78):
         return "cna"
 
-    # ----------------- 7) GENERAL CLINICAL vs GENERAL SUPPORT -----------------
+    # ----------------- 8) GENERAL CLINICAL vs GENERAL SUPPORT -----------------
     NURSE_KEYWORDS = [
         "pain", "hurts",
         "medication", "meds",
@@ -670,6 +664,7 @@ def route_note_intelligently(note_text: str) -> str:
         "blood pressure", "bp",
         "dermoplast",
     ]
+
     CNA_SUPPORT_KEYWORDS = [
         "water", "ice", "ice chips", "snacks",
         "blanket", "blankets",
@@ -687,9 +682,8 @@ def route_note_intelligently(note_text: str) -> str:
     if fuzzy_hit(CNA_SUPPORT_KEYWORDS, threshold=0.78):
         return "cna"
 
-    # ----------------- 8) DEFAULT: CNA -----------------
+    # ----------------- 9) DEFAULT: CNA (safer workload-wise) -----------------
     return "cna"
-
 
 def classify_escalation_tier(text: str) -> str:
     """
@@ -750,6 +744,7 @@ def classify_escalation_tier(text: str) -> str:
         "changing pads every 10 minutes", "changing pads every 20 minutes",
     ]
 
+    # Incision catastrophes → emergent
     incision_emergent_triggers = [
         "incision is leaking", "incision leaking",
         "incision opened", "incision popped", "incision popped open",
@@ -757,10 +752,6 @@ def classify_escalation_tier(text: str) -> str:
         "wound opened", "wound came open",
         "pus", "purulent drainage",
     ]
-
-    # 0) BP cuff / equipment: treat as routine (not clinical) unless other red flags
-    if "blood pressure cuff" in t or "bp cuff" in t or "blood pressure machine" in t:
-        return "routine"
 
     # 1) ANY vision change is emergent
     if any(p in t for p in emergent_vision_phrases) or has_phrase("vision"):
@@ -774,13 +765,30 @@ def classify_escalation_tier(text: str) -> str:
     if "incision" in t and any(p in t for p in incision_emergent_triggers):
         return "emergent"
 
-    # 4) Chest + pain/hurts/pressure/tightness -> emergent
-    if "chest" in t and any(w in t for w in ["pain", "hurts", "hurt", "pressure", "tightness", "tight"]):
+    # 4) Chest + pain/hurts → emergent
+    if "chest" in t and (
+        "hurt" in t or "hurts" in t or "hurting" in t or "pain" in t or "really bad" in t
+    ):
+        # This will catch things like:
+        # "My chest hurts really bad"
+        # "My chest is in a lot of pain"
         return "emergent"
 
     # 5) Other hard-coded emergent phrases
     for phrase in emergent_phrases:
         if phrase in t or has_phrase(phrase):
+            return "emergent"
+
+    # 6) IV + red/hot/burning/streaking/fever → emergent (IV complication)
+    if "iv" in t:
+        iv_red_flags = [
+            "red", "redness", "burning", "burns",
+            "streaking", "streaks",
+            "hot", "warm",
+            "fever", "chills",
+            "really hurts", "hurts really bad", "severe pain", "bad pain",
+        ]
+        if any(flag in t for flag in iv_red_flags):
             return "emergent"
 
     # --- CLINICAL / NURSE-LEVEL, BUT NOT FULL EMERGENCY ---
@@ -795,10 +803,13 @@ def classify_escalation_tier(text: str) -> str:
         "fever", "chills",
         "rash", "newborn rash",
         "medication", "meds",
-        "blood pressure", "bp",
+        "blood pressure", "bp", "bp cuff", "blood pressure cuff",
         "iv", "iv site", "iv looks swollen", "iv is swollen",
-        "breastfeeding", "breast feeding", "breastfeed", "breast feed",
+        # breastfeeding & baby-feeding clinical issues
+        "breastfeeding", "breast feeding", "breastfeed", "breast fed",
+        "latch", "latching",
         "engorged", "mastitis",
+        "help me breastfeed", "help with breastfeeding",
         "dermoplast",
         # neuro-ish leg weakness/numbness (clinical tier, even if CNA might help)
         "can't feel my legs", "cant feel my legs",
@@ -806,16 +817,11 @@ def classify_escalation_tier(text: str) -> str:
     ]
 
     for kw in clinical_keywords:
-        if " " in kw:
-            # multi-word: substring is fine
-            if kw in t:
-                return "clinical"
-        else:
-            # single-word: require word-boundary match (no 'trash' -> 'rash')
-            if has_phrase(kw):
-                return "clinical"
+        if kw in t or has_phrase(kw):
+            return "clinical"
 
     # --- EVERYTHING ELSE: ROUTINE ---
+    # supplies, room comfort, food/water, blankets, shower help, etc.
     return "routine"
 
 
@@ -2116,6 +2122,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
