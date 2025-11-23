@@ -570,12 +570,11 @@ def route_note_intelligently(note_text: str) -> str:
 
 
 
-
 def classify_escalation_tier(text: str) -> str:
     """
     Classify a request into an escalation tier:
       - 'emergent' : life-threatening / severe red flags
-      - 'clinical' : symptoms, pain, bleeding, medication, breastfeeding, etc.
+      - 'clinical' : symptoms, pain, bleeding, medication, breastfeeding, IV pump, etc.
       - 'routine'  : supplies, comfort, room issues, basic help
     Works on the English-normalized text (english_user_input).
     """
@@ -592,7 +591,7 @@ def classify_escalation_tier(text: str) -> str:
         "chest pain",
         "heart is racing", "heart racing",
         "passed out", "fainted",
-        "seizure", "stroke",
+        "seizure", "seizing", "i'm seizing", "im seizing",
         "feel like i'm dying", "feel like im dying",
         "seeing spots",
         "call 911",
@@ -617,6 +616,7 @@ def classify_escalation_tier(text: str) -> str:
         "medication", "meds",
         "breastfeeding", "breast feeding", "latch", "latching",
         "engorged", "mastitis",
+        "iv", "pump",               # so "My IV pump is beeping" => clinical
         "dermoplast",
     ]
 
@@ -625,8 +625,9 @@ def classify_escalation_tier(text: str) -> str:
             return "clinical"
 
     # --- EVERYTHING ELSE: ROUTINE ---
-    # supplies, room comfort, food/water, blankets, shower help, etc.
+    # supplies, room comfort, diapers, blankets, basic help, etc.
     return "routine"
+
 
 # --- Core Helper Functions ---
 def log_to_audit_trail(event_type, details):
@@ -1925,6 +1926,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
