@@ -387,21 +387,20 @@ def send_email_alert(subject, body, room_number):
 
 def route_note_intelligently(note_text: str) -> str:
     """
-    Decide 'nurse' vs 'cna' for free-text notes using OB-specific rules:
-      • Emergencies → Nurse
-      • Neuro/vision/chest/heart/bleeding/incision issues → Nurse
-      • Leg numbness → Nurse (epidural regression) unless paired with red flags → Emergent handled elsewhere
-      • Breastfeeding → Nurse (except formula refill → CNA)
-      • Supplies/linens/environment → CNA
-      • Mobility/bathroom/shower → CNA
-      • Devices/equipment failure → CNA
-      • Cold packs → CNA (per user)
-      • Fuzzy matching for typos
+    Decide 'nurse' vs 'cna' for free-text notes using:
+      - Hard safety rules (blood/pain/incision/breathing/vision/etc. => nurse)
+      - Leg numbness/weakness => nurse (clinical by default)
+      - Environment/cleaning/bedding => CNA
+      - Supplies/mobility/help-to-bed/bathroom/shower => CNA
+      - Breastfeeding & baby-feeding rules
+      - Fuzzy matching for typos ("lite", "brite", "coled", etc.)
+    NOTE: Per user rule, ANY cold pack / ice pack request -> CNA.
     """
     if not note_text:
         return "cna"
 
     text = note_text.lower().strip()
+    # normalized for token-based fuzzy matching
     norm = re.sub(r"[^a-z0-9\s]", " ", text)
     tokens = [t for t in norm.split() if t]
 
@@ -409,208 +408,312 @@ def route_note_intelligently(note_text: str) -> str:
         return any(w in text for w in words)
 
     def fuzzy_hit(keywords, threshold=0.78):
+        """Return True if any token is fuzzily close to any keyword."""
+        if not tokens:
+            return False
         for kw in keywords:
             kw_clean = kw.lower().strip()
+            # phrase match (for multiword patterns)
             if " " in kw_clean and kw_clean in norm:
                 return True
+            # token-level fuzzy match (for typos)
             for t in tokens:
                 if len(t) < 3:
                     continue
-                if difflib.SequenceMatcher(None, t, kw_clean).ratio() >= threshold:
+                ratio = difflib.SequenceMatcher(None, t, kw_clean).ratio()
+                if ratio >= threshold:
                     return True
         return False
 
-    # -----------------------------
-    # 0) ALWAYS CNA: COLD PACKS
-    # -----------------------------
-    if contains_any(["cold pack", "cold packs", "ice pack", "ice packs", "icepack", "icepacks"]):
+    # ----------------- 0) COLD PACK / ICE PACK => ALWAYS CNA -----------------
+    # Your rule: ANY cold/ice pack request (even if they mention incision/bottom/breast)
+    COLD_PACK_PHRASES = [
+        "cold pack", "cold packs", "ice pack", "ice packs", "icepack", "icepacks"
+    ]
+    if contains_any(COLD_PACK_PHRASES):
         return "cna"
 
-    # -----------------------------
-    # 1) ALWAYS NURSE: EMERGENT RED FLAGS
-    # -----------------------------
-    EMERGENT = [
-        "emergency", "not breathing", "cant breathe", "can't breathe",
-        "hard to breathe", "difficulty breathing", "short of breath",
-        "chest pain", "pressure in my chest", "tightness in my chest",
-        "heart is racing", "heart racing", "palpitations",
-        "passed out", "fainted", "seizure", "stroke",
+    # ----------------- 1) EMERGENCY / RED-FLAG -> ALWAYS NURSE -----------------
+    EMERGENCY_PHRASES = [
+        "emergency", "code",
+        "not breathing", "cant breathe", "can't breathe",
+        "hard to breathe", "trouble breathing",
+        "short of breath", "shortness of breath", "difficulty breathing",
+        "chest pain", "chest hurts",
+        "chest pressure", "pressure in my chest", "tightness in my chest",
+        "heart racing", "heart is racing", "heart beating fast",
+        "heart feels weird", "heart feels strange", "palpitations",
+        "passed out", "fainted",
+        "seizure", "seizing", "having a seizure", "stroke",
         "feel like i'm dying", "feel like im dying",
-        "seeing spots", "vision blurry", "blurry vision",
-        "confused", "confusion", "disoriented",
-        "i feel weird", "i feel off", "i feel strange", "i feel funny",
-        "something feels wrong", "i don't feel right",
+        "seeing spots", "seeing stars",
     ]
 
-    # ANY of these → nurse
-    if contains_any(EMERGENT) or fuzzy_hit(EMERGENT, threshold=0.72):
-        return "nurse"
-
-    # -----------------------------
-    # 2) ALWAYS NURSE: HEAVY BLEEDING
-    # -----------------------------
-    BLEEDING = [
-        "blood gushing", "gushing blood", "soaked through", "saturated",
-        "soaking pads", "soaking through", "heavy bleeding",
-        "lots of blood", "clots", "golf ball", "hemorrhage",
+    # heavy bleeding / hemorrhage
+    BLOOD_BASE = ["blood", "bleeding", "hemorrhage", "hemorrhaging"]
+    HEMORRHAGE_DESCRIPTORS = [
+        "gushing", "running down", "all over", "everywhere",
+        "golf ball", "golf-ball", "soaked", "soaking", "saturated"
     ]
-    if contains_any(BLEEDING) or fuzzy_hit(BLEEDING, threshold=0.72):
-        return "nurse"
 
-    # -----------------------------
-    # 3) ALWAYS NURSE: INCISION RED FLAGS
-    # -----------------------------
-    INCISION_EMERGENT = [
-        "incision leaking", "incision popped open", "incision opened",
-        "incision burst", "wound opened", "incision drainage",
-        "pus", "oozing", "discharge from incision",
+    PAIN_INCISION_KEYWORDS = [
+        "severe pain", "sharp pain", "really bad pain", "terrible pain",
+        "incision", "staples", "stitches", "wound", "infection",
+        "infected", "pus", "drainage", "oozing",
+        "burning pain", "migraine", "severe headache",
+        "headache", "vision", "blurry vision",
+        "dizzy", "lightheaded", "faint", "fainted"
     ]
-    if contains_any(INCISION_EMERGENT) or fuzzy_hit(INCISION_EMERGENT, threshold=0.72):
+
+    # direct emergent phrases
+    if contains_any(EMERGENCY_PHRASES) or fuzzy_hit(EMERGENCY_PHRASES, threshold=0.72):
         return "nurse"
 
-    INCISION_CLINICAL = [
-        "incision hurts", "incision sore", "incision warm",
-        "incision red", "incision burning",
+    # heavy bleeding logic: blood + scary descriptors OR soaking pads
+    if any(b in text for b in BLOOD_BASE):
+        if any(d in text for d in HEMORRHAGE_DESCRIPTORS) or "running down my legs" in text:
+            return "nurse"
+        # clots only count as hemorrhage if blood/bleeding also present
+        if ("clot" in text or "clots" in text) and any(b in text for b in BLOOD_BASE):
+            return "nurse"
+
+    # soaking through pads (even if they never type "blood")
+    if "soaking" in text and "pad" in text:
+        return "nurse"
+
+    # severe neuro: vision + headache
+    if any(w in text for w in ["vision", "blurry vision", "seeing spots", "seeing stars"]) and \
+       any(h in text for h in ["severe headache", "bad headache", "headache", "migraine"]):
+        return "nurse"
+
+    # ----------------- 2) LEG NUMBNESS / WEAKNESS => NURSE (CLINICAL TIER) ----
+    LEG_NEURO_PHRASES = [
+        "can't feel my legs", "cant feel my legs",
+        "legs feel weak", "leg feels weak",
+        "legs are weak", "numb legs", "legs are numb"
     ]
-    if contains_any(INCISION_CLINICAL) or fuzzy_hit(INCISION_CLINICAL):
+    if contains_any(LEG_NEURO_PHRASES) or fuzzy_hit(LEG_NEURO_PHRASES, threshold=0.80):
+        # per your choice A: always nurse (clinical tier will handle emergent vs clinical)
         return "nurse"
 
-    # -----------------------------
-    # 4) BREASTFEEDING
-    # -----------------------------
-    if "formula" in text and any(w in text for w in ["more", "another", "extra", "refill"]):
+    # ----------------- 3) BREASTFEEDING & BABY FEEDING -----------------
+    # Formula refill (non-clinical) -> CNA, unless caught as emergent above
+    if "formula" in text and any(w in text for w in ["more", "extra", "another", "refill", "ran out", "run out", "feeding my baby", "feed my baby"]):
         return "cna"
 
-    BF_NURSE = [
+    FEED_NURSE_KEYWORDS = [
         "breastfeeding", "breast feeding", "latch", "latching",
-        "engorged", "mastitis", "pump", "pumping",
-        "nipple", "nipples",
+        "engorged", "mastitis",
+        "nipple", "nipples", "milk", "let down",
+        "baby wont eat", "baby won't eat", "baby not eating",
+        "baby wont latch", "baby won't latch"
     ]
-    if contains_any(BF_NURSE) or fuzzy_hit(BF_NURSE, threshold=0.75):
+    if contains_any(FEED_NURSE_KEYWORDS) or fuzzy_hit(FEED_NURSE_KEYWORDS, threshold=0.72):
+        # anything breastfeeding/baby-feeding (not just formula refills) → nurse
         return "nurse"
 
-    # -----------------------------
-    # 5) LEG NUMBNESS (Epidural)
-    # -----------------------------
-    LEG_KEYWORDS = ["cant feel my legs", "can't feel my legs", "legs numb", "leg numb"]
-    if contains_any(LEG_KEYWORDS) or fuzzy_hit(LEG_KEYWORDS, threshold=0.75):
-        return "nurse"
-
-    # -----------------------------
-    # 6) ENVIRONMENT / CLEANING → CNA
-    # -----------------------------
-    ENV = [
-        "light", "lights", "bright", "dim", "dark",
+    # ----------------- 4) ENVIRONMENT / CLEANING / BEDDING -> CNA -------------
+    ENV_KEYWORDS = [
+        "light", "lights", "bright", "dim", "dark", "lamp",
         "cold", "hot", "warm", "temperature",
-        "trash", "trash is full", "garbage",
-        "dirty sheet", "dirty sheets",
+        "room is cold", "too cold", "too hot",
+        "thermostat",
+        "tv", "television", "volume", "loud", "noise", "noisy", "quiet",
+        "curtain", "curtains", "door"
     ]
-    if fuzzy_hit(ENV, threshold=0.70) or contains_any(ENV):
+
+    CNA_CLEANING = [
+        "trash is full", "trash overflowing", "trash can", "garbage",
+        "change my sheets", "change the sheets",
+        "dirty sheet", "dirty sheets", "wet bed", "leaked on bed",
+        "spilled", "spill", "clean room", "mess", "messy"
+    ]
+
+    # sheet/bed cleaning context → CNA
+    if any(w in norm for w in ["sheet", "sheets", "dirty sheets", "dirty sheet"]):
         return "cna"
 
-    # -----------------------------
-    # 7) MOBILITY / BATHROOM → CNA
-    # -----------------------------
-    MOBILITY = [
-        "help getting out of bed", "help me stand", "help standing",
-        "help me walk", "help walking",
+    # bed + pad together => likely bed pad, not perineal pad → CNA
+    if "bed" in norm and "pad" in norm:
+        return "cna"
+
+    if fuzzy_hit(ENV_KEYWORDS, threshold=0.70) or fuzzy_hit(CNA_CLEANING, threshold=0.75):
+        return "cna"
+
+    # ----------------- 5) MOBILITY / BATHROOM / SHOWER HELP -> CNA ------------
+    MOBILITY_CNA_PHRASES = [
+        "help getting out of bed", "help out of bed",
+        "help me out of bed", "help me stand up", "help standing up",
+        "help me stand", "help me to stand",
+        "help me walk", "help walking", "help to walk",
         "help to the bathroom", "help to the toilet",
-        "help to the shower", "help getting to the shower",
-        "help to the nursery", "help to the sink",
-        "i can't get out of bed", "cant get out of bed",
+        "help going to the bathroom", "help going to the toilet",
+        "help getting into the shower", "help me to the shower",
+        "help getting to the shower", "help me shower",
+        "help me to the nursery", "help me to the sink",
     ]
-    if contains_any(MOBILITY) or fuzzy_hit(MOBILITY):
+    if contains_any(MOBILITY_CNA_PHRASES) or fuzzy_hit(MOBILITY_CNA_PHRASES, threshold=0.78):
         return "cna"
 
-    # -----------------------------
-    # 8) DEVICE ISSUES
-    # -----------------------------
-    CNA_DEVICE = [
-        "bp cuff", "blood pressure cuff", "cuff broken", "cuff isn't working",
-        "iv pump beeping", "pump beeping", "machine beeping",
-        "call light", "remote not working", "tv remote",
-    ]
-    if contains_any(CNA_DEVICE) or fuzzy_hit(CNA_DEVICE):
+    # generic bathroom / toilet / shower help (no red flags) → CNA
+    if any(w in text for w in ["toilet", "bathroom", "shower"]) and not contains_any(PAIN_INCISION_KEYWORDS + EMERGENCY_PHRASES):
         return "cna"
 
-    IV_CLINICAL = [
-        "iv looks swollen", "iv swollen", "iv hurts", "iv stings",
-        "iv burning", "burns when iv running",
+    # incontinence / bed accidents → CNA
+    INCONTINENCE_PHRASES = [
+        "peed the bed", "peed in the bed", "peeing the bed",
+        "i peed in the hat", "i peed in hat", "urinated in bed"
     ]
-    if contains_any(IV_CLINICAL) or fuzzy_hit(IV_CLINICAL):
-        return "nurse"
+    if contains_any(INCONTINENCE_PHRASES) or fuzzy_hit(INCONTINENCE_PHRASES, threshold=0.78):
+        return "cna"
 
-    # -----------------------------
-    # 9) SUPPLIES → CNA
-    # -----------------------------
-    CNA_SUPPLIES = [
+    # ----------------- 6) DEVICES / ROOM EQUIPMENT -> CNA ---------------------
+    DEVICE_CNA_PHRASES = [
+        "bp cuff", "blood pressure cuff", "cuff isn't working", "cuff isnt working",
+        "cuff is broken", "blood pressure cuff is broken",
+        "call light", "call-light",
+        "tv remote", "remote not working", "remote is broken",
+        "iv pump", "iv pump is beeping", "pump is beeping", "beeping nonstop"
+    ]
+    if contains_any(DEVICE_CNA_PHRASES) or fuzzy_hit(DEVICE_CNA_PHRASES, threshold=0.78):
+        return "cna"
+
+    # ----------------- 7) GENERAL CLINICAL vs GENERAL SUPPORT -----------------
+    NURSE_KEYWORDS = [
+        "pain", "hurts", "sore",
+        "medication", "meds",
+        "nausea", "nauseous", "vomit", "vomiting", "throwing up",
+        "sick", "fever", "chills",
+        "iv", "staples", "incision", "rash", "newborn rash",
+        "drainage", "hurt",
+        "blood pressure", "bp",
+        "dermoplast"
+    ]
+
+    CNA_SUPPORT_KEYWORDS = [
         "water", "ice", "ice chips", "snacks",
-        "blanket", "pillow", "pillows",
+        "blanket", "blankets",
+        "sheet", "sheets", "pillow", "pillows",
+        "need supplies", "supplies",
+        "pads", "mesh underwear", "diaper", "diapers",
+        "wipes", "formula", "bottle", "bottles",
         "burp cloth", "burp cloths",
-        "diapers", "wipes", "pads", "mesh underwear",
+        "blue pad", "white pad"
     ]
-    if contains_any(CNA_SUPPLIES) or fuzzy_hit(CNA_SUPPLIES):
+
+    if fuzzy_hit(NURSE_KEYWORDS, threshold=0.78):
+        return "nurse"
+    if fuzzy_hit(CNA_SUPPORT_KEYWORDS, threshold=0.78):
         return "cna"
 
-    # -----------------------------
-    # DEFAULT → CNA
-    # -----------------------------
+    # ----------------- 8) DEFAULT: CNA (safer workload-wise) ------------------
     return "cna"
+
 
 
 
 def classify_escalation_tier(text: str) -> str:
     """
-    emergent: life-threatening / severe warning signs
-    clinical: symptoms requiring RN evaluation but not emergent
-    routine: supplies, comfort, environment, basic help
+    Classify a request into an escalation tier:
+      - 'emergent' : life-threatening / severe red flags
+      - 'clinical' : symptoms, pain, bleeding, medication, breastfeeding, etc.
+      - 'routine'  : supplies, comfort, room issues, basic help
+    Works on the English-normalized text (english_user_input).
     """
     if not text:
         return "routine"
 
     t = text.lower().strip()
 
-    # EMERGENT
-    emergent = [
-        "not breathing", "difficulty breathing", "short of breath",
-        "chest pain", "pressure in my chest", "tightness in my chest",
-        "heart racing", "heart is racing", "palpitations",
-        "fainted", "passed out", "seizure", "stroke",
-        "feel like i'm dying", "feel like im dying",
-        "vision blurry", "blurry vision", "seeing spots",
-        "severe headache", "bad headache",
-        "blood gushing", "heavy bleeding", "soaking pads",
-        "incision popped open", "incision leaking", "pus", "oozing",
-        "i feel weird", "i feel off", "i feel strange", "i don't feel right",
-    ]
-    for phrase in emergent:
-        if phrase in t:
+    def has(*phrases):
+        return any(p in t for p in phrases)
+
+    # --- 1) EMERGENT / RED-FLAG CHECKS ------------------------------------
+
+    # Breathing / chest / heart
+    if has(
+        "not breathing", "cant breathe", "can't breathe",
+        "hard to breathe", "trouble breathing",
+        "short of breath", "shortness of breath", "difficulty breathing",
+        "chest pain", "chest hurts",
+        "chest pressure", "pressure in my chest", "tightness in my chest",
+        "heart racing", "heart is racing", "heart beating fast",
+        "heart feels weird", "heart feels strange", "palpitations",
+        "pressure in my chest"
+    ):
+        return "emergent"
+
+    # “I feel like I’m dying”
+    if has("feel like i'm dying", "feel like im dying"):
+        return "emergent"
+
+    # Stroke / seizure
+    if has("stroke", "seizure", "seizing", "having a seizure", "face drooping", "slurred speech"):
+        return "emergent"
+
+    # Vision + headache combo
+    if (has("vision", "blurry vision", "seeing spots", "seeing stars")
+            and has("severe headache", "bad headache", "headache", "migraine")):
+        return "emergent"
+
+    # Heavy bleeding / hemorrhage
+    if "blood" in t or "bleeding" in t:
+        if has("gushing", "running down", "all over", "everywhere",
+               "golf ball", "golf-ball", "soaked", "soaking", "saturated"):
+            return "emergent"
+        # clots + blood/bleeding
+        if ("clot" in t or "clots" in t) and ("blood" in t or "bleeding" in t):
             return "emergent"
 
-    # CLINICAL
-    clinical = [
-        "pain", "hurts",
-        "headache", "migraine",
-        "bleeding", "clots", "golf ball",
-        "incision", "wound",
-        "nausea", "vomit", "vomiting",
-        "dizzy", "lightheaded",
+    # soaking pads (even if no explicit "blood")
+    if "soaking" in t and "pad" in t:
+        return "emergent"
+
+    # Incision scary phrases
+    if has("incision popped", "incision opened", "incision is open", "incision is leaking", "incision leaking", "incision burst"):
+        return "emergent"
+
+    # Leg neuro emergent if paired with infection/thrombus clues
+    if has("can't feel my legs", "cant feel my legs", "numb legs", "legs feel weak", "leg feels weak"):
+        if has("red", "hot", "swollen", "burning", "streak", "fever"):
+            return "emergent"
+
+    # --- 2) CLINICAL (NURSE-LEVEL, NON-EMERGENT) --------------------------
+
+    clinical_keywords = [
+        "pain", "hurts", "sore",
+        "severe headache", "bad headache", "migraine", "headache",
+        "bleeding", "blood", "clots", "golf ball",
+        "incision", "staples", "stitches", "wound",
+        "drainage", "oozing", "infected", "infection",
+        "nausea", "nauseous", "vomit", "vomiting", "throwing up",
+        "dizzy", "lightheaded", "faint",
         "fever", "chills",
-        "bp cuff", "blood pressure",
-        "breastfeeding", "latch", "engorged", "mastitis",
-        "iv looks swollen", "iv swollen", "iv hurts",
-        "cant feel my legs", "can't feel my legs", "legs numb",
-        "rash",
-        "pressure in my chest but not pain",
-        "something wrong with my heart",
+        "blood pressure", "bp", "bp cuff", "blood pressure cuff",
+        "rash", "newborn rash",
+        "medication", "meds",
+        "breastfeeding", "breast feeding", "latch", "latching",
+        "engorged", "mastitis",
+        "dermoplast",
+        "iv looks swollen", "iv is swollen", "iv infiltrated", "iv burning",
     ]
-    for kw in clinical:
+
+    # Any leg numbness/weakness that didn't hit emergent above -> clinical
+    if has("can't feel my legs", "cant feel my legs", "numb legs", "legs feel weak", "leg feels weak"):
+        return "clinical"
+
+    for kw in clinical_keywords:
         if kw in t:
             return "clinical"
 
-    # ROUTINE — everything else
-    return "routine"
+    # Device issues (pump beeping, bp cuff broken) are clinical problems,
+    # but not emergent on their own.
+    if has("pump is beeping", "iv pump is beeping", "beeping nonstop", "cuff is broken", "cuff isn't working", "cuff isnt working"):
+        return "clinical"
 
+    # --- 3) EVERYTHING ELSE: ROUTINE -------------------------------------
+    # supplies, room comfort, food/water, blankets, shower help, etc.
+    return "routine"
 
 
 # --- Core Helper Functions ---
@@ -1910,6 +2013,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
