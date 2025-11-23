@@ -102,6 +102,30 @@
       text-align:center;
       font-size:1rem;
     }
+
+    /* --- NEW: Escalation tier badge --- */
+    .tier-badge {
+      padding:4px 8px;
+      border-radius:9999px;
+      font-size:0.8rem;
+      font-weight:600;
+      border:1px solid transparent;
+    }
+    .tier-emergent {
+      background:#fef2f2;
+      border-color:#fecaca;
+      color:#b91c1c;
+    }
+    .tier-clinical {
+      background:#eff6ff;
+      border-color:#bfdbfe;
+      color:#1d4ed8;
+    }
+    .tier-routine {
+      background:#ecfdf5;
+      border-color:#bbf7d0;
+      color:#15803d;
+    }
   </style>
 </head>
 <body>
@@ -159,6 +183,7 @@
 
     <ul id="requests-list">
       {% for request in active_requests|default([]) %}
+        {% set tier_value = request.tier|default('routine') %}
         <li class="request-item {{ request.role|default('') }}"
             id="{{ request.id|default('') }}"
             data-id="{{ request.id|default('') }}"
@@ -166,9 +191,11 @@
             data-request="{{ request.request|default('') }}"
             data-role="{{ request.role|default('') }}"
             data-timestamp="{{ request.timestamp|default('') }}"
-            data-last-seen="{{ (request.timestamp|default('')) }}">
+            data-last-seen="{{ (request.timestamp|default('')) }}"
+            data-tier="{{ tier_value }}">
           <p>{{ request.request|default('') }}</p>
           <div class="meta">
+            <span class="tier-badge tier-{{ tier_value }}">{{ tier_value|capitalize }}</span>
             <span>Room: {{ request.room|default('—') }}</span>
             <span class="role-span">For: {{ request.role|default('')|upper }}</span>
             <span class="timestamp"></span>
@@ -275,12 +302,48 @@
       });
     }
 
+    // --- NEW: helper to apply tier styles to a card ---
+    function applyTierToItem(li, tierRaw) {
+      if (!li) return;
+      const tier = (tierRaw || li.dataset.tier || 'routine').toLowerCase();
+      li.dataset.tier = tier;
+      const badge = li.querySelector('.tier-badge');
+      if (!badge) return;
+
+      let label = 'Routine';
+      let cls = 'tier-routine';
+      if (tier === 'emergent') {
+        label = 'Emergent';
+        cls = 'tier-emergent';
+      } else if (tier === 'clinical') {
+        label = 'Clinical';
+        cls = 'tier-clinical';
+      }
+
+      badge.textContent = label;
+      badge.classList.remove('tier-emergent', 'tier-clinical', 'tier-routine');
+      badge.classList.add(cls);
+    }
+
     function buildRequestHTML(data) {
       const isCNA = (data.role || '') === 'cna';
       const deferBtn = isCNA ? '<button class="defer-btn">Defer to Nurse</button>' : '';
+
+      const tier = (data.tier || 'routine').toLowerCase();
+      let tierLabel = 'Routine';
+      let tierClass = 'tier-routine';
+      if (tier === 'emergent') {
+        tierLabel = 'Emergent';
+        tierClass = 'tier-emergent';
+      } else if (tier === 'clinical') {
+        tierLabel = 'Clinical';
+        tierClass = 'tier-clinical';
+      }
+
       return `
         <p>${(data.request || '')}</p>
         <div class="meta">
+          <span class="tier-badge ${tierClass}" data-tier="${tier}">${tierLabel}</span>
           <span>Room: ${(data.room || '—')}</span>
           <span class="role-span">For: ${(data.role || '').toUpperCase()}</span>
           <span class="timestamp"></span>
@@ -325,6 +388,7 @@
       if (!list || !req) return;
 
       if (!req.id) req.id = 'key:' + makeCompositeKey(req.room, req.request);
+      if (!req.tier) req.tier = 'routine';
 
       let li = document.getElementById(req.id);
       if (li) {
@@ -333,6 +397,7 @@
         li.dataset.role = req.role || '';
         li.dataset.timestamp = req.timestamp || '';
         li.dataset.lastSeen = String(Date.now());
+        li.dataset.tier = (req.tier || 'routine').toLowerCase();
         li.className = 'request-item ' + (req.role || '');
 
         const p = li.querySelector('p');
@@ -340,9 +405,11 @@
         const meta = li.querySelector('.meta');
         if (meta) {
           const spans = meta.querySelectorAll('span');
-          if (spans[0]) spans[0].textContent = `Room: ${req.room || '—'}`;
-          if (spans[1]) spans[1].textContent = `For: ${(req.role || '').toUpperCase()}`;
+          // spans[0] = tier badge, spans[1] = room, spans[2] = role, spans[3] = timestamp
+          if (spans[1]) spans[1].textContent = `Room: ${req.room || '—'}`;
+          if (spans[2]) spans[2].textContent = `For: ${(req.role || '').toUpperCase()}`;
         }
+        applyTierToItem(li, req.tier);
       } else {
         li = document.createElement('li');
         li.id = req.id;
@@ -353,6 +420,7 @@
         li.dataset.role = req.role || '';
         li.dataset.timestamp = req.timestamp || '';
         li.dataset.lastSeen = String(Date.now());
+        li.dataset.tier = (req.tier || 'routine').toLowerCase();
         li.innerHTML = buildRequestHTML(req);
         document.getElementById('requests-list').appendChild(li);
       }
@@ -365,6 +433,7 @@
       }
 
       applyLocalStatusToItem(li);
+      applyTierToItem(li, req.tier);
       toggleEmptyState();
     }
 
@@ -375,6 +444,8 @@
 
     /* ---- Socket events ---- */
     socket.on('new_request', function(data) {
+      // Default missing tier to routine so UI always shows something
+      if (!data.tier) data.tier = 'routine';
       addRequestToDashboard(data);
       playNotificationSound();
     });
@@ -435,6 +506,11 @@
     document.addEventListener('DOMContentLoaded', function() {
       const list = document.getElementById('requests-list');
       if (!list) return;
+
+      // Apply proper tier styling for any server-rendered rows
+      document.querySelectorAll('#requests-list .request-item').forEach(li => {
+        applyTierToItem(li, li.dataset.tier);
+      });
 
       list.addEventListener('click', function(e) {
         const btn = e.target;
@@ -520,6 +596,10 @@
         .then(r => r.ok ? r.json() : Promise.reject())
         .then(json => {
           const incoming = (json && json.active_requests) ? json.active_requests : [];
+          // Default missing tiers to routine so they don't show blank
+          incoming.forEach(it => {
+            if (!it.tier) it.tier = 'routine';
+          });
           incoming.sort((a, b) => (new Date(b.timestamp||0)) - (new Date(a.timestamp||0)));
 
           const incomingIds = new Set();
@@ -557,6 +637,8 @@
                   setStatusFor(newer.id, room, text, oldStatus);
                   li.dataset.localStatus = oldStatus;
                 }
+                // also update tier from newest data
+                applyTierToItem(li, newer.tier || 'routine');
               }
             } else if (!stillById && !stillByKey && id) {
               if (li.dataset.localStatus) {
