@@ -772,60 +772,6 @@ def classify_escalation_tier(text: str) -> str:
     return "routine"
 
 
-def process_request(role, subject, user_input, reply_message):
-    """
-    Persist the request, emit dashboard updates, and (optionally) email.
-    Uses _current_room() to honor ?room=... and validates against 231–260.
-    Also classifies each request into an escalation tier:
-      'emergent' | 'clinical' | 'routine'
-    """
-    # Language-normalize the user_input for analytics/dashboards
-    lang = session.get('language', 'en')
-    english_user_input = to_english_label(user_input, lang)
-
-    # Unique request id
-    request_id = 'req_' + str(datetime.now(timezone.utc).timestamp()).replace('.', '')
-
-    # ✅ Prefer URL ?room=... (and keep session in sync), then fall back to session
-    room_number = _current_room() or session.get('room_number')
-    if not room_number or not _valid_room(room_number):
-        room_number = None  # store as NULL/None instead of "N/A"
-
-    is_first_baby = session.get('is_first_baby')
-
-    # --- classify escalation tier based on the English text ---
-    tier = classify_escalation_tier(english_user_input)  # 'emergent' | 'clinical' | 'routine'
-
-    # Write to DB in background (non-blocking)
-    socketio.start_background_task(
-        log_request_to_db,
-        request_id,
-        role,                  # 'nurse' or 'cna'
-        english_user_input,    # normalized text for analytics
-        reply_message,
-        room_number,           # None if unknown/invalid
-        is_first_baby
-    )
-
-    # (Optional) email alert — keep commented unless you’ve set creds
-    # socketio.start_background_task(
-    #     send_email_alert,
-    #     subject,
-    #     english_user_input,
-    #     room_number or "Unknown"
-    # )
-
-    # Live update to dashboards
-    socketio.emit('new_request', {
-        'id': request_id,
-        'room': room_number,                   # None if unknown
-        'request': english_user_input,
-        'role': role,                          # 'nurse' | 'cna'
-        'tier': tier,                          # 'emergent' | 'clinical' | 'routine'
-        'timestamp': datetime.now(timezone.utc).isoformat()
-    })
-
-    return reply_message
 
 
 
@@ -2126,6 +2072,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
