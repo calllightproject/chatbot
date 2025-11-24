@@ -481,13 +481,14 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
 def route_note_intelligently(note_text: str) -> str:
     """
     Decide 'nurse' vs 'cna' for free-text notes using:
-      - Hard safety rules (heart/chest/breathing/color changes => NURSE)
+      - Hard safety rules (escalation_tier 'emergent' => NURSE)
       - Blood/pain/incision/neuro => NURSE
       - Environment/cleaning/bedding => CNA
       - Supplies/mobility/help-to-bed/bathroom/shower => CNA
       - Breastfeeding & baby-feeding rules
       - Fuzzy matching for typos
-    NOTE: Per user rule, ANY cold/ice pack request -> CNA.
+    NOTE: Per user rule, ANY cold/ice pack request -> CNA,
+    BUT emergencies always override and go to nurse.
     """
     if not note_text:
         return "cna"
@@ -517,7 +518,12 @@ def route_note_intelligently(note_text: str) -> str:
                     return True
         return False
 
-    # 0) COLD PACK / ICE PACK => ALWAYS CNA
+    # 🔴 NEW: global EMERGENT override
+    # If the tier logic says "emergent", ALWAYS route to nurse.
+    if classify_escalation_tier(note_text) == "emergent":
+        return "nurse"
+
+    # 0) COLD PACK / ICE PACK => CNA (only if NOT emergent)
     COLD_PACK_PHRASES = [
         "cold pack", "cold packs", "ice pack", "ice packs", "icepack", "icepacks"
     ]
@@ -525,6 +531,7 @@ def route_note_intelligently(note_text: str) -> str:
         return "cna"
 
     # 1) ANY scary heart/chest/breathing/color-change => NURSE
+    # (kept for safety, though emergent override above already catches these)
     if _has_heart_breath_color_emergent(text):
         return "nurse"
 
@@ -666,12 +673,14 @@ def route_note_intelligently(note_text: str) -> str:
     # 8) DEFAULT: CNA
     return "cna"
 
+
 def classify_escalation_tier(text: str) -> str:
     """
-    Classify a request into an escalation tier:
+    Classify a request into an escalation tier (ENGLISH ONLY):
       - 'emergent' : life-threatening / severe red flags
       - 'routine'  : everything else
-    English-only. Any heart/chest/breathing/color-change flagged by
+
+    Any heart/chest/breathing/color-change flagged by
     _has_heart_breath_color_emergent() -> 'emergent'.
     """
     if not text:
@@ -2068,6 +2077,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
