@@ -691,29 +691,80 @@ def classify_escalation_tier(text: str) -> str:
         pattern = r"\b" + re.escape(phrase) + r"\b"
         return re.search(pattern, t) is not None
 
+    # --- HARD-CODED SPANISH & MANDARIN EMERGENCY PHRASES ---
+    # (These will still be present even when wrapped as "[ES] ..." or "[ZH] ...")
+    emergent_phrases_es = [
+        "tengo una emergencia",
+        "no puedo respirar",
+        "me cuesta respirar",
+        "dificultad para respirar",
+        "dolor en el pecho",
+        "presión en el pecho",
+        "presion en el pecho",
+        "mi corazón se siente raro",
+        "mi corazon se siente raro",
+        "mi corazón se siente extraño",
+        "mi corazon se siente extraño",
+        "mi corazón se siente extraño",
+        "mi visión está borrosa",
+        "mi vision esta borrosa",
+        "veo manchas",
+    ]
+
+    emergent_phrases_zh = [
+        "我有紧急情况",
+        "我有緊急情況",
+        "我喘不过气",
+        "我喘不過氣",
+        "呼吸困难",
+        "呼吸困難",
+        "呼吸有困难",
+        "呼吸有困難",
+        "胸口疼",
+        "胸口痛",
+        "胸口紧",
+        "胸口緊",
+        "心脏感觉怪怪的",
+        "心臟感覺怪怪的",
+        "视力模糊",
+        "視力模糊",
+        "看到斑点",
+        "看到斑點",
+    ]
+
+    if any(p in t for p in emergent_phrases_es) or any(p in t for p in emergent_phrases_zh):
+        return "emergent"
+
+    # --- ENGLISH EMERGENT PHRASES / PATTERNS ---
     emergent_phrases = [
         "emergency",
         "not breathing", "cant breathe", "can't breathe",
         "hard to breathe", "trouble breathing", "short of breath",
         "chest pain", "chest pressure", "pressure in my chest",
         "tightness in my chest",
-        "chest feels tight", "chest feels tight and strange",
         "heart is racing", "heart racing", "palpitations",
         "passed out", "fainted",
         "seizure", "stroke",
         "feel like i'm dying", "feel like im dying",
         "call 911",
-        # softer heart complaints that should still be emergent
+        # softer heart complaints that still should be emergent
         "something is wrong with my heart",
-        "heart feels weird", "my heart feels weird",
-        "heart feels really weird", "my heart feels really weird",
+        "heart feels weird",
+        "my heart feels weird",
+        "heart feels really weird",
+        "my heart feels really weird",
         "my heart feels really weird and uncomfortable",
-        "my heart feels off", "heart feels off",
-        "my heart doesn't feel right", "my heart does not feel right",
+        "my heart feels off",
+        "heart feels off",
+        "my heart doesn't feel right",
+        "my heart does not feel right",
         "funny feeling in my chest",
-        "my heart keeps doing something weird", "heart keeps doing something weird",
-        "trouble catching my breath", "catching my breath", "catch my breath",
-        "my heart feels weak or off", "heart feels weak", "heart feels weak or off"
+        # breathing difficulty variants
+        "difficulty breathing",
+        "breathing difficulty",
+        "having trouble catching my breath",
+        "trouble catching my breath",
+        "trouble catching breath",
     ]
 
     emergent_vision_phrases = [
@@ -743,22 +794,28 @@ def classify_escalation_tier(text: str) -> str:
         "pus", "purulent drainage",
     ]
 
-    def has_heart_weird():
+    def has_heart_weird() -> bool:
+        # Catches things like "my heart keeps doing something weird",
+        # "my heart feels weak or off", etc.
         return re.search(
-            r"heart.*?(feels|feeling|is|keeps|kept)?[^a-zA-Z0-9]*"
-            r"(weird|off|funny|strange|uncomfortable|not right|weak)",
+            r"heart.*(weird|off|funny|strange|uncomfortable|not right|weak)",
             t
         ) is not None
 
-    def has_chest_tight():
-        return re.search(r"chest.*(tight|tightness)", t) is not None
+    def has_chest_emergent() -> bool:
+        # Catches "my chest feels tight and strange", etc.
+        return re.search(
+            r"chest.*(tight|pressure|pain|weird|strange|uncomfortable)",
+            t
+        ) is not None
 
-    def has_breath_trouble():
-        if "trouble catching my breath" in t:
-            return True
-        if "catch my breath" in t or "catching my breath" in t:
-            return True
-        return False
+    def has_breathing_trouble() -> bool:
+        patterns = [
+            r"trouble\s+catching\s+my\s+breath",
+            r"trouble\s+catching\s+breath",
+            r"having\s+trouble\s+catching\s+my\s+breath",
+        ]
+        return any(re.search(p, t) for p in patterns)
 
     # 1) ANY vision change is emergent
     if any(p in t for p in emergent_vision_phrases) or has_phrase("vision"):
@@ -772,24 +829,20 @@ def classify_escalation_tier(text: str) -> str:
     if "incision" in t and any(p in t for p in incision_emergent_triggers):
         return "emergent"
 
-    # 4) Heart-weird pattern (handles "really weird and uncomfortable", "weak or off", etc.)
+    # 4) Heart/chest/breathing patterns
+    if has_breathing_trouble():
+        return "emergent"
+    if has_chest_emergent():
+        return "emergent"
     if has_heart_weird():
         return "emergent"
 
-    # 5) Chest tightness
-    if has_chest_tight():
-        return "emergent"
-
-    # 6) Breath-catching trouble
-    if has_breath_trouble():
-        return "emergent"
-
-    # 7) Other hard-coded emergent phrases
+    # 5) Other hard-coded emergent phrases
     for phrase in emergent_phrases:
         if phrase in t or has_phrase(phrase):
             return "emergent"
 
-    # --- CLINICAL --- 
+    # --- CLINICAL (non-emergent symptoms) ---
     clinical_keywords = [
         "pain", "hurts",
         "severe headache", "bad headache", "migraine", "headache",
@@ -815,6 +868,7 @@ def classify_escalation_tier(text: str) -> str:
         if kw in t or has_phrase(kw):
             return "clinical"
 
+    # Otherwise: routine
     return "routine"
 
 
@@ -2115,6 +2169,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
