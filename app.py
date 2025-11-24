@@ -739,7 +739,21 @@ def classify_escalation_tier(text: str) -> str:
     if _has_heart_breath_color_emergent(t):
         return "emergent"
 
-    # 2) Other explicit EMERGENT phrases (you already had these)
+    # 1b) NEW: breathing + dizziness / presyncope combo → EMERGENT
+    breathing_words = ["breath", "breathe", "breathing", "air", "lungs"]
+    dizzy_words = [
+        "dizzy", "dizziness",
+        "lightheaded", "light headed",
+        "faint", "fainting",
+        "about to faint", "about to pass out",
+        "going to faint", "going to pass out",
+        "feel like i'm going to pass out",
+        "feel like im going to pass out",
+    ]
+    if any(w in t for w in breathing_words) and any(d in t for d in dizzy_words):
+        return "emergent"
+
+    # 2) Other explicit EMERGENT phrases
     def has_phrase(phrase: str) -> bool:
         pattern = r"\b" + re.escape(phrase) + r"\b"
         return re.search(pattern, t) is not None
@@ -812,6 +826,7 @@ def classify_escalation_tier(text: str) -> str:
 
     # Everything else is routine
     return "routine"
+
 
 
 # --- Core Helper Functions ---
@@ -2111,6 +2126,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
