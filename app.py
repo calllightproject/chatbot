@@ -389,213 +389,131 @@ import re
 
 def _has_heart_breath_color_emergent(text: str) -> bool:
     """
-    Detect scary chest/heart/breathing or color-change phrases.
-    English only. If this returns True, we will:
+    Very liberal emergent screener for chest/heart/breathing/color-change.
+    ENGLISH ONLY.
+    If this returns True, we will:
       - route to NURSE
-      - classify as EMERGENT
+      - show EMERGENT badge
     """
     if not text:
         return False
 
-    # Normalize to lowercase and fix curly quotes
+    # Normalize case + curly quotes
     t = text.lower()
     t = t.replace("’", "'").replace("“", '"').replace("”", '"')
 
-    # Letters-only version for regex matching
-    alpha = re.sub(r"[^a-z\s]", " ", t)
-    alpha = re.sub(r"\s+", " ", alpha).strip()
+    # -------- 1. INSTANT STRING TRIGGERS (on their own are emergent) --------
+    instant_triggers = [
+        # can't breathe / no air
+        "can't breathe", "cant breathe", "cannot breathe",
+        "can't get air", "cant get air",
+        "no air", "not getting air",
+        "can't pull in a breath", "cant pull in a breath",
+        "can't get a breath", "cant get a breath",
+        "gasping for air", "gasp for air", "gasping",
+        "suffocating", "suffocate", "feel like i am suffocating",
+        "throat is closing",
 
-    # --- direct phrases (everything we absolutely want emergent) ---
-    direct_phrases = [
-        # BREATHING – original
-        "short of breath",
-        "shortness of breath",
-        "hard to breathe",
-        "having trouble breathing",
-        "trouble breathing",
-        "trouble catching my breath",
-        "difficulty breathing",
-        "breathing difficulty",
-        "can't breathe",
-        "cant breathe",
-        "cannot breathe",
-        "can't catch my breath",
-        "cant catch my breath",
-        "can't get a deep breath",
-        "cant get a deep breath",
-        "can't get a full breath",
-        "cant get a full breath",
-        "all of a sudden it's hard to get a deep breath",
-        "all of a sudden its hard to get a deep breath",
-
-        # BREATHING – newer phrases we’ve tested
-        "i feel like i'm suffocating",
-        "i feel like im suffocating",
-        "feel like i'm suffocating",
-        "feel like im suffocating",
-        "suffocating",
-        "my breathing feels shallow and scary",
-        "breathing feels shallow and scary",
-        "my breathing feels irregular and scary",
-        "breathing feels irregular and scary",
-        "i'm gasping for air",
-        "im gasping for air",
-        "gasping for air",
-        "i'm gasping for air and can't control it",
-        "im gasping for air and cant control it",
-        "can't get any air",
-        "cant get any air",
-        "can't get any air in my lungs",
-        "cant get any air in my lungs",
-        "my breathing is getting worse every minute",
-        "breathing is getting worse every minute",
-        "my breathing keeps stopping for a moment",
-        "breathing keeps stopping for a moment",
-        "i feel like i'm losing my breath every few seconds",
-        "i feel like im losing my breath every few seconds",
-        "my breathing suddenly became very shallow and frightening",
-        "breathing suddenly became very shallow and frightening",
-        "i feel like i'm choking and can't get air",
-        "i feel like im choking and cant get air",
-        "i feel like i'm choking and can't get any air",
-        "i feel like im choking and cant get any air",
-        "i can't inhale fully and it feels like something is blocking my breath",
-        "i cant inhale fully and it feels like something is blocking my breath",
-        "i feel like i can't draw in enough air no matter how hard i try",
-        "i feel like i cant draw in enough air no matter how hard i try",
-        "i'm trying to breathe but it feels like nothing is getting in",
-        "im trying to breathe but it feels like nothing is getting in",
-
-        # explicit baby breathing
-        "my baby suddenly stopped breathing",
+        # very explicit baby emergencies
         "baby suddenly stopped breathing",
-        "my baby isn't breathing",
-        "my baby isnt breathing",
-        "baby isn't breathing",
-        "baby isnt breathing",
+        "my baby suddenly stopped breathing",
+        "baby stopped breathing",
         "baby not breathing",
-        "baby can't breathe",
-        "baby cant breathe",
-
-        # CHEST – pain / pressure / tightness
-        "chest pain",
-        "my chest hurts",
-        "chest hurts",
-        "my chest feels heavy",
-        "chest feels heavy",
-        "my chest feels tight",
-        "chest feels tight",
-        "my chest feels tight and strange",
-        "my chest feels tight and heavy",
-        "my chest feels heavy and it's getting worse",
-        "my chest feels heavy and its getting worse",
-        "it feels like someone is sitting on my chest",
-        "it feels like something is sitting on my chest",
-        "pressure in my chest",
-        "strong pressure in my chest",
-        "my chest feels like it's being crushed",
-        "my chest feels like its being crushed",
-        "chest feels like it's being crushed",
-        "chest feels like its being crushed",
-        "i feel crushing pressure in the center of my chest",
-        "feel crushing pressure in the center of my chest",
-        "every breath hurts in my chest and i can't take a full one",
-        "every breath hurts in my chest and i cant take a full one",
-        "i feel a stabbing tightness in my chest when i try to breathe",
-
-        # HEART – weird / off / weak
-        "my heart keeps doing something weird",
-        "my heart feels weak or off",
-        "my heart feels weak and off",
-        "my heart feels weak",
-        "my heart feels off",
-        "my heart feels strange",
-        "my heart feels fluttery and not normal",
-        "my heart feels like it skips beats",
-        "heart feels weird",
-        "heart feels off",
-        "heart feels strange",
-        "heart feels weak",
-        "heart keeps doing something weird",
-
-        # HEART – racing / pounding / out of control
-        "my heart feels like it's beating out of my chest",
-        "my heart feels like its beating out of my chest",
-        "heart feels like it's beating out of my chest",
-        "heart feels like its beating out of my chest",
-        "my heart is beating so fast it scares me",
-        "heart is beating so fast it scares me",
-        "my heart started pounding really fast and won't slow down",
-        "my heart started pounding really fast and wont slow down",
-        "my heart is racing so fast i feel like i'm going to pass out",
-        "my heart is racing so fast i feel like im going to pass out",
-
-        # HEART – rhythm / stopping / out of control
-        "my heart feels like it's stopping and starting",
-        "my heart feels like its stopping and starting",
-        "heart feels like it's stopping and starting",
-        "heart feels like its stopping and starting",
-        "my heart feels like it's stopping for a second and restarting",
-        "my heart feels like its stopping for a second and restarting",
-        "my heart rhythm feels out of control and wrong",
-        "heart rhythm feels out of control and wrong",
-        "my heart feels like it's fluttering out of control",
-        "my heart feels like its fluttering out of control",
-        "heart feels like it's fluttering out of control",
-        "heart feels like its fluttering out of control",
+        "my baby not breathing",
+        "baby isn't breathing", "baby isnt breathing",
+        "my baby isn't breathing", "my baby isnt breathing",
+        "baby can't breathe", "baby cant breathe",
+        "baby's chest isn't rising", "baby chest isn't rising",
+        "baby chest isnt rising",
     ]
-
-    for p in direct_phrases:
-        if p in t:
+    for kw in instant_triggers:
+        if kw in t:
             return True
 
-    # --- generic heart / chest weirdness catch-all ---
-    heart_chest_pattern = re.compile(
-        r"(heart|chest).{0,60}"
-        r"(weird|off|funny|strange|uncomfortable|not normal|not right|"
-        r"fluttery|flutters|skipping|skips|skipped|pounding|racing|"
-        r"heavy|tight|tightness|weak|pressure|sitting on|crushed|crushing|"
-        r"stopping|stopped|irregular|wrong|scares|scared|frightening)"
-    )
-    if heart_chest_pattern.search(alpha):
+    # -------- 2. BREATHING / AIRWAY PATTERNS --------
+    breath_tokens = [
+        "breath", "breathe", "breathing",
+        "air", "lungs", "inhale", "exhale"
+    ]
+    breath_severity = [
+        "hard", "harder",
+        "struggling", "struggle",
+        "trouble", "difficulty",
+        "getting worse", "worse",
+        "stopping", "stopped", "keeps stopping", "keeps pausing", "pausing",
+        "shallow", "irregular",
+        "scary", "frightening", "terrified",
+        "about to faint", "going to faint", "going to pass out",
+        "locking up", "locked up", "blocked", "blocking",
+        "can't", "cant", "cannot",
+        "no air", "not getting air",
+    ]
+
+    if any(tok in t for tok in breath_tokens) and any(s in t for s in breath_severity):
         return True
 
-    # --- breathing trouble patterns (regex) ---
-    breath_patterns = [
-        r"(difficulty|difficult|trouble)\s+breath(ing)?",
-        r"breath(ing)?\s+difficulty",
-        r"can\s*t\s+(catch|get)\s+(\w+\s+)?breath",
-        r"cant\s+(catch|get)\s+(\w+\s+)?breath",
-        r"cannot\s+(catch|get)\s+(\w+\s+)?breath",
-        r"hard\w*\s+to\s*breathe",                 # hard to / harder to breathe
-        r"gasping\s+for\s+air",
-        r"can\s*t\s*get\s+any\s+air",
-        r"cant\s*get\s+any\s+air",
-        r"can\s*t\s*get\s+.*air\s+in\s+my\s+lungs",
-        r"cant\s*get\s+.*air\s+in\s+my\s+lungs",
-        r"breath(ing)?\s+is\s+getting\s+worse",
-        r"my\s+breath(ing)?\s+is\s+getting\s+worse",
-        r"my\s+breath(ing)?\s+keeps\s+stopping",
-        r"breath(ing)?\s+keeps\s+stopping",
-        r"choking\s+and\s+can\s*t\s+get\s+air",
-        r"choking\s+and\s+cant\s+get\s+air",
-        r"draw\s+in\s+enough\s+air",
-        r"nothing\s+is\s+getting\s+in",
-    ]
-    for rg in breath_patterns:
-        if re.search(rg, alpha):
+    # e.g. "I suddenly can't feel air moving in or out of my lungs"
+    if "air moving" in t and "lungs" in t:
+        return True
+    if "can't feel air" in t or "cant feel air" in t:
+        return True
+
+    # -------- 3. HEART PATTERNS --------
+    if "heart" in t:
+        heart_severity = [
+            "racing", "pounding", "beating so fast", "beating fast",
+            "beating out of my chest",
+            "skipping", "skips", "skipped",
+            "stopping", "stopped",
+            "flutter", "fluttering",
+            "erratic", "out of control",
+            "weak", "not normal", "not right",
+            "wrong", "off", "weird",
+            "scares", "scared", "dangerous",
+            "feels like it's stopping for a second and restarting",
+            "feels like its stopping for a second and restarting",
+        ]
+        if any(s in t for s in heart_severity):
             return True
 
-    # --- color change (purple / blue / bluish / grey / gray) ---
-    color_words = ["purple", "blue", "bluish", "grey", "gray"]
+    # -------- 4. CHEST PAIN / PRESSURE PATTERNS --------
+    if "chest" in t:
+        chest_severity = [
+            "pain", "hurts",
+            "tight", "tightness",
+            "pressure", "crushing", "crushed",
+            "heavy", "weight",
+            "locking up", "locked up",
+            "squeezed", "squeezing",
+            "center of my chest", "center of the chest",
+            "across my whole chest",
+        ]
+        if any(s in t for s in chest_severity):
+            return True
+
+        # combo patterns
+        if ("can't get air" in t or "cant get air" in t) or \
+           ("can't pull in a breath" in t or "cant pull in a breath" in t):
+            return True
+
+    # -------- 5. BABY + BREATHING (generic) --------
+    if any(w in t for w in ["baby", "newborn", "infant"]):
+        if any(p in t for p in [
+            "not breathing", "isn't breathing", "isnt breathing",
+            "stopped breathing", "chest isn't rising", "chest isnt rising",
+            "breathing seems off", "breathing seems weird"
+        ]):
+            return True
+
+    # -------- 6. COLOR CHANGE (cyanosis) --------
+    color_words = ["blue", "bluish", "purple", "grey", "gray"]
     context_words = [
         "baby", "newborn", "me", "my", "skin", "face", "lips",
-        "mouth", "hands", "feet", "fingers", "toes"
+        "mouth", "hands", "feet", "fingers", "toes", "nose"
     ]
     if any(c in t for c in color_words) and any(w in t for w in context_words):
         return True
 
-    # "turning blue/purple/grey" etc, even without explicit body word
     if ("turned blue" in t or "turning blue" in t or
         "turned purple" in t or "turning purple" in t or
         "turned grey" in t or "turning grey" in t or
@@ -604,7 +522,6 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         return True
 
     return False
-
 
 def route_note_intelligently(note_text: str) -> str:
     """
@@ -814,19 +731,19 @@ def classify_escalation_tier(text: str) -> str:
     if not text:
         return "routine"
 
-    # Normalize case + curly quotes
+    # Normalize
     t = text.lower().strip()
     t = t.replace("’", "'").replace("“", '"').replace("”", '"')
-
-    def has_phrase(phrase: str) -> bool:
-        pattern = r"\b" + re.escape(phrase) + r"\b"
-        return re.search(pattern, t) is not None
 
     # 1) Heart/chest/breathing/color-change → EMERGENT
     if _has_heart_breath_color_emergent(t):
         return "emergent"
 
-    # 2) Other explicit EMERGENT phrases (English only)
+    # 2) Other explicit EMERGENT phrases (you already had these)
+    def has_phrase(phrase: str) -> bool:
+        pattern = r"\b" + re.escape(phrase) + r"\b"
+        return re.search(pattern, t) is not None
+
     emergent_phrases = [
         "emergency",
         "passed out", "fainted",
@@ -834,23 +751,9 @@ def classify_escalation_tier(text: str) -> str:
         "feel like i'm dying", "feel like im dying",
         "call 911",
 
-        # newborn emergencies (English)
+        # newborn emergencies
         "my baby is choking",
         "baby is choking",
-        "baby not breathing",
-        "baby isn't breathing",
-        "baby isnt breathing",
-        "my baby isn't breathing",
-        "my baby isnt breathing",
-        "baby can't breathe",
-        "baby cant breathe",
-        "baby turned blue",
-        "baby is blue",
-        "baby looks blue",
-        "baby looks purple",
-        "baby turned purple",
-        "baby looks gray",
-        "baby looks grey",
         "baby is limp",
         "baby feels limp",
         "baby is not moving",
@@ -861,7 +764,6 @@ def classify_escalation_tier(text: str) -> str:
         "baby fell",
     ]
 
-    # Vision changes: ALL vision changes are emergent
     emergent_vision_phrases = [
         "blurry vision", "vision is blurry",
         "vision is weird",
@@ -2209,6 +2111,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
