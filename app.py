@@ -393,13 +393,13 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
     ENGLISH ONLY.
     If this returns True, we will:
       - route to NURSE
-      - show EMERGENT badge
+      - classify as EMERGENT
     """
     if not text:
         return False
 
     # Normalize case + curly quotes
-    t = text.lower()
+    t = text.lower().strip()
     t = t.replace("’", "'").replace("“", '"').replace("”", '"')
 
     # -------- 1. INSTANT STRING TRIGGERS (on their own are emergent) --------
@@ -491,9 +491,9 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         if any(s in t for s in chest_severity):
             return True
 
-        # combo patterns
-        if ("can't get air" in t or "cant get air" in t) or \
-           ("can't pull in a breath" in t or "cant pull in a breath" in t):
+        # combo patterns with air
+        if ("can't get air" in t or "cant get air" in t or
+            "can't pull in a breath" in t or "cant pull in a breath" in t):
             return True
 
     # -------- 5. BABY + BREATHING (generic) --------
@@ -522,6 +522,7 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         return True
 
     return False
+
 def _has_neuro_emergent(text: str) -> bool:
     """
     Detect neuro-related EMERGENT language (postpartum patient + newborn).
@@ -2458,6 +2459,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
