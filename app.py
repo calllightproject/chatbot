@@ -386,6 +386,75 @@ def send_email_alert(subject, body, room_number):
         print(f"EMAIL disabled or failed: {e}")
 
 
+def _has_heart_or_breathing_emergent(t: str) -> bool:
+    """
+    Shared helper: detects scary chest/heart/breathing phrases that should
+    ALWAYS be treated as emergent and routed to the nurse.
+    Works on lowercase text.
+    """
+    if not t:
+        return False
+
+    t = t.lower()
+
+    # Direct phrases we KNOW are bad (includes all your tested ones)
+    direct_phrases = [
+        "short of breath",
+        "hard to breathe",
+        "trouble breathing",
+        "trouble catching my breath",
+        "difficulty breathing",
+        "breathing difficulty",
+        "can't breathe",
+        "cant breathe",
+        "can't get a full breath in",
+        "cant get a full breath in",
+        "can't get my breath",
+        "cant get my breath",
+        "having trouble catching my breath",
+        "having trouble breathing",
+        "breathing is hard",
+
+        "my heart keeps doing something weird",
+        "my heart feels weak or off",
+        "my heart feels weak and off",
+        "my chest feels tight and strange",
+        "my chest feels heavy and uncomfortable",
+        "it feels like someone is sitting on my chest",
+        "my heart feels fluttery and not normal",
+        "my heart feels like it skips beats sometimes",
+    ]
+    for p in direct_phrases:
+        if p in t:
+            return True
+
+    # Generic heart/chest weirdness
+    heart_chest_pattern = re.compile(
+        r"(heart|chest)[^a-z]*"
+        r"(feels|feeling|is|keeps|kept|keeps on|doing)?[^a-z]*"
+        r"(weird|off|funny|strange|uncomfortable|not normal|not right|"
+        r"fluttery|flutters|skipping|skips|skipped|pounding|racing|"
+        r"heavy|tight|weak|pressure|sitting on)"
+    )
+    if heart_chest_pattern.search(t):
+        return True
+
+    # Breath trouble patterns
+    breath_patterns = [
+        r"(difficulty|difficult|trouble)\s+breath(ing)?",
+        r"breath(ing)?\s+difficulty",
+        r"can't\s+(catch|get)\s+(\w+\s+)?breath",
+        r"cant\s+(catch|get)\s+(\w+\s+)?breath",
+        r"hard\s+to\s*breathe",
+    ]
+    for rg in breath_patterns:
+        if re.search(rg, t):
+            return True
+
+    return False
+
+
+
 
 def route_note_intelligently(note_text: str) -> str:
     """
@@ -394,7 +463,7 @@ def route_note_intelligently(note_text: str) -> str:
       - Environment/cleaning/bedding => CNA
       - Supplies/mobility/help-to-bed/bathroom/shower => CNA
       - Breastfeeding & baby-feeding rules
-      - Fuzzy matching for typos ("lite", "brite", "coled", etc.)
+      - Fuzzy matching for typos
     NOTE: Per user rule, ANY cold/ice pack request -> CNA.
     """
     if not note_text:
@@ -417,10 +486,10 @@ def route_note_intelligently(note_text: str) -> str:
             if " " in kw_clean and kw_clean in norm:
                 return True
             # token-level fuzzy match (for typos)
-            for t in tokens:
-                if len(t) < 3:
+            for tkn in tokens:
+                if len(tkn) < 3:
                     continue
-                ratio = difflib.SequenceMatcher(None, t, kw_clean).ratio()
+                ratio = difflib.SequenceMatcher(None, tkn, kw_clean).ratio()
                 if ratio >= threshold:
                     return True
         return False
@@ -432,14 +501,17 @@ def route_note_intelligently(note_text: str) -> str:
     if contains_any(COLD_PACK_PHRASES):
         return "cna"
 
-    # ----------------- 1) EMERGENCY / RED-FLAG -> ALWAYS NURSE -----------------
+    # ----------------- 0.5) HEART/CHEST/BREATHING EMERGENT => NURSE ---------
+    if _has_heart_or_breathing_emergent(text):
+        return "nurse"
+
+    # ----------------- 1) EMERGENCY / RED-FLAG -> ALWAYS NURSE --------------
     EMERGENCY_PHRASES = [
         "emergency",
         "not breathing", "cant breathe", "can't breathe",
         "hard to breathe", "trouble breathing", "short of breath",
         "chest pain", "chest pressure", "pressure in my chest",
         "tightness in my chest",
-        "chest feels tight", "chest feels tight and strange",  # new chest-tight variants
         "heart racing", "heart is racing",
         "palpitations",
         "passed out", "fainted", "seizure", "stroke",
@@ -447,15 +519,16 @@ def route_note_intelligently(note_text: str) -> str:
         "call 911",
         # softer heart complaints that should still be emergent
         "something is wrong with my heart",
-        "heart feels weird", "my heart feels weird",
-        "heart feels really weird", "my heart feels really weird",
+        "heart feels weird",
+        "my heart feels weird",
+        "heart feels really weird",
+        "my heart feels really weird",
         "my heart feels really weird and uncomfortable",
-        "my heart feels off", "heart feels off",
-        "my heart doesn't feel right", "my heart does not feel right",
+        "my heart feels off",
+        "heart feels off",
+        "my heart doesn't feel right",
+        "my heart does not feel right",
         "funny feeling in my chest",
-        "my heart keeps doing something weird", "heart keeps doing something weird",
-        "trouble catching my breath", "catching my breath", "catch my breath",
-        "my heart feels weak or off", "heart feels weak", "heart feels weak or off"
     ]
 
     # Vision changes: ALL vision changes are emergent
@@ -499,44 +572,13 @@ def route_note_intelligently(note_text: str) -> str:
     def has_catastrophic_incision():
         return "incision" in text and any(p in text for p in INCISION_EMERGENT_TRIGGERS)
 
-    def has_heart_weird():
-        # catch things like "my heart feels really weird and uncomfortable",
-        # "my heart keeps doing something weird", "my heart feels weak or off", etc.
-        return re.search(
-            r"heart.*?(feels|feeling|is|keeps|kept)?[^a-zA-Z0-9]*"
-            r"(weird|off|funny|strange|uncomfortable|not right|weak)",
-            text
-        ) is not None
-
-    def has_chest_tight():
-        # "my chest feels tight", "chest tight and strange", etc.
-        return re.search(r"chest.*(tight|tightness)", text) is not None
-
-    def has_breath_trouble():
-        # "trouble catching my breath", "can't catch my breath", etc.
-        if "trouble catching my breath" in text:
-            return True
-        if "catch my breath" in text or "catching my breath" in text:
-            return True
-        return False
-
-    if has_vision_change():
-        return "nurse"
-    if has_emergent_bleeding():
-        return "nurse"
-    if has_catastrophic_incision():
-        return "nurse"
-    if has_heart_weird():
-        return "nurse"
-    if has_chest_tight():
-        return "nurse"
-    if has_breath_trouble():
+    if has_vision_change() or has_emergent_bleeding() or has_catastrophic_incision():
         return "nurse"
 
     if contains_any(EMERGENCY_PHRASES) or fuzzy_hit(EMERGENCY_PHRASES, threshold=0.72):
         return "nurse"
 
-    # ----------------- 2) GENERAL CLINICAL (blood/pain/incision/neuro) -> Nurse -----------------
+    # ----------------- 2) GENERAL CLINICAL (blood/pain/incision/neuro) -> Nurse
     BLOOD_KEYWORDS = [
         "blood", "bleeding",
         "clots", "golf ball", "soaked", "saturated", "hemorrhage", "hemorrhaging"
@@ -570,7 +612,7 @@ def route_note_intelligently(note_text: str) -> str:
     if contains_any(FEED_NURSE_KEYWORDS) or fuzzy_hit(FEED_NURSE_KEYWORDS, threshold=0.72):
         return "nurse"
 
-    # ----------------- 4) ENVIRONMENT / CLEANING / BEDDING -> CNA -----------------
+    # ----------------- 4) ENVIRONMENT / CLEANING / BEDDING -> CNA -------
     ENV_KEYWORDS = [
         "light", "lights", "bright", "dim", "dark", "lamp",
         "cold", "hot", "warm", "temperature",
@@ -595,7 +637,7 @@ def route_note_intelligently(note_text: str) -> str:
     if fuzzy_hit(ENV_KEYWORDS, threshold=0.70) or fuzzy_hit(CNA_CLEANING, threshold=0.75):
         return "cna"
 
-    # ----------------- 5) MOBILITY / BATHROOM / SHOWER HELP -> CNA -----------------
+    # ----------------- 5) MOBILITY / BATHROOM / SHOWER HELP -> CNA ------
     MOBILITY_CNA_PHRASES = [
         "help getting out of bed", "help out of bed",
         "help me out of bed", "help me stand up", "help standing up",
@@ -620,7 +662,7 @@ def route_note_intelligently(note_text: str) -> str:
     if contains_any(INCONTINENCE_PHRASES) or fuzzy_hit(INCONTINENCE_PHRASES, threshold=0.78):
         return "cna"
 
-    # ----------------- 6) DEVICES / ROOM EQUIPMENT -----------------
+    # ----------------- 6) DEVICES / ROOM EQUIPMENT ----------------------
     DEVICE_CNA_PHRASES = [
         "bp cuff", "blood pressure cuff",
         "cuff isn't working", "cuff isnt working",
@@ -641,7 +683,7 @@ def route_note_intelligently(note_text: str) -> str:
     if contains_any(DEVICE_CNA_PHRASES) or fuzzy_hit(DEVICE_CNA_PHRASES, threshold=0.78):
         return "cna"
 
-    # ----------------- 7) GENERAL CLINICAL vs GENERAL SUPPORT -----------------
+    # ----------------- 7) GENERAL CLINICAL vs GENERAL SUPPORT -----------
     NURSE_KEYWORDS = [
         "pain", "hurts",
         "medication", "meds",
@@ -671,7 +713,7 @@ def route_note_intelligently(note_text: str) -> str:
     if fuzzy_hit(CNA_SUPPORT_KEYWORDS, threshold=0.78):
         return "cna"
 
-    # ----------------- 8) DEFAULT: CNA -----------------
+    # ----------------- 8) DEFAULT: CNA ----------------------------------
     return "cna"
 
 def classify_escalation_tier(text: str) -> str:
@@ -691,51 +733,10 @@ def classify_escalation_tier(text: str) -> str:
         pattern = r"\b" + re.escape(phrase) + r"\b"
         return re.search(pattern, t) is not None
 
-    # --- HARD-CODED SPANISH & MANDARIN EMERGENCY PHRASES ---
-    # (These will still be present even when wrapped as "[ES] ..." or "[ZH] ...")
-    emergent_phrases_es = [
-        "tengo una emergencia",
-        "no puedo respirar",
-        "me cuesta respirar",
-        "dificultad para respirar",
-        "dolor en el pecho",
-        "presión en el pecho",
-        "presion en el pecho",
-        "mi corazón se siente raro",
-        "mi corazon se siente raro",
-        "mi corazón se siente extraño",
-        "mi corazon se siente extraño",
-        "mi corazón se siente extraño",
-        "mi visión está borrosa",
-        "mi vision esta borrosa",
-        "veo manchas",
-    ]
-
-    emergent_phrases_zh = [
-        "我有紧急情况",
-        "我有緊急情況",
-        "我喘不过气",
-        "我喘不過氣",
-        "呼吸困难",
-        "呼吸困難",
-        "呼吸有困难",
-        "呼吸有困難",
-        "胸口疼",
-        "胸口痛",
-        "胸口紧",
-        "胸口緊",
-        "心脏感觉怪怪的",
-        "心臟感覺怪怪的",
-        "视力模糊",
-        "視力模糊",
-        "看到斑点",
-        "看到斑點",
-    ]
-
-    if any(p in t for p in emergent_phrases_es) or any(p in t for p in emergent_phrases_zh):
+    # ---------- 0) Heart / chest / breathing red flags ----------
+    if _has_heart_or_breathing_emergent(t):
         return "emergent"
 
-    # --- ENGLISH EMERGENT PHRASES / PATTERNS ---
     emergent_phrases = [
         "emergency",
         "not breathing", "cant breathe", "can't breathe",
@@ -747,24 +748,14 @@ def classify_escalation_tier(text: str) -> str:
         "seizure", "stroke",
         "feel like i'm dying", "feel like im dying",
         "call 911",
-        # softer heart complaints that still should be emergent
+        # softer heart complaints that should still be emergent
         "something is wrong with my heart",
-        "heart feels weird",
-        "my heart feels weird",
-        "heart feels really weird",
-        "my heart feels really weird",
+        "heart feels weird", "my heart feels weird",
+        "heart feels really weird", "my heart feels really weird",
         "my heart feels really weird and uncomfortable",
-        "my heart feels off",
-        "heart feels off",
-        "my heart doesn't feel right",
-        "my heart does not feel right",
+        "my heart feels off", "heart feels off",
+        "my heart doesn't feel right", "my heart does not feel right",
         "funny feeling in my chest",
-        # breathing difficulty variants
-        "difficulty breathing",
-        "breathing difficulty",
-        "having trouble catching my breath",
-        "trouble catching my breath",
-        "trouble catching breath",
     ]
 
     emergent_vision_phrases = [
@@ -794,55 +785,37 @@ def classify_escalation_tier(text: str) -> str:
         "pus", "purulent drainage",
     ]
 
-    def has_heart_weird() -> bool:
-        # Catches things like "my heart keeps doing something weird",
-        # "my heart feels weak or off", etc.
+    def has_heart_weird():
         return re.search(
-            r"heart.*(weird|off|funny|strange|uncomfortable|not right|weak)",
+            r"heart[^a-z]*(feels|feeling|is|keeps|kept|doing)?[^a-z]*"
+            r"(weird|off|funny|strange|uncomfortable|not normal|not right|"
+            r"fluttery|flutters|skipping|skips|skipped|pounding|racing|"
+            r"heavy|tight|weak)",
             t
         ) is not None
 
-    def has_chest_emergent() -> bool:
-        # Catches "my chest feels tight and strange", etc.
-        return re.search(
-            r"chest.*(tight|pressure|pain|weird|strange|uncomfortable)",
-            t
-        ) is not None
-
-    def has_breathing_trouble() -> bool:
-        patterns = [
-            r"trouble\s+catching\s+my\s+breath",
-            r"trouble\s+catching\s+breath",
-            r"having\s+trouble\s+catching\s+my\s+breath",
-        ]
-        return any(re.search(p, t) for p in patterns)
-
-    # 1) ANY vision change is emergent
+    # ---------- 1) Vision change: ALWAYS emergent ----------
     if any(p in t for p in emergent_vision_phrases) or has_phrase("vision"):
         return "emergent"
 
-    # 2) Emergent bleeding
+    # ---------- 2) Emergent bleeding ----------
     if any(p in t for p in emergent_bleeding_phrases):
         return "emergent"
 
-    # 3) Incision catastrophes
+    # ---------- 3) Incision catastrophes ----------
     if "incision" in t and any(p in t for p in incision_emergent_triggers):
         return "emergent"
 
-    # 4) Heart/chest/breathing patterns
-    if has_breathing_trouble():
-        return "emergent"
-    if has_chest_emergent():
-        return "emergent"
+    # ---------- 4) Heart-weird pattern ----------
     if has_heart_weird():
         return "emergent"
 
-    # 5) Other hard-coded emergent phrases
+    # ---------- 5) Other hard-coded emergent phrases ----------
     for phrase in emergent_phrases:
         if phrase in t or has_phrase(phrase):
             return "emergent"
 
-    # --- CLINICAL (non-emergent symptoms) ---
+    # ---------- CLINICAL TIER ----------
     clinical_keywords = [
         "pain", "hurts",
         "severe headache", "bad headache", "migraine", "headache",
@@ -868,7 +841,7 @@ def classify_escalation_tier(text: str) -> str:
         if kw in t or has_phrase(kw):
             return "clinical"
 
-    # Otherwise: routine
+    # ---------- DEFAULT ----------
     return "routine"
 
 
@@ -2169,6 +2142,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
