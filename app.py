@@ -733,10 +733,49 @@ def classify_escalation_tier(text: str) -> str:
         pattern = r"\b" + re.escape(phrase) + r"\b"
         return re.search(pattern, t) is not None
 
-    # ---------- 0) Heart / chest / breathing red flags ----------
-    if _has_heart_or_breathing_emergent(t):
+    # --- HARD-CODED SPANISH & MANDARIN EMERGENCY PHRASES ---
+    emergent_phrases_es = [
+        "tengo una emergencia",
+        "no puedo respirar",
+        "me cuesta respirar",
+        "dificultad para respirar",
+        "dolor en el pecho",
+        "presión en el pecho",
+        "presion en el pecho",
+        "mi corazón se siente raro",
+        "mi corazon se siente raro",
+        "mi corazón se siente extraño",
+        "mi corazon se siente extraño",
+        "mi visión está borrosa",
+        "mi vision esta borrosa",
+        "veo manchas",
+    ]
+
+    emergent_phrases_zh = [
+        "我有紧急情况",
+        "我有緊急情況",
+        "我喘不过气",
+        "我喘不過氣",
+        "呼吸困难",
+        "呼吸困難",
+        "呼吸有困难",
+        "呼吸有困難",
+        "胸口疼",
+        "胸口痛",
+        "胸口紧",
+        "胸口緊",
+        "心脏感觉怪怪的",
+        "心臟感覺怪怪的",
+        "视力模糊",
+        "視力模糊",
+        "看到斑点",
+        "看到斑點",
+    ]
+
+    if any(p in t for p in emergent_phrases_es) or any(p in t for p in emergent_phrases_zh):
         return "emergent"
 
+    # --- ENGLISH EMERGENT PHRASES / PATTERNS ---
     emergent_phrases = [
         "emergency",
         "not breathing", "cant breathe", "can't breathe",
@@ -748,14 +787,24 @@ def classify_escalation_tier(text: str) -> str:
         "seizure", "stroke",
         "feel like i'm dying", "feel like im dying",
         "call 911",
-        # softer heart complaints that should still be emergent
+        # softer heart complaints that still should be emergent
         "something is wrong with my heart",
-        "heart feels weird", "my heart feels weird",
-        "heart feels really weird", "my heart feels really weird",
+        "heart feels weird",
+        "my heart feels weird",
+        "heart feels really weird",
+        "my heart feels really weird",
         "my heart feels really weird and uncomfortable",
-        "my heart feels off", "heart feels off",
-        "my heart doesn't feel right", "my heart does not feel right",
+        "my heart feels off",
+        "heart feels off",
+        "my heart doesn't feel right",
+        "my heart does not feel right",
         "funny feeling in my chest",
+        # breathing difficulty variants
+        "difficulty breathing",
+        "breathing difficulty",
+        "having trouble catching my breath",
+        "trouble catching my breath",
+        "trouble catching breath",
     ]
 
     emergent_vision_phrases = [
@@ -785,37 +834,92 @@ def classify_escalation_tier(text: str) -> str:
         "pus", "purulent drainage",
     ]
 
-    def has_heart_weird():
+    arrhythmia_phrases = [
+        "flip flop feeling", "flip-flop feeling",
+        "skips beats", "skipping beats",
+        "skips a beat", "skipping a beat",
+        "fluttery", "fluttering",
+        "feels like my heart is fluttering",
+        "heart feels fluttery",
+    ]
+
+    chest_heavy_phrases = [
+        "chest feels heavy",
+        "my chest feels heavy",
+        "heaviness in my chest",
+    ]
+
+    breathing_extra_phrases = [
+        "can't take a deep breath", "cant take a deep breath",
+        "can't get a full breath", "cant get a full breath",
+        "can't breathe right", "cant breathe right",
+        "can't breathe very well", "cant breathe very well",
+        "feel like i can't breathe", "feel like i cant breathe",
+        "feel like i cannot breathe",
+    ]
+
+    def has_heart_weird() -> bool:
+        # Catches "my heart feels weak or off", etc.
         return re.search(
-            r"heart[^a-z]*(feels|feeling|is|keeps|kept|doing)?[^a-z]*"
-            r"(weird|off|funny|strange|uncomfortable|not normal|not right|"
-            r"fluttery|flutters|skipping|skips|skipped|pounding|racing|"
-            r"heavy|tight|weak)",
+            r"heart.*(weird|off|funny|strange|uncomfortable|not right|weak)",
             t
         ) is not None
 
-    # ---------- 1) Vision change: ALWAYS emergent ----------
+    def has_chest_emergent() -> bool:
+        # Catches "my chest feels tight and strange", "chest feels heavy", etc.
+        return re.search(
+            r"chest.*(tight|pressure|pain|weird|strange|uncomfortable|heavy|heaviness)",
+            t
+        ) is not None
+
+    def has_breathing_trouble() -> bool:
+        patterns = [
+            r"trouble\s+catching\s+(my\s+)?breath",
+            r"cant\s+get\s+(a\s+)?full\s+breath",
+            r"can't\s+get\s+(a\s+)?full\s+breath",
+            r"cant\s+take\s+(a\s+)?deep\s+breath",
+            r"can't\s+take\s+(a\s+)?deep\s+breath",
+            r"feel\s+like\s+i\s+cant\s+breathe",
+            r"feel\s+like\s+i\s+can't\s+breathe",
+            r"cant\s+breathe\s+right",
+            r"can't\s+breathe\s+right",
+        ]
+        if any(re.search(p, t) for p in patterns):
+            return True
+        if any(p in t for p in breathing_extra_phrases):
+            return True
+        return False
+
+    # 1) ANY vision change is emergent
     if any(p in t for p in emergent_vision_phrases) or has_phrase("vision"):
         return "emergent"
 
-    # ---------- 2) Emergent bleeding ----------
+    # 2) Emergent bleeding
     if any(p in t for p in emergent_bleeding_phrases):
         return "emergent"
 
-    # ---------- 3) Incision catastrophes ----------
+    # 3) Incision catastrophes
     if "incision" in t and any(p in t for p in incision_emergent_triggers):
         return "emergent"
 
-    # ---------- 4) Heart-weird pattern ----------
+    # 4) Heart/chest/breathing patterns & arrhythmia-style descriptions
+    if has_breathing_trouble():
+        return "emergent"
+    if has_chest_emergent():
+        return "emergent"
     if has_heart_weird():
         return "emergent"
+    if any(p in t for p in arrhythmia_phrases):
+        return "emergent"
+    if any(p in t for p in chest_heavy_phrases):
+        return "emergent"
 
-    # ---------- 5) Other hard-coded emergent phrases ----------
+    # 5) Other hard-coded emergent phrases
     for phrase in emergent_phrases:
         if phrase in t or has_phrase(phrase):
             return "emergent"
 
-    # ---------- CLINICAL TIER ----------
+    # --- CLINICAL (non-emergent symptoms) ---
     clinical_keywords = [
         "pain", "hurts",
         "severe headache", "bad headache", "migraine", "headache",
@@ -832,7 +936,6 @@ def classify_escalation_tier(text: str) -> str:
         "breastfeeding", "breast feeding", "latch", "latching",
         "engorged", "mastitis",
         "dermoplast",
-        # neuro-ish leg weakness/numbness
         "can't feel my legs", "cant feel my legs",
         "legs feel weak", "legs are weak",
     ]
@@ -841,7 +944,7 @@ def classify_escalation_tier(text: str) -> str:
         if kw in t or has_phrase(kw):
             return "clinical"
 
-    # ---------- DEFAULT ----------
+    # Otherwise: routine
     return "routine"
 
 
@@ -2142,6 +2245,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
