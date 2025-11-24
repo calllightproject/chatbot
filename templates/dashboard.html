@@ -91,7 +91,7 @@
     .toolbar { display:flex; align-items:center; gap:10px; margin-top:8px; }
     .muted { font-size:.85rem; color:#64748b; }
 
-    /* Tier pill */
+    /* Tier pill: only emergent is used now */
     .tier-pill {
       display: inline-block;
       margin-left: 8px;
@@ -100,16 +100,6 @@
       font-size: 0.8rem;
       font-weight: 600;
       border: 1px solid transparent;
-    }
-    .tier-routine {
-      background: #ecfdf5;
-      color: #166534;
-      border-color: #bbf7d0;
-    }
-    .tier-clinical {
-      background: #fff7ed;
-      color: #9a3412;
-      border-color: #fed7aa;
     }
     .tier-emergent {
       background: #fef2f2;
@@ -197,7 +187,9 @@
             data-tier="{{ tier|lower }}">
           <p>
             {{ request.request|default('') }}
-            <span class="tier-pill tier-{{ tier|lower }}">{{ tier|capitalize }}</span>
+            {% if tier|lower == 'emergent' %}
+              <span class="tier-pill tier-emergent">Emergent</span>
+            {% endif %}
           </p>
           <div class="meta">
             <span>Room: {{ request.room|default('—') }}</span>
@@ -311,12 +303,15 @@
       const deferBtn = isCNA ? '<button class="defer-btn">Defer to Nurse</button>' : '';
 
       const tierRaw = (data.tier || 'routine').toLowerCase();
-      const tierLabel = tierRaw.charAt(0).toUpperCase() + tierRaw.slice(1);
+      const showPill = tierRaw === 'emergent';
+      const pillHtml = showPill
+        ? '<span class="tier-pill tier-emergent">Emergent</span>'
+        : '';
 
       return `
         <p>
           ${(data.request || '')}
-          <span class="tier-pill tier-${tierRaw}">${tierLabel}</span>
+          ${pillHtml}
         </p>
         <div class="meta">
           <span>Room: ${(data.room || '—')}</span>
@@ -369,7 +364,6 @@
       // preserve existing tier if backend doesn't send one
       const existingTier = li ? (li.dataset.tier || 'routine') : 'routine';
       const tierRaw = (req.tier || existingTier || 'routine').toLowerCase();
-      const tierLabel = tierRaw.charAt(0).toUpperCase() + tierRaw.slice(1);
 
       if (li) {
         li.dataset.room = req.room || '';
@@ -382,7 +376,6 @@
 
         const p = li.querySelector('p');
         if (p) {
-          // first child text stays as request; we just update the tier pill separately
           const txtNode = p.childNodes[0];
           if (txtNode) txtNode.textContent = req.request || '';
         }
@@ -393,10 +386,22 @@
           if (spans[1]) spans[1].textContent = `For: ${(req.role || '').toUpperCase()}`;
         }
 
-        const pill = li.querySelector('.tier-pill');
-        if (pill) {
-          pill.textContent = tierLabel;
-          pill.className = `tier-pill tier-${tierRaw}`;
+        // pill handling – only emergent
+        const showPill = tierRaw === 'emergent';
+        let pill = li.querySelector('.tier-pill');
+        if (showPill) {
+          if (!pill) {
+            pill = document.createElement('span');
+            pill.className = 'tier-pill tier-emergent';
+            pill.textContent = 'Emergent';
+            const pEl = li.querySelector('p');
+            if (pEl) pEl.appendChild(pill);
+          } else {
+            pill.className = 'tier-pill tier-emergent';
+            pill.textContent = 'Emergent';
+          }
+        } else if (pill) {
+          pill.remove();
         }
       } else {
         li = document.createElement('li');
