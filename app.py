@@ -456,191 +456,423 @@ def _has_heart_or_breathing_emergent(t: str) -> bool:
 
 
 
-def route_note_intelligently(text: str) -> str:
+def route_note_intelligently(note_text: str) -> str:
     """
-    Decide whether a request should go to CNA or NURSE.
-    This version matches our simplified tier system:
-
-      - If EMERGENT (ANY language) → NURSE
-      - If routine/basic task → CNA
-
+    Decide 'nurse' vs 'cna' for free-text notes using:
+      - Hard safety rules (heart/chest/breathing/vision/bleeding/incision/newborn emergencies => nurse)
+      - Environment/cleaning/bedding => CNA
+      - Supplies/mobility/help-to-bed/bathroom/shower => CNA
+      - Breastfeeding & baby-feeding rules
+      - Fuzzy matching for typos ("lite", "brite", "coled", etc.)
+    NOTE: Per user rule, ANY cold/ice pack request -> CNA.
     """
-
-    if not text:
+    if not note_text:
         return "cna"
 
-    t = text.lower().strip()
+    text = note_text.lower().strip()
+    norm = re.sub(r"[^a-z0-9\s]", " ", text)
+    tokens = [t for t in norm.split() if t]
 
-    def has_phrase(p: str) -> bool:
-        return p.lower() in t
+    def contains_any(words):
+        return any(w in text for w in words)
 
-    # ---------------------------------------------------------
-    # MULTILINGUAL EMERGENT PHRASES (SPANISH / CHINESE / ARABIC)
-    # ---------------------------------------------------------
+    def fuzzy_hit(keywords, threshold=0.78):
+        """Return True if any token is fuzzily close to any keyword."""
+        if not tokens:
+            return False
+        for kw in keywords:
+            kw_clean = kw.lower().strip()
+            # phrase match (for multiword patterns)
+            if " " in kw_clean and kw_clean in norm:
+                return True
+            # token-level fuzzy match (for typos)
+            for t in tokens:
+                if len(t) < 3:
+                    continue
+                ratio = difflib.SequenceMatcher(None, t, kw_clean).ratio()
+                if ratio >= threshold:
+                    return True
+        return False
 
-    emergent_es = [
-        # breathing
-        "no puedo respirar", "me cuesta respirar", "dificultad para respirar",
-        "no puedo tomar aire", "me falta el aire",
+    # ----------------- 0) COLD PACK / ICE PACK => ALWAYS CNA -----------------
+    COLD_PACK_PHRASES = [
+        "cold pack", "cold packs", "ice pack", "ice packs", "icepack", "icepacks"
+    ]
+    if contains_any(COLD_PACK_PHRASES):
+        return "cna"
 
-        # chest / heart
-        "dolor en el pecho", "presión en el pecho", "presion en el pecho",
-        "pecho apretado",
-        "mi corazón se siente raro", "mi corazon se siente raro",
-        "mi corazón late muy rápido", "mi corazon late muy rapido",
-        "mi corazón no se siente bien", "mi corazon no se siente bien",
-
-        # vision
-        "visión borrosa", "vision borrosa", "veo puntos", "veo luces",
-
-        # bleeding
-        "mucha sangre", "sangre saliendo", "sangrando mucho",
-        "empapando compresas", "cambiando compresas",
-
-        # incision
-        "mi incisión se abrió", "mi incision se abrio",
-        "mi incisión tiene pus", "mi incision tiene pus",
-
-        # newborn
-        "mi bebé no respira", "mi bebe no respira",
-        "mi bebé está azul", "mi bebe esta azul",
-        "mi bebé se atragantó", "mi bebe se atraganto",
-        "dejé caer a mi bebé", "deje caer a mi bebe"
+    # ----------------- 1) NEWBORN EMERGENCIES (ANY LANGUAGE) -> NURSE --------
+    EMERGENT_BABY_PHRASES_EN = [
+        "my baby is choking",
+        "baby is choking",
+        "baby is not breathing",
+        "baby isn't breathing",
+        "baby isnt breathing",
+        "baby not breathing",
+        "baby can't breathe",
+        "baby cant breathe",
+        "baby turned blue",
+        "baby is blue",
+        "baby looks blue",
+        "baby looks purple",
+        "baby turned purple",
+        "baby looks gray",
+        "baby looks grey",
+        "baby is limp",
+        "baby feels limp",
+        "baby is not moving",
+        "baby isn't moving",
+        "baby isnt moving",
+        "dropped my baby",
+        "i dropped the baby",
+        "baby fell",
     ]
 
-    emergent_zh = [
-        # breathing
-        "我无法呼吸", "我無法呼吸", "呼吸困难", "呼吸困難", "我喘不过气", "我喘不過氣",
-
-        # chest/heart
-        "胸口痛", "胸口疼", "胸口压迫感", "胸口壓迫感",
-        "胸口紧", "胸口緊",
-        "心跳很快", "心脏不舒服", "心臟不舒服",
-        "心脏不对劲", "心臟不對勁",
-
-        # vision
-        "视力模糊", "視力模糊", "看到黑点", "看到黑點",
-
-        # bleeding
-        "大量出血", "流很多血", "血流个不停", "血流個不停",
-
-        # incision
-        "伤口裂开了", "傷口裂開了", "伤口流脓了", "傷口流膿了",
-
-        # newborn
-        "宝宝不呼吸", "寶寶不呼吸",
-        "宝宝发青", "寶寶發青", "宝宝变蓝了", "寶寶變藍了",
-        "宝宝噎住了", "寶寶噎住了",
-        "我把宝宝掉了", "我把寶寶掉了"
+    EMERGENT_BABY_PHRASES_ES = [
+        "mi bebé se está ahogando",
+        "mi bebe se esta ahogando",
+        "mi bebé se ahoga",
+        "mi bebe se ahoga",
+        "mi bebé no respira",
+        "mi bebe no respira",
+        "no respira bien",
+        "bebé morado",
+        "bebe morado",
+        "mi bebé está morado",
+        "mi bebe esta morado",
+        "mi bebé se puso morado",
+        "mi bebe se puso morado",
+        "bebé azul",
+        "bebe azul",
+        "bebé gris",
+        "bebe gris",
+        "bebé morada",
+        "bebe morada",
     ]
 
-    emergent_ar = [
-        "لا أستطيع التنفس", "صعوبة في التنفس",
-        "ألم في الصدر", "ضغط في الصدر",
-        "قلبي يدق بسرعة", "قلبي غير طبيعي",
-        "رؤيتي مشوشة",
-        "نزيف شديد",
-        "جرحي انفتح", "جرحي يخرج صديد",
-        "طفلي لا يتنفس", "طفلي أزرق", "طفلي يختنق",
-        "أسقطت طفلي"
+    EMERGENT_BABY_PHRASES_ZH = [
+        "宝宝窒息",        # baby is choking
+        "寶寶窒息",
+        "宝宝不呼吸",      # baby not breathing
+        "寶寶不呼吸",
+        "宝宝沒有呼吸",
+        "寶寶沒有呼吸",
+        "宝宝喘不过气",
+        "寶寶喘不過氣",
+        "宝宝發紫",
+        "寶寶發紫",
+        "宝宝臉色發紫",
+        "寶寶臉色發紫",
+        "宝宝變紫",
+        "寶寶變紫",
+        "宝宝發青",
+        "寶寶發青",
     ]
 
-    # If any multilingual emergent phrase appears → nurse
-    if any(p in t for p in emergent_es): return "nurse"
-    if any(p in t for p in emergent_zh): return "nurse"
-    if any(p in t for p in emergent_ar): return "nurse"
+    EMERGENT_BABY_PHRASES_AR = [
+        "طفلي يختنق",          # my baby is choking
+        "طفلي لا يتنفس",        # my baby is not breathing
+        "الطفل لا يتنفس",
+        "لا يتنفس جيدا",
+        "طفلي ازرق",            # my baby is blue
+        "طفلي أزرق",
+        "الطفل ازرق",
+        "الطفل أزرق",
+        "طفلي أصبح أزرق",
+        "طفلي شاحب ورمادي",    # gray/pale
+        "طفلي رمادي",
+    ]
 
-    # ---------------------------------------------------------
-    # ENGLISH EMERGENT PHRASES
-    # ---------------------------------------------------------
+    def has_newborn_emergency() -> bool:
+        # Direct phrase hits
+        if any(p in text for p in EMERGENT_BABY_PHRASES_EN):
+            return True
+        if any(p in text for p in EMERGENT_BABY_PHRASES_ES):
+            return True
+        if any(p in text for p in EMERGENT_BABY_PHRASES_ZH):
+            return True
+        if any(p in text for p in EMERGENT_BABY_PHRASES_AR):
+            return True
 
-    emergent_en = [
-        # breathing
-        "can't breathe", "cant breathe", "hard to breathe",
-        "trouble breathing", "difficulty breathing",
-        "short of breath", "can't catch my breath",
-        "cant catch my breath",
+        # Generic (baby + danger) combo across languages
+        baby_words = [
+            "baby", "newborn",
+            "bebé", "bebe",
+            "bebes", "bebés",
+            "宝宝", "嬰兒",
+            "طفلي", "الطفل", "رضيع"
+        ]
+        danger_words = [
+            "choking", "not breathing", "isn't breathing", "isnt breathing",
+            "can't breathe", "cant breathe",
+            "blue", "purple", "grey", "gray",
+            "limp", "not moving", "isn't moving", "isnt moving",
+            "unresponsive", "dropped", "fell", "se cayó", "se cayo",
+            "morada", "morado", "azul", "gris",   # ES colors
+            "发紫", "發紫", "发青", "發青",         # ZH purple/blue
+            "ازرق", "أزرق", "بنفسجي", "رمادي"     # AR colors
+        ]
+        if any(b in text for b in baby_words) and any(d in text for d in danger_words):
+            return True
 
-        # chest / heart
+        return False
+
+    if has_newborn_emergency():
+        return "nurse"
+
+    # ----------------- 2) ADULT EMERGENCY / RED-FLAG -> ALWAYS NURSE ---------
+    EMERGENCY_PHRASES = [
+        "emergency",
+        "not breathing", "cant breathe", "can't breathe",
+        "hard to breathe", "trouble breathing", "short of breath",
         "chest pain", "chest pressure", "pressure in my chest",
         "tightness in my chest",
-        "heart is racing", "my heart is racing",
-        "my heart feels weird", "heart feels weird",
+        "chest feels tight", "chest feels tight and strange",
+        "heart racing", "heart is racing",
+        "palpitations",
+        "passed out", "fainted", "seizure", "stroke",
+        "feel like i'm dying", "feel like im dying",
+        "call 911",
+        # softer heart complaints that should still be emergent
         "something is wrong with my heart",
-        "heart feels off", "heart feels funny",
+        "heart feels weird", "my heart feels weird",
+        "heart feels really weird", "my heart feels really weird",
+        "my heart feels really weird and uncomfortable",
+        "my heart feels off", "heart feels off",
+        "my heart doesn't feel right", "my heart does not feel right",
+        "funny feeling in my chest",
+        "my heart keeps doing something weird", "heart keeps doing something weird",
+        "trouble catching my breath", "catching my breath", "catch my breath",
+        "my heart feels weak or off", "heart feels weak", "heart feels weak or off",
+        # severe headache + neuro style phrases could be added here later
+    ]
 
-        # neuro
-        "seizure", "i'm seizing", "i am seizing",
-        "passed out", "fainted",
+    # Vision changes: ALL vision changes are emergent
+    EMERGENT_VISION_PHRASES = [
+        "blurry vision", "vision is blurry",
+        "vision is weird",
+        "seeing spots", "seeing stars", "seeing sparkles", "seeing flashes",
+        "bright spots",
+        "tunnel vision",
+        "vision going dark", "vision is dark",
+        "can't see", "cant see",
+    ]
 
-        # vision
-        "vision is blurry", "blurry vision", "seeing spots",
-        "seeing stars", "seeing flashes",
+    EMERGENT_BLEEDING_PHRASES = [
+        "blood gushing", "gushing blood",
+        "blood gushing down my legs",
+        "soaking through pads", "soak through pads", "soaking pads",
+        "soaked through pad", "soaked through pads",
+        "pads every 10 minutes", "pads every 20 minutes",
+        "changing pads every 10 minutes", "changing pads every 20 minutes",
+        "bright red blood running down my legs",
+        "bright red blood down my legs",
+    ]
 
-        # bleeding
-        "blood gushing", "soaking through pads",
-        "soaked through pad", "changing pads every",
-
-        # incision
+    INCISION_EMERGENT_TRIGGERS = [
         "incision is leaking", "incision leaking",
-        "incision opened", "incision popped open",
-        "wound opened", "pus", "purulent drainage",
-
-        # newborn
-        "baby not breathing", "my baby is not breathing",
-        "baby turned blue", "baby is blue",
-        "baby choking", "my baby is choking",
-        "i dropped my baby"
+        "incision opened", "incision popped", "incision popped open",
+        "incision came open", "incision split", "incision is open",
+        "wound opened", "wound came open",
+        "pus", "purulent drainage",
     ]
 
-    if any(p in t for p in emergent_en):
+    def has_vision_change():
+        if any(p in text for p in EMERGENT_VISION_PHRASES):
+            return True
+        if re.search(r"\bvision\b", norm):
+            return True
+        return False
+
+    def has_emergent_bleeding():
+        return any(p in text for p in EMERGENT_BLEEDING_PHRASES)
+
+    def has_catastrophic_incision():
+        return "incision" in text and any(p in text for p in INCISION_EMERGENT_TRIGGERS)
+
+    def has_heart_weird():
+        # catch things like "my heart feels really weird and uncomfortable", etc.
+        return re.search(
+            r"heart.*?(feels|feeling|is|keeps|kept)?[^a-zA-Z0-9]*"
+            r"(weird|off|funny|strange|uncomfortable|not right|weak)",
+            text
+        ) is not None
+
+    def has_chest_tight():
+        # "my chest feels tight", "chest tight and strange", etc.
+        return re.search(r"chest.*(tight|tightness|pressure|heavy)", text) is not None
+
+    def has_breath_trouble():
+        # "trouble catching my breath", "can't catch my breath", etc.
+        if "trouble catching my breath" in text:
+            return True
+        if "catch my breath" in text or "catching my breath" in text:
+            return True
+        if "short of breath" in text or "hard to breathe" in text:
+            return True
+        return False
+
+    if has_vision_change():
+        return "nurse"
+    if has_emergent_bleeding():
+        return "nurse"
+    if has_catastrophic_incision():
+        return "nurse"
+    if has_heart_weird():
+        return "nurse"
+    if has_chest_tight():
+        return "nurse"
+    if has_breath_trouble():
         return "nurse"
 
-    # ---------------------------------------------------------
-    # HEART / CHEST / BREATHING free-form detection
-    # ---------------------------------------------------------
-
-    if re.search(r"heart.*(weird|off|strange|funny|uncomfortable|not right)", t):
+    if contains_any(EMERGENCY_PHRASES) or fuzzy_hit(EMERGENCY_PHRASES, threshold=0.72):
         return "nurse"
 
-    if re.search(r"chest.*(tight|pressure|pain|weird|strange|uncomfortable)", t):
-        return "nurse"
-
-    if re.search(r"(trouble|hard).*breath", t):
-        return "nurse"
-
-    # ---------------------------------------------------------
-    # CNA ROUTINE TASKS
-    # ---------------------------------------------------------
-
-    cna_tasks = [
-        "blanket", "cold", "too cold", "room is cold",
-        "formula", "more formula", "baby formula",
-        "burp cloth", "burpcloth", "diaper",
-        "mesh underwear", "peri bottle",
-        "help me to bathroom", "help me to the shower",
-        "help me stand", "help me up",
-        "trash full", "trash is full",
-        "ice pack", "cold pack",
-        "bed is uncomfortable", "bed feels lumpy"
+    # ----------------- 3) GENERAL CLINICAL (blood/pain/incision/neuro) -> NURSE -----------------
+    BLOOD_KEYWORDS = [
+        "blood", "bleeding",
+        "clots", "golf ball", "soaked", "saturated", "hemorrhage", "hemorrhaging"
     ]
 
-    if any(p in t for p in cna_tasks):
+    PAIN_INCISION_KEYWORDS = [
+        "severe pain", "sharp pain", "really bad pain", "terrible pain",
+        "incision", "staples", "stitches", "wound", "infection",
+        "infected", "drainage", "oozing",
+        "burning pain", "migraine", "severe headache", "headache",
+        "dizzy", "lightheaded", "faint", "fainted",
+        "rash", "newborn rash",
+    ]
+
+    if contains_any(BLOOD_KEYWORDS) or fuzzy_hit(BLOOD_KEYWORDS + PAIN_INCISION_KEYWORDS, threshold=0.72):
+        return "nurse"
+
+    # ----------------- 4) BREASTFEEDING & BABY FEEDING -----------------
+    # Formula refill (non-clinical) -> CNA, unless already caught as emergent above
+    if "formula" in text and any(w in text for w in ["more", "extra", "another", "refill", "ran out", "run out"]):
         return "cna"
 
-    # ---------------------------------------------------------
-    # DEFAULT: CNA
-    # ---------------------------------------------------------
+    FEED_NURSE_KEYWORDS = [
+        "breastfeeding", "breast feeding", "latch", "latching",
+        "nipple", "nipples", "milk", "let down", "engorged",
+        "mastitis", "pump", "pumping",
+        "baby wont eat", "baby won't eat", "baby not eating",
+        "baby wont latch", "baby won't latch",
+        "help me breastfeed", "help with breastfeeding",
+    ]
+    if contains_any(FEED_NURSE_KEYWORDS) or fuzzy_hit(FEED_NURSE_KEYWORDS, threshold=0.72):
+        return "nurse"
+
+    # ----------------- 5) ENVIRONMENT / CLEANING / BEDDING -> CNA -----------------
+    ENV_KEYWORDS = [
+        "light", "lights", "bright", "dim", "dark", "lamp",
+        "cold", "hot", "warm", "temperature",
+        "room is cold", "too cold", "too hot",
+        "tv", "television", "volume", "loud", "noise", "noisy", "quiet",
+        "curtain", "curtains", "door",
+    ]
+
+    CNA_CLEANING = [
+        "trash is full", "trash overflowing", "trash can", "garbage",
+        "change my sheets", "change the sheets",
+        "dirty sheet", "dirty sheets", "wet bed", "leaked on bed",
+        "spilled", "spill", "clean room", "mess", "messy",
+    ]
+
+    if any(w in norm for w in ["sheet", "sheets", "dirty sheets", "dirty sheet"]):
+        return "cna"
+
+    if "bed" in norm and "pad" in norm:
+        return "cna"
+
+    if fuzzy_hit(ENV_KEYWORDS, threshold=0.70) or fuzzy_hit(CNA_CLEANING, threshold=0.75):
+        return "cna"
+
+    # ----------------- 6) MOBILITY / BATHROOM / SHOWER HELP -> CNA -----------------
+    MOBILITY_CNA_PHRASES = [
+        "help getting out of bed", "help out of bed",
+        "help me out of bed", "help me stand up", "help standing up",
+        "help me stand", "help me to stand",
+        "help me walk", "help walking", "help to walk",
+        "help to the bathroom", "help to the toilet",
+        "help going to the bathroom", "help going to the toilet",
+        "help getting into the shower", "help me to the shower",
+        "help getting to the shower", "help me shower",
+        "help me to the nursery", "help me to the sink",
+    ]
+    if contains_any(MOBILITY_CNA_PHRASES) or fuzzy_hit(MOBILITY_CNA_PHRASES, threshold=0.78):
+        return "cna"
+
+    if any(w in text for w in ["toilet", "bathroom", "shower"]) and not contains_any(PAIN_INCISION_KEYWORDS + EMERGENCY_PHRASES):
+        return "cna"
+
+    INCONTINENCE_PHRASES = [
+        "peed the bed", "peed in the bed", "peeing the bed",
+        "i peed in the hat", "i peed in hat", "urinated in bed",
+    ]
+    if contains_any(INCONTINENCE_PHRASES) or fuzzy_hit(INCONTINENCE_PHRASES, threshold=0.78):
+        return "cna"
+
+    # ----------------- 7) DEVICES / ROOM EQUIPMENT -----------------
+    DEVICE_CNA_PHRASES = [
+        "bp cuff", "blood pressure cuff",
+        "cuff isn't working", "cuff isnt working",
+        "blood pressure machine", "bp machine",
+        "call light", "call-light",
+        "tv remote", "remote not working", "remote is not working",
+        "remote broke", "remote is broken",
+    ]
+    IV_PUMP_PHRASES = [
+        "iv pump is beeping", "iv pump keeps beeping",
+        "pump is beeping", "pump keeps beeping",
+        "iv pump alarm", "pump alarm",
+    ]
+
+    if contains_any(IV_PUMP_PHRASES) or fuzzy_hit(IV_PUMP_PHRASES, threshold=0.78):
+        return "nurse"
+
+    if contains_any(DEVICE_CNA_PHRASES) or fuzzy_hit(DEVICE_CNA_PHRASES, threshold=0.78):
+        return "cna"
+
+    # ----------------- 8) GENERAL CLINICAL vs GENERAL SUPPORT -----------------
+    NURSE_KEYWORDS = [
+        "pain", "hurts",
+        "medication", "meds",
+        "nausea", "nauseous", "vomit", "vomiting", "throwing up",
+        "sick", "fever", "chills",
+        "iv", "staples", "incision",
+        "rash", "newborn rash",
+        "drainage", "hurt",
+        "blood pressure", "bp",
+        "dermoplast",
+    ]
+
+    CNA_SUPPORT_KEYWORDS = [
+        "water", "ice", "ice chips", "snacks",
+        "blanket", "blankets",
+        "sheet", "sheets", "pillow", "pillows",
+        "need supplies", "supplies",
+        "pads", "mesh underwear", "diaper", "diapers",
+        "wipes", "formula", "bottle", "bottles",
+        "blue pad", "white pad",
+        "burp cloth", "burp cloths",
+        "cold pack", "cold packs", "ice pack", "ice packs",
+    ]
+
+    if fuzzy_hit(NURSE_KEYWORDS, threshold=0.78):
+        return "nurse"
+    if fuzzy_hit(CNA_SUPPORT_KEYWORDS, threshold=0.78):
+        return "cna"
+
+    # ----------------- 9) DEFAULT: CNA -----------------
     return "cna"
+
 
 def classify_escalation_tier(text: str) -> str:
     """
     Classify a request into an escalation tier:
       - 'emergent' : life-threatening / severe red flags
       - 'routine'  : everything else
-
-    This runs on english_user_input, which may still contain
-    original-language text like Spanish, Chinese, Arabic, etc.
+    Works on the (possibly English-normalized) text.
     """
     if not text:
         return "routine"
@@ -651,182 +883,215 @@ def classify_escalation_tier(text: str) -> str:
         pattern = r"\b" + re.escape(phrase) + r"\b"
         return re.search(pattern, t) is not None
 
-    # --- MULTILINGUAL EMERGENT PHRASES (SPANISH / MANDARIN / ARABIC) ---
-
-    # Spanish
+    # --- LANGUAGE-SPECIFIC EMERGENT PHRASES (ADULT) ---
     emergent_phrases_es = [
-        # Breathing
         "tengo una emergencia",
         "no puedo respirar",
         "me cuesta respirar",
         "dificultad para respirar",
-        "no puedo tomar aire",
-        "no puedo coger aire",
-        "no puedo agarrar aire",
-        "me falta el aire",
-
-        # Chest / heart
         "dolor en el pecho",
-        "presión en el pecho", "presion en el pecho",
-        "pecho apretado",
-        "mi corazón se siente raro", "mi corazon se siente raro",
-        "mi corazón se siente extraño", "mi corazon se siente extraño",
-        "mi corazón late muy rápido", "mi corazon late muy rapido",
-        "mi corazón está corriendo", "mi corazon esta corriendo",
-        "mi corazón no se siente bien", "mi corazon no se siente bien",
-
-        # Vision
-        "mi visión está borrosa", "mi vision esta borrosa",
-        "veo puntos", "veo luces", "veo destellos", "veo manchas",
-
-        # Bleeding
-        "mucha sangre", "sangre saliendo", "sangrando mucho",
-        "empapando toallas", "empapando compresas",
-        "cambiando compresas cada 10 minutos",
-
-        # Incision / wound
-        "mi incisión se abrió", "mi incision se abrio",
-        "mi incisión tiene pus", "mi incision tiene pus",
-        "mi herida se abrió", "mi herida se abrio",
-
-        # Newborn
-        "mi bebé no respira", "mi bebe no respira",
-        "mi bebé está azul", "mi bebe esta azul",
-        "mi bebé se atragantó", "mi bebe se atraganto",
-        "dejé caer a mi bebé", "deje caer a mi bebe",
+        "dolor en mi pecho",
+        "presión en el pecho",
+        "presion en el pecho",
+        "mi corazón se siente raro",
+        "mi corazon se siente raro",
+        "mi visión está borrosa",
+        "mi vision esta borrosa",
+        "veo manchas",
+        # newborn-ish in ES (also handled below)
+        "mi bebé está morado",
+        "mi bebe esta morado",
+        "mi bebé está azul",
+        "mi bebe esta azul",
+        "mi bebé no respira",
+        "mi bebe no respira",
+        "mi bebé se está ahogando",
+        "mi bebe se esta ahogando",
     ]
 
-    # Mandarin (Simplified / Traditional mixed)
     emergent_phrases_zh = [
-        # Breathing
-        "我有紧急情况", "我有緊急情況",
-        "我无法呼吸", "我無法呼吸",
-        "我喘不过气", "我喘不過氣",
-        "呼吸困难", "呼吸困難",
-        "我吸不到气", "我吸不到氣",
-
-        # Chest / heart
-        "胸口痛", "胸口疼", "胸口压迫感", "胸口壓迫感",
-        "胸口紧", "胸口緊",
-        "心跳很快",
-        "心脏感觉怪怪的", "心臟感覺怪怪的",
-        "心脏不舒服", "心臟不舒服",
-        "心脏不对劲", "心臟不對勁",
-
-        # Vision
-        "视力模糊", "視力模糊",
-        "看到黑点", "看到黑點",
-        "看到亮点", "看到亮點",
-        "我看不清楚",
-
-        # Bleeding
-        "大量出血",
-        "流很多血",
-        "一直流血",
-        "血流个不停", "血流個不停",
-
-        # Incision / wound
-        "伤口裂开了", "傷口裂開了",
-        "伤口开了", "傷口開了",
-        "伤口流脓了", "傷口流膿了",
-
-        # Newborn
-        "宝宝不呼吸", "寶寶不呼吸",
-        "宝宝发青", "寶寶發青",
-        "宝宝变蓝了", "寶寶變藍了",
-        "宝宝噎住了", "寶寶噎住了",
-        "我把宝宝掉了", "我把寶寶掉了",
+        "我有紧急情况",
+        "我有緊急情況",
+        "我喘不过气",
+        "我喘不過氣",
+        "呼吸困难",
+        "呼吸困難",
+        "呼吸有困难",
+        "呼吸有困難",
+        "胸口疼",
+        "胸口痛",
+        "胸口紧",
+        "胸口緊",
+        "心脏感觉怪怪的",
+        "心臟感覺怪怪的",
+        "视力模糊",
+        "視力模糊",
+        "看到斑点",
+        "看到斑點",
     ]
 
-    # Arabic (in Arabic script)
     emergent_phrases_ar = [
-        # Breathing
+        "عندي حالة طارئة",
         "لا أستطيع التنفس",
         "لا استطيع التنفس",
+        "أشعر بضيق في التنفس",
+        "اشعر بضيق في التنفس",
         "صعوبة في التنفس",
-        "أشعر أني أختنق",
-        "اشعر اني اختنق",
-
-        # Chest / heart
         "ألم في الصدر",
         "الم في الصدر",
-        "ضغط في الصدر",
-        "صدري ضيق",
-        "قلبي يدق بسرعة",
-        "قلبي غير طبيعي",
-        "قلبي يشعر بغرابة",
-
-        # Vision
-        "رؤيتي مشوشة",
-        "لا أستطيع الرؤية بوضوح",
-        "لا استطيع الرؤية بوضوح",
-        "أرى نقاط",
-        "ارى نقاط",
-        "أرى وميض",
-        "ارى وميض",
-
-        # Bleeding
-        "نزيف شديد",
-        "الكثير من الدم",
-        "أنزف بغزارة",
-        "انزف بغزارة",
-        "أغرق الفوط بالدم",
-        "اغرق الفوط بالدم",
-
-        # Incision / wound
-        "جرحي انفتح",
-        "جرحي ينزف",
-        "جرحي يخرج صديد",
-
-        # Newborn
+        # newborn-ish also covered below
         "طفلي لا يتنفس",
-        "طفلي أزرق",
-        "طفلي ازرق",
         "طفلي يختنق",
-        "أسقطت طفلي",
-        "اسقطت طفلي",
     ]
 
-    # If we see ANY of these phrases in the text → emergent
-    if any(p in t for p in emergent_phrases_es):
+    # --- NEWBORN EMERGENCIES (ANY LANGUAGE) ---
+    EMERGENT_BABY_PHRASES_EN = [
+        "my baby is choking",
+        "baby is choking",
+        "baby is not breathing",
+        "baby isn't breathing",
+        "baby isnt breathing",
+        "baby not breathing",
+        "baby can't breathe",
+        "baby cant breathe",
+        "baby turned blue",
+        "baby is blue",
+        "baby looks blue",
+        "baby looks purple",
+        "baby turned purple",
+        "baby looks gray",
+        "baby looks grey",
+        "baby is limp",
+        "baby feels limp",
+        "baby is not moving",
+        "baby isn't moving",
+        "baby isnt moving",
+        "dropped my baby",
+        "i dropped the baby",
+        "baby fell",
+    ]
+
+    EMERGENT_BABY_PHRASES_ES = [
+        "mi bebé se está ahogando",
+        "mi bebe se esta ahogando",
+        "mi bebé se ahoga",
+        "mi bebe se ahoga",
+        "mi bebé no respira",
+        "mi bebe no respira",
+        "no respira bien",
+        "bebé morado",
+        "bebe morado",
+        "mi bebé está morado",
+        "mi bebe esta morado",
+        "mi bebé se puso morado",
+        "mi bebe se puso morado",
+        "bebé azul",
+        "bebe azul",
+        "bebé gris",
+        "bebe gris",
+        "bebé morada",
+        "bebe morada",
+    ]
+
+    EMERGENT_BABY_PHRASES_ZH = [
+        "宝宝窒息",
+        "寶寶窒息",
+        "宝宝不呼吸",
+        "寶寶不呼吸",
+        "宝宝沒有呼吸",
+        "寶寶沒有呼吸",
+        "宝宝喘不过气",
+        "寶寶喘不過氣",
+        "宝宝發紫",
+        "寶寶發紫",
+        "宝宝臉色發紫",
+        "寶寶臉色發紫",
+        "宝宝變紫",
+        "寶寶變紫",
+        "宝宝發青",
+        "寶寶發青",
+    ]
+
+    EMERGENT_BABY_PHRASES_AR = [
+        "طفلي يختنق",
+        "طفلي لا يتنفس",
+        "الطفل لا يتنفس",
+        "لا يتنفس جيدا",
+        "طفلي ازرق",
+        "طفلي أزرق",
+        "الطفل ازرق",
+        "الطفل أزرق",
+        "طفلي أصبح أزرق",
+        "طفلي شاحب ورمادي",
+        "طفلي رمادي",
+    ]
+
+    def has_newborn_emergency() -> bool:
+        if any(p in t for p in EMERGENT_BABY_PHRASES_EN):
+            return True
+        if any(p in t for p in EMERGENT_BABY_PHRASES_ES):
+            return True
+        if any(p in t for p in EMERGENT_BABY_PHRASES_ZH):
+            return True
+        if any(p in t for p in EMERGENT_BABY_PHRASES_AR):
+            return True
+
+        baby_words = [
+            "baby", "newborn",
+            "bebé", "bebe", "bebes", "bebés",
+            "宝宝", "嬰兒",
+            "طفلي", "الطفل", "رضيع"
+        ]
+        danger_words = [
+            "choking", "not breathing", "isn't breathing", "isnt breathing",
+            "can't breathe", "cant breathe",
+            "blue", "purple", "grey", "gray",
+            "limp", "not moving", "isn't moving", "isnt moving",
+            "unresponsive", "dropped", "fell", "se cayó", "se cayo",
+            "morada", "morado", "azul", "gris",
+            "发紫", "發紫", "发青", "發青",
+            "ازرق", "أزرق", "بنفسجي", "رمادي",
+        ]
+        if any(b in t for b in baby_words) and any(d in t for d in danger_words):
+            return True
+        return False
+
+    if any(p in t for p in emergent_phrases_es) or any(p in t for p in emergent_phrases_zh) or any(p in t for p in emergent_phrases_ar):
         return "emergent"
-    if any(p in t for p in emergent_phrases_zh):
-        return "emergent"
-    if any(p in t for p in emergent_phrases_ar):
+    if has_newborn_emergency():
         return "emergent"
 
-    # --- ENGLISH EMERGENT PHRASES / PATTERNS ---
-
-    # Direct English phrases (including newborn)
-    emergent_phrases_en = [
+    # --- ENGLISH EMERGENT PHRASES / PATTERNS (ADULT) ---
+    emergent_phrases = [
         "emergency",
-        # breathing
         "not breathing", "cant breathe", "can't breathe",
         "hard to breathe", "trouble breathing", "short of breath",
         "difficulty breathing", "breathing difficulty",
-        "having trouble catching my breath",
-        "trouble catching my breath",
-        "trouble catching breath",
-        "can't catch my breath", "cant catch my breath",
-        "i can't breathe right", "i cant breathe right",
-        # chest / heart
         "chest pain", "chest pressure", "pressure in my chest",
         "tightness in my chest",
         "heart is racing", "heart racing", "palpitations",
+        "passed out", "fainted",
+        "seizure", "stroke",
         "feel like i'm dying", "feel like im dying",
-        "something is wrong with my heart",
-        "heart feels weird", "my heart feels weird",
-        "heart feels really weird", "my heart feels really weird",
-        "my heart feels really weird and uncomfortable",
-        "my heart feels off", "heart feels off",
-        "my heart doesn't feel right", "my heart does not feel right",
-        "funny feeling in my chest",
-        # neuro / LOC
-        "passed out", "fainted", "seizure", "stroke",
         "call 911",
+        # softer heart complaints that still should be emergent
+        "something is wrong with my heart",
+        "heart feels weird",
+        "my heart feels weird",
+        "heart feels really weird",
+        "my heart feels really weird",
+        "my heart feels really weird and uncomfortable",
+        "my heart feels off",
+        "heart feels off",
+        "my heart doesn't feel right",
+        "my heart does not feel right",
+        "funny feeling in my chest",
+        # breathing difficulty variants
+        "having trouble catching my breath",
+        "trouble catching my breath",
+        "trouble catching breath",
     ]
 
-    # Vision, bleeding, incision, newborn: English
     emergent_vision_phrases = [
         "blurry vision", "vision is blurry",
         "vision is weird",
@@ -844,6 +1109,8 @@ def classify_escalation_tier(text: str) -> str:
         "soaked through pad", "soaked through pads",
         "pads every 10 minutes", "pads every 20 minutes",
         "changing pads every 10 minutes", "changing pads every 20 minutes",
+        "bright red blood running down my legs",
+        "bright red blood down my legs",
     ]
 
     incision_emergent_triggers = [
@@ -854,44 +1121,31 @@ def classify_escalation_tier(text: str) -> str:
         "pus", "purulent drainage",
     ]
 
-    emergent_newborn_phrases_en = [
-        "baby is not breathing", "baby's not breathing", "babys not breathing",
-        "my baby is not breathing",
-        "my baby turned blue", "baby turned blue",
-        "my baby looks blue", "baby looks blue",
-        "my baby turned purple", "baby looks purple",
-        "my baby turned gray", "baby looks gray", "baby looks grey",
-        "baby is choking", "my baby is choking",
-        "baby choked", "my baby choked",
-        "i dropped my baby", "dropped my baby",
-    ]
-
-    # Helper patterns for English heart/chest/breathing that are more free-form
     def has_heart_weird() -> bool:
-        return re.search(r"heart.*(weird|off|funny|strange|uncomfortable|not right|weak)", t) is not None
+        return re.search(
+            r"heart.*(weird|off|funny|strange|uncomfortable|not right|weak)",
+            t
+        ) is not None
 
     def has_chest_emergent() -> bool:
-        # captures "my chest feels tight and strange", etc.
-        return re.search(r"chest.*(tight|pressure|pain|weird|strange|uncomfortable|heavy)", t) is not None
+        return re.search(
+            r"chest.*(tight|pressure|pain|weird|strange|uncomfortable|heavy)",
+            t
+        ) is not None
 
     def has_breathing_trouble() -> bool:
         patterns = [
             r"trouble\s+catching\s+my\s+breath",
             r"trouble\s+catching\s+breath",
             r"having\s+trouble\s+catching\s+my\s+breath",
-            r"can't\s+catch\s+my\s+breath",
-            r"cant\s+catch\s+my\s+breath",
-            r"hard\s+to\s+breathe",
-            r"hard\s+to\s+breath",
         ]
         if any(re.search(p, t) for p in patterns):
             return True
-        # Also: if they literally mention "i can't breathe" or "i cant breathe"
-        if "i can't breathe" in t or "i cant breathe" in t:
+        if "short of breath" in t or "hard to breathe" in t:
             return True
         return False
 
-    # 1) Vision changes → emergent
+    # 1) ANY vision change is emergent
     if any(p in t for p in emergent_vision_phrases) or has_phrase("vision"):
         return "emergent"
 
@@ -903,11 +1157,7 @@ def classify_escalation_tier(text: str) -> str:
     if "incision" in t and any(p in t for p in incision_emergent_triggers):
         return "emergent"
 
-    # 4) Newborn emergencies (English)
-    if any(p in t for p in emergent_newborn_phrases_en):
-        return "emergent"
-
-    # 5) Heart/chest/breathing English patterns
+    # 4) Heart/chest/breathing patterns
     if has_breathing_trouble():
         return "emergent"
     if has_chest_emergent():
@@ -915,13 +1165,14 @@ def classify_escalation_tier(text: str) -> str:
     if has_heart_weird():
         return "emergent"
 
-    # 6) Other hard-coded English emergent phrases
-    for phrase in emergent_phrases_en:
+    # 5) Other hard-coded emergent phrases (English)
+    for phrase in emergent_phrases:
         if phrase in t or has_phrase(phrase):
             return "emergent"
 
-    # Everything else: treated as routine
+    # --- Everything else is routine ---
     return "routine"
+
 
 # --- Core Helper Functions ---
 def log_to_audit_trail(event_type, details):
@@ -2220,6 +2471,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
