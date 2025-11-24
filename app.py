@@ -431,11 +431,10 @@ def route_note_intelligently(note_text: str) -> str:
         return "cna"
 
     # ----------------- 1) EMERGENCY / RED-FLAG -> ALWAYS NURSE -----------------
-    EMERGENCY_PHRASES = [
+       EMERGENCY_PHRASES = [
         "emergency",
         "not breathing", "cant breathe", "can't breathe",
         "hard to breathe", "trouble breathing", "short of breath",
-        "difficulty breathing", "breathing difficulty", "breathing is difficult",
         "chest pain", "chest pressure", "pressure in my chest",
         "tightness in my chest",
         "heart racing", "heart is racing",
@@ -445,14 +444,18 @@ def route_note_intelligently(note_text: str) -> str:
         "call 911",
         # softer heart complaints that should still be emergent
         "something is wrong with my heart",
-        "my heart feels weird",
         "heart feels weird",
+        "my heart feels weird",
+        "heart feels really weird",
+        "my heart feels really weird",
+        "my heart feels really weird and uncomfortable",
         "my heart feels off",
         "heart feels off",
         "my heart doesn't feel right",
         "my heart does not feel right",
         "funny feeling in my chest",
     ]
+
 
     # Vision changes: ALL vision changes are emergent
     EMERGENT_VISION_PHRASES = [
@@ -674,7 +677,6 @@ def classify_escalation_tier(text: str) -> str:
         "emergency",
         "not breathing", "cant breathe", "can't breathe",
         "hard to breathe", "trouble breathing", "short of breath",
-        "difficulty breathing", "breathing difficulty", "breathing is difficult",
         "chest pain", "chest pressure", "pressure in my chest",
         "tightness in my chest",
         "heart is racing", "heart racing", "palpitations",
@@ -684,14 +686,18 @@ def classify_escalation_tier(text: str) -> str:
         "call 911",
         # softer heart complaints that should still be emergent
         "something is wrong with my heart",
-        "my heart feels weird",
         "heart feels weird",
+        "my heart feels weird",
+        "heart feels really weird",
+        "my heart feels really weird",
+        "my heart feels really weird and uncomfortable",
         "my heart feels off",
         "heart feels off",
         "my heart doesn't feel right",
         "my heart does not feel right",
         "funny feeling in my chest",
     ]
+
 
     emergent_vision_phrases = [
         "blurry vision", "vision is blurry",
@@ -2073,6 +2079,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
