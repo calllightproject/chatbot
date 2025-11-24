@@ -386,74 +386,6 @@ def send_email_alert(subject, body, room_number):
         print(f"EMAIL disabled or failed: {e}")
 
 
-def _has_heart_or_breathing_emergent(t: str) -> bool:
-    """
-    Shared helper: detects scary chest/heart/breathing phrases that should
-    ALWAYS be treated as emergent and routed to the nurse.
-    Works on lowercase text.
-    """
-    if not t:
-        return False
-
-    t = t.lower()
-
-    # Direct phrases we KNOW are bad (includes all your tested ones)
-    direct_phrases = [
-        "short of breath",
-        "hard to breathe",
-        "trouble breathing",
-        "trouble catching my breath",
-        "difficulty breathing",
-        "breathing difficulty",
-        "can't breathe",
-        "cant breathe",
-        "can't get a full breath in",
-        "cant get a full breath in",
-        "can't get my breath",
-        "cant get my breath",
-        "having trouble catching my breath",
-        "having trouble breathing",
-        "breathing is hard",
-
-        "my heart keeps doing something weird",
-        "my heart feels weak or off",
-        "my heart feels weak and off",
-        "my chest feels tight and strange",
-        "my chest feels heavy and uncomfortable",
-        "it feels like someone is sitting on my chest",
-        "my heart feels fluttery and not normal",
-        "my heart feels like it skips beats sometimes",
-    ]
-    for p in direct_phrases:
-        if p in t:
-            return True
-
-    # Generic heart/chest weirdness
-    heart_chest_pattern = re.compile(
-        r"(heart|chest)[^a-z]*"
-        r"(feels|feeling|is|keeps|kept|keeps on|doing)?[^a-z]*"
-        r"(weird|off|funny|strange|uncomfortable|not normal|not right|"
-        r"fluttery|flutters|skipping|skips|skipped|pounding|racing|"
-        r"heavy|tight|weak|pressure|sitting on)"
-    )
-    if heart_chest_pattern.search(t):
-        return True
-
-    # Breath trouble patterns
-    breath_patterns = [
-        r"(difficulty|difficult|trouble)\s+breath(ing)?",
-        r"breath(ing)?\s+difficulty",
-        r"can't\s+(catch|get)\s+(\w+\s+)?breath",
-        r"cant\s+(catch|get)\s+(\w+\s+)?breath",
-        r"hard\s+to\s*breathe",
-    ]
-    for rg in breath_patterns:
-        if re.search(rg, t):
-            return True
-
-    return False
-
-
 
 
 def route_note_intelligently(note_text: str) -> str:
@@ -883,7 +815,63 @@ def classify_escalation_tier(text: str) -> str:
         pattern = r"\b" + re.escape(phrase) + r"\b"
         return re.search(pattern, t) is not None
 
+    # ---------- MULTILINGUAL FREE-TEXT EMERGENCY CATCH ----------
+
+    # Chinese breathing/chest/heart emergencies (free text)
+    emergent_zh_free = [
+        "呼吸不过来", "呼吸不過來",        # can't breathe
+        "喘不过气", "喘不過氣",            # out of breath
+        "呼吸困难", "呼吸困難",            # breathing difficulty
+        "胸口非常紧", "胸口很紧", "胸口緊",  # very tight chest
+        "胸口痛", "胸痛",                  # chest pain
+        "心跳很快", "心跳加速",            # heart racing
+        "心脏痛", "心臟痛",                # heart pain
+        "心脏不舒服", "心臟不舒服",        # heart feels weird
+        "宝宝发紫", "嬰兒發紫",            # baby turning purple
+        "宝宝发青", "嬰兒發青",
+        "宝宝不呼吸", "嬰兒不呼吸",        # baby not breathing
+        "宝宝窒息", "嬰兒窒息"             # baby choking
+    ]
+    if any(p in t for p in emergent_zh_free):
+        return "emergent"
+
+    # Spanish free-text emergent phrases
+    emergent_es_free = [
+        "no puedo respirar",
+        "me cuesta respirar",
+        "dificultad para respirar",
+        "dolor en el pecho",
+        "presión en el pecho",
+        "mi corazón", "mi corazon",          # heart issue
+        "bebé no respira", "bebe no respira",
+        "mi bebé está morado", "mi bebe esta morado",
+        "mi bebé está azul", "mi bebe esta azul",
+        "mi bebé está púrpura", "mi bebe esta purpura",
+        "bebé se está ahogando", "bebe se esta ahogando"
+    ]
+    if any(p in t for p in emergent_es_free):
+        return "emergent"
+
+    # Arabic free-text emergent phrases
+    emergent_ar_free = [
+        "لا أستطيع التنفس",
+        "لا استطيع التنفس",
+        "صعوبة في التنفس",
+        "ألم في صدري",
+        "الم في صدري",
+        "صدري ضيق",
+        "قلبي يؤلمني",
+        "قلبي يتسارع",
+        "طفلي يختنق",
+        "طفلي أزرق",
+        "طفلي ازرق",
+        "طفلي لا يتنفس"
+    ]
+    if any(p in t for p in emergent_ar_free):
+        return "emergent"
+
     # --- LANGUAGE-SPECIFIC EMERGENT PHRASES (ADULT) ---
+
     emergent_phrases_es = [
         "tengo una emergencia",
         "no puedo respirar",
@@ -945,6 +933,7 @@ def classify_escalation_tier(text: str) -> str:
     ]
 
     # --- NEWBORN EMERGENCIES (ANY LANGUAGE) ---
+
     EMERGENT_BABY_PHRASES_EN = [
         "my baby is choking",
         "baby is choking",
@@ -1002,13 +991,13 @@ def classify_escalation_tier(text: str) -> str:
         "寶寶沒有呼吸",
         "宝宝喘不过气",
         "寶寶喘不過氣",
-        "宝宝發紫",
+        "宝宝发紫",
         "寶寶發紫",
         "宝宝臉色發紫",
         "寶寶臉色發紫",
         "宝宝變紫",
         "寶寶變紫",
-        "宝宝發青",
+        "宝宝发青",
         "寶寶發青",
     ]
 
@@ -1056,12 +1045,18 @@ def classify_escalation_tier(text: str) -> str:
             return True
         return False
 
-    if any(p in t for p in emergent_phrases_es) or any(p in t for p in emergent_phrases_zh) or any(p in t for p in emergent_phrases_ar):
+    # Direct language-specific emergent adult phrases
+    if any(p in t for p in emergent_phrases_es) \
+       or any(p in t for p in emergent_phrases_zh) \
+       or any(p in t for p in emergent_phrases_ar):
         return "emergent"
+
+    # Newborn emergencies (any language)
     if has_newborn_emergency():
         return "emergent"
 
     # --- ENGLISH EMERGENT PHRASES / PATTERNS (ADULT) ---
+
     emergent_phrases = [
         "emergency",
         "not breathing", "cant breathe", "can't breathe",
@@ -1172,7 +1167,6 @@ def classify_escalation_tier(text: str) -> str:
 
     # --- Everything else is routine ---
     return "routine"
-
 
 # --- Core Helper Functions ---
 def log_to_audit_trail(event_type, details):
@@ -2471,6 +2465,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
