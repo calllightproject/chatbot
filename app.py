@@ -407,7 +407,7 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
 
     # --- obvious multi-word triggers (English only) ---
     direct_phrases = [
-        # breathing
+        # breathing – original
         "short of breath",
         "shortness of breath",
         "hard to breathe",
@@ -428,7 +428,7 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         "all of a sudden it's hard to get a deep breath",
         "all of a sudden its hard to get a deep breath",
 
-        # newer breathing phrases / suffocation / gasping / shallow
+        # breathing – new / you tested
         "i feel like i'm suffocating",
         "i feel like im suffocating",
         "feel like i'm suffocating",
@@ -436,6 +436,8 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         "suffocating",
         "my breathing feels shallow and scary",
         "breathing feels shallow and scary",
+        "my breathing feels irregular and scary",
+        "breathing feels irregular and scary",
         "i'm gasping for air",
         "im gasping for air",
         "gasping for air",
@@ -447,8 +449,31 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         "cant get any air in my lungs",
         "my breathing is getting worse every minute",
         "breathing is getting worse every minute",
+        "my breathing keeps stopping for a moment",
+        "breathing keeps stopping for a moment",
+        "i feel like i'm losing my breath every few seconds",
+        "i feel like im losing my breath every few seconds",
+        "my breathing suddenly became very shallow and frightening",
+        "breathing suddenly became very shallow and frightening",
+        "i feel like i'm choking and can't get air",
+        "i feel like im choking and cant get air",
+        "i feel like i'm choking and can't get any air",
+        "i feel like im choking and cant get any air",
+        "i can't inhale fully and it feels like something is blocking my breath",
+        "i cant inhale fully and it feels like something is blocking my breath",
 
-        # chest/heart
+        # explicit breathing events
+        "my baby suddenly stopped breathing",
+        "baby suddenly stopped breathing",
+        "my baby isn't breathing",
+        "my baby isnt breathing",
+        "baby isn't breathing",
+        "baby isnt breathing",
+        "baby not breathing",
+        "baby can't breathe",
+        "baby cant breathe",
+
+        # chest – original and new
         "chest pain",
         "my chest hurts",
         "chest hurts",
@@ -468,7 +493,13 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         "my chest feels like its being crushed",
         "chest feels like it's being crushed",
         "chest feels like its being crushed",
+        "i feel crushing pressure in the center of my chest",
+        "feel crushing pressure in the center of my chest",
+        "every breath hurts in my chest and i can't take a full one",
+        "every breath hurts in my chest and i cant take a full one",
+        "i feel a stabbing tightness in my chest when i try to breathe",
 
+        # heart – original
         "my heart keeps doing something weird",
         "my heart feels weak or off",
         "my heart feels weak and off",
@@ -483,15 +514,31 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         "heart feels weak",
         "heart keeps doing something weird",
 
+        # heart – racing / pounding / out of control
         "my heart feels like it's beating out of my chest",
         "my heart feels like its beating out of my chest",
         "heart feels like it's beating out of my chest",
         "heart feels like its beating out of my chest",
+        "my heart is beating so fast it scares me",
+        "heart is beating so fast it scares me",
+        "my heart started pounding really fast and won't slow down",
+        "my heart started pounding really fast and wont slow down",
+        "my heart is racing so fast i feel like i'm going to pass out",
+        "my heart is racing so fast i feel like im going to pass out",
 
+        # heart – rhythm / stopping / out of control
         "my heart feels like it's stopping and starting",
         "my heart feels like its stopping and starting",
         "heart feels like it's stopping and starting",
         "heart feels like its stopping and starting",
+        "my heart feels like it's stopping for a second and restarting",
+        "my heart feels like its stopping for a second and restarting",
+        "my heart rhythm feels out of control and wrong",
+        "heart rhythm feels out of control and wrong",
+        "my heart feels like it's fluttering out of control",
+        "my heart feels like its fluttering out of control",
+        "heart feels like it's fluttering out of control",
+        "heart feels like its fluttering out of control",
     ]
     for p in direct_phrases:
         if p in t:
@@ -502,7 +549,8 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         r"(heart|chest).{0,60}"
         r"(weird|off|funny|strange|uncomfortable|not normal|not right|"
         r"fluttery|flutters|skipping|skips|skipped|pounding|racing|"
-        r"heavy|tight|tightness|weak|pressure|sitting on|crushed)"
+        r"heavy|tight|tightness|weak|pressure|sitting on|crushed|crushing|"
+        r"stopping|stopped|irregular|wrong|scares|scared|frightening)"
     )
     if heart_chest_pattern.search(alpha):
         return True
@@ -514,7 +562,7 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         r"can\s*t\s+(catch|get)\s+(\w+\s+)?breath",
         r"cant\s+(catch|get)\s+(\w+\s+)?breath",
         r"cannot\s+(catch|get)\s+(\w+\s+)?breath",
-        r"hard\w*\s+to\s*breathe",                # hard to / harder to breathe
+        r"hard\w*\s+to\s*breathe",                 # hard to / harder to breathe
         r"gasping\s+for\s+air",
         r"can\s*t\s*get\s+any\s+air",
         r"cant\s*get\s+any\s+air",
@@ -522,6 +570,10 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         r"cant\s*get\s+.*air\s+in\s+my\s+lungs",
         r"breath(ing)?\s+is\s+getting\s+worse",
         r"my\s+breath(ing)?\s+is\s+getting\s+worse",
+        r"my\s+breath(ing)?\s+keeps\s+stopping",
+        r"breath(ing)?\s+keeps\s+stopping",
+        r"choking\s+and\s+can\s*t\s+get\s+air",
+        r"choking\s+and\s+cant\s+get\s+air",
     ]
     for rg in breath_patterns:
         if re.search(rg, alpha):
@@ -2149,6 +2201,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
