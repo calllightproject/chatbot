@@ -708,6 +708,155 @@ def _has_neuro_emergent(text: str) -> bool:
 
     # If nothing above matched, don't treat as neuro emergent
     return False
+def _has_htn_emergent(text: str) -> bool:
+    """
+    Detect HTN/preeclampsia-related EMERGENT language (postpartum).
+    ENGLISH ONLY.
+
+    If this returns True, we will:
+      - route to NURSE
+      - classify as EMERGENT
+
+    Per user rule: ANY preeclampsia red flag alone -> emergent.
+    """
+    if not text:
+        return False
+
+    # normalize
+    t = text.lower().strip()
+    t = t.replace("’", "'").replace("“", '"').replace("”", '"')
+
+    # ---- 1) RUQ / epigastric pain (ALWAYS emergent) ----
+    ruq_phrases = [
+        "sharp pain under my right ribs",
+        "pain under my right ribs",
+        "pain under the right ribs",
+        "right upper side pain",
+        "right upper stomach pain",
+        "pain in my upper right side",
+        "pain in my right upper side",
+        "right upper quadrant pain",
+        "ruq pain",
+        "upper abdominal pain",
+        "upper abdomen pain",
+        "upper stomach pain",
+        "pain under my ribs",
+        "pain under the ribs",
+    ]
+    for p in ruq_phrases:
+        if p in t:
+            return True
+
+    # generic combo: "right" + ("upper" or "under") + ("rib" or "side") + "pain"
+    if "right" in t and ("upper" in t or "under" in t) and "pain" in t:
+        if "rib" in t or "ribs" in t or "side" in t or "stomach" in t or "abdomen" in t:
+            return True
+
+    # ---- 2) WORSENING SWELLING / EDEMA ----
+    # specific phrase you gave:
+    if "swelling got way worse really fast" in t and "face feels tight" in t:
+        return True
+
+    swelling_keywords = ["swelling", "swollen", "puffiness", "puffy"]
+    swelling_severity = [
+        "got way worse", "got worse", "getting worse",
+        "really fast", "suddenly", "all of a sudden",
+        "very bad", "extremely", "face feels tight", "face is tight",
+        "can't bend my fingers", "cant bend my fingers",
+    ]
+    if any(w in t for w in swelling_keywords) and any(s in t for s in swelling_severity):
+        return True
+
+    # ---- 3) HEADACHE + PREECLAMPSIA CONTEXT (extra guard, on top of neuro) ----
+    # We already catch many in _has_neuro_emergent, but double-safety here is fine.
+    if "headache" in t:
+        htn_headache_severity = [
+            "really bad", "very bad", "so bad",
+            "worst", "worst of my life",
+            "getting worse", "worse and worse",
+            "won't go away", "wont go away", "not going away",
+            "even after meds", "even after medicine", "meds not helping",
+            "pounding", "throbbing",
+        ]
+        if any(s in t for s in htn_headache_severity):
+            return True
+
+    # ---- 4) VISUAL CHANGES (reinforce preeclampsia risk) ----
+    # Some of this overlaps with neuro, but that's okay.
+    vision_patterns = [
+        "seeing spots", "seeing sparkles", "seeing flashes",
+        "bright spots", "halos", "halo around lights",
+        "vision is blurry", "vision feels blurry", "vision is dim", "vision feels dim",
+        "vision is flickering", "vision is fading", "vision fading",
+        "double vision",
+    ]
+    for p in vision_patterns:
+        if p in t:
+            return True
+
+    # ---- 5) CONFUSION / DISORIENTATION / FEELING OFF ----
+    confusion_phrases = [
+        "suddenly feel really confused",
+        "suddenly feel confused",
+        "i suddenly feel really confused",
+        "i suddenly feel confused",
+        "feel really confused and disoriented",
+        "feel confused and disoriented",
+        "i feel confused and disoriented",
+        "i feel really confused and disoriented",
+        "disoriented", "disorientation",
+        "i can't think straight", "i cant think straight",
+        "feel kind of out of it",
+        "feel out of it",
+        "my head feels weird",
+        "something feels wrong",
+    ]
+    for p in confusion_phrases:
+        if p in t:
+            return True
+
+    # ---- 6) IMPENDING DOOM / "SOMETHING BAD" ----
+    doom_phrases = [
+        "like something bad is about to happen",
+        "like something bad is going to happen",
+        "like something terrible is about to happen",
+        "feel like something bad is happening",
+        "feel like something bad is going to happen",
+        "feel like something is really wrong",
+        "i feel like something is wrong",
+        "i feel like something is really wrong",
+        "something bad is going to happen",
+    ]
+    for p in doom_phrases:
+        if p in t:
+            return True
+
+    # ---- 7) SHAKY + NAUSEOUS + FEELING WRONG ----
+    # your phrase: "I feel shaky, nauseous, and like something bad is about to happen"
+    if "shaky" in t or "shake" in t or "shaking" in t:
+        if "nausea" in t or "nauseous" in t or "nauseated" in t or "sick to my stomach" in t:
+            # and any doom/feels-wrong language
+            if "something bad" in t or "something feels wrong" in t or "something is wrong" in t:
+                return True
+
+    # ---- 8) PATIENT-REPORTED HIGH BP ----
+    bp_keywords = [
+        "blood pressure",
+        "bp",
+        "pressure was high",
+        "reading was high",
+        "my blood pressure was high",
+        "my bp was high",
+        "my blood pressure is high",
+        "my bp is high",
+        "high blood pressure",
+        "very high blood pressure",
+        "very high bp",
+    ]
+    if any(k in t for k in bp_keywords):
+        return True
+
+    return False
 
 def route_note_intelligently(note_text: str) -> str:
     """
@@ -911,9 +1060,10 @@ def classify_escalation_tier(text: str) -> str:
       - 'emergent' : life-threatening / severe red flags
       - 'routine'  : everything else
 
-    Any heart/chest/breathing/color-change flagged by
-    _has_heart_breath_color_emergent()
-    OR neuro red flags from _has_neuro_emergent()
+    Any of the following helpers returning True:
+      - _has_heart_breath_color_emergent()
+      - _has_neuro_emergent()
+      - _has_htn_emergent()
     -> 'emergent'.
     """
     if not text:
@@ -927,11 +1077,15 @@ def classify_escalation_tier(text: str) -> str:
     if _has_heart_breath_color_emergent(t):
         return "emergent"
 
-    # 1b) NEW: Neuro emergent → EMERGENT
+    # 1b) Neuro emergent → EMERGENT
     if _has_neuro_emergent(t):
         return "emergent"
 
-    # 2) Other explicit EMERGENT phrases
+    # 1c) HTN / preeclampsia emergent → EMERGENT
+    if _has_htn_emergent(t):
+        return "emergent"
+
+    # 2) Other explicit EMERGENT phrases (existing logic)
     def has_phrase(phrase: str) -> bool:
         pattern = r"\b" + re.escape(phrase) + r"\b"
         return re.search(pattern, t) is not None
@@ -943,7 +1097,7 @@ def classify_escalation_tier(text: str) -> str:
         "feel like i'm dying", "feel like im dying",
         "call 911",
 
-        # newborn emergencies (non-neuro)
+        # newborn emergencies (non-neuro, non-respiratory)
         "my baby is choking",
         "baby is choking",
         "baby is limp",
@@ -1004,7 +1158,6 @@ def classify_escalation_tier(text: str) -> str:
 
     # Everything else is routine
     return "routine"
-
 
 
 
@@ -2305,6 +2458,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
