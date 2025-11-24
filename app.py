@@ -397,7 +397,7 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
     if not text:
         return False
 
-    # Normalize to lowercase and fix curly quotes (can’t -> can't, etc.)
+    # Normalize to lowercase and fix curly quotes
     t = text.lower()
     t = t.replace("’", "'").replace("“", '"').replace("”", '"')
 
@@ -405,9 +405,9 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
     alpha = re.sub(r"[^a-z\s]", " ", t)
     alpha = re.sub(r"\s+", " ", alpha).strip()
 
-    # --- obvious multi-word triggers (English only) ---
+    # --- direct phrases (everything we absolutely want emergent) ---
     direct_phrases = [
-        # breathing – original
+        # BREATHING – original
         "short of breath",
         "shortness of breath",
         "hard to breathe",
@@ -428,7 +428,7 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         "all of a sudden it's hard to get a deep breath",
         "all of a sudden its hard to get a deep breath",
 
-        # breathing – new / you tested
+        # BREATHING – newer phrases we’ve tested
         "i feel like i'm suffocating",
         "i feel like im suffocating",
         "feel like i'm suffocating",
@@ -461,8 +461,12 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         "i feel like im choking and cant get any air",
         "i can't inhale fully and it feels like something is blocking my breath",
         "i cant inhale fully and it feels like something is blocking my breath",
+        "i feel like i can't draw in enough air no matter how hard i try",
+        "i feel like i cant draw in enough air no matter how hard i try",
+        "i'm trying to breathe but it feels like nothing is getting in",
+        "im trying to breathe but it feels like nothing is getting in",
 
-        # explicit breathing events
+        # explicit baby breathing
         "my baby suddenly stopped breathing",
         "baby suddenly stopped breathing",
         "my baby isn't breathing",
@@ -473,7 +477,7 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         "baby can't breathe",
         "baby cant breathe",
 
-        # chest – original and new
+        # CHEST – pain / pressure / tightness
         "chest pain",
         "my chest hurts",
         "chest hurts",
@@ -499,7 +503,7 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         "every breath hurts in my chest and i cant take a full one",
         "i feel a stabbing tightness in my chest when i try to breathe",
 
-        # heart – original
+        # HEART – weird / off / weak
         "my heart keeps doing something weird",
         "my heart feels weak or off",
         "my heart feels weak and off",
@@ -514,7 +518,7 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         "heart feels weak",
         "heart keeps doing something weird",
 
-        # heart – racing / pounding / out of control
+        # HEART – racing / pounding / out of control
         "my heart feels like it's beating out of my chest",
         "my heart feels like its beating out of my chest",
         "heart feels like it's beating out of my chest",
@@ -526,7 +530,7 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         "my heart is racing so fast i feel like i'm going to pass out",
         "my heart is racing so fast i feel like im going to pass out",
 
-        # heart – rhythm / stopping / out of control
+        # HEART – rhythm / stopping / out of control
         "my heart feels like it's stopping and starting",
         "my heart feels like its stopping and starting",
         "heart feels like it's stopping and starting",
@@ -540,11 +544,12 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         "heart feels like it's fluttering out of control",
         "heart feels like its fluttering out of control",
     ]
+
     for p in direct_phrases:
         if p in t:
             return True
 
-    # --- generic heart / chest weirdness ---
+    # --- generic heart / chest weirdness catch-all ---
     heart_chest_pattern = re.compile(
         r"(heart|chest).{0,60}"
         r"(weird|off|funny|strange|uncomfortable|not normal|not right|"
@@ -574,13 +579,15 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         r"breath(ing)?\s+keeps\s+stopping",
         r"choking\s+and\s+can\s*t\s+get\s+air",
         r"choking\s+and\s+cant\s+get\s+air",
+        r"draw\s+in\s+enough\s+air",
+        r"nothing\s+is\s+getting\s+in",
     ]
     for rg in breath_patterns:
         if re.search(rg, alpha):
             return True
 
-    # --- color change (purple / blue / grey / gray) with body/baby context ---
-    color_words = ["purple", "blue", "grey", "gray"]
+    # --- color change (purple / blue / bluish / grey / gray) ---
+    color_words = ["purple", "blue", "bluish", "grey", "gray"]
     context_words = [
         "baby", "newborn", "me", "my", "skin", "face", "lips",
         "mouth", "hands", "feet", "fingers", "toes"
@@ -592,7 +599,8 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
     if ("turned blue" in t or "turning blue" in t or
         "turned purple" in t or "turning purple" in t or
         "turned grey" in t or "turning grey" in t or
-        "turned gray" in t or "turning gray" in t):
+        "turned gray" in t or "turning gray" in t or
+        "turned bluish" in t or "turning bluish" in t):
         return True
 
     return False
@@ -2201,6 +2209,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
