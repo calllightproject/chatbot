@@ -522,6 +522,192 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         return True
 
     return False
+def _has_neuro_emergent(text: str) -> bool:
+    """
+    Detect neuro-related EMERGENT language (postpartum patient + newborn).
+    ENGLISH ONLY.
+
+    If this returns True, we will:
+      - route to NURSE
+      - classify as EMERGENT
+
+    Unit-specific exceptions:
+      - "my leg feels weak and wobbly"  -> NOT emergent
+      - "i feel unsteady when i stand up" -> NOT emergent
+    """
+    if not text:
+        return False
+
+    # normalize
+    t = text.lower().strip()
+    t = t.replace("’", "'").replace("“", '"').replace("”", '"')
+
+    # ---- 0) UNIT-SPECIFIC NON-EMERGENT EXCEPTIONS ----
+    exception_phrases = [
+        "my leg feels weak and wobbly",
+        "i feel unsteady when i stand up",
+    ]
+    for p in exception_phrases:
+        if p in t:
+            return False
+
+    # ---- 1) HEADACHE + VISION (PREECLAMPSIA / STROKE STYLE) ----
+    # direct phrases from your testing
+    headache_phrases = [
+        "really bad headache that won't go away",
+        "really bad headache that wont go away",
+        "worst headache of my life",
+        "my headache is getting worse really fast",
+        "headache is getting worse really fast",
+        "my headache is getting worse",
+        "headache that won't go away even after meds",
+        "headache that wont go away even after meds",
+        "my head hurts and i feel kind of out of it",
+        "my head hurts and i feel out of it",
+        "pressure behind my eyes",
+    ]
+    for p in headache_phrases:
+        if p in t:
+            return True
+
+    # generic severe/worsening headache
+    if "headache" in t:
+        severity_words = [
+            "really bad", "very bad", "so bad",
+            "worst", "getting worse", "worse and worse",
+            "won't go away", "wont go away",
+            "not going away",
+            "even after meds", "even after medicine", "meds not helping",
+        ]
+        if any(s in t for s in severity_words):
+            return True
+
+    # vision + neuro
+    vision_keywords = [
+        "vision", "blurry vision", "vision feels blurry", "vision feels dim",
+        "seeing spots", "seeing sparkles", "seeing flashes",
+        "bright spots", "vision is fading", "vision fading",
+        "going dark", "going black", "going dim",
+    ]
+    if any(k in t for k in vision_keywords):
+        return True
+
+    # ---- 2) DIZZINESS / ABOUT TO PASS OUT (NEURO CONTEXT) ----
+    # specific phrases you flagged
+    if "feel like i'm going to pass out" in t or "feel like im going to pass out" in t:
+        return True
+
+    if "going to pass out" in t or "about to pass out" in t:
+        return True
+
+    # "my dizziness is not going away"
+    if "dizziness" in t or "dizzy" in t or "lightheaded" in t or "light headed" in t:
+        if "not going away" in t or "getting worse" in t or "worse" in t:
+            return True
+
+    # ---- 3) CONFUSION / ALTERED MENTAL STATE ----
+    confusion_phrases = [
+        "i suddenly feel confused",
+        "i feel confused",
+        "i can't think straight",
+        "i cant think straight",
+        "feel kind of out of it",
+        "feel out of it",
+        "feel strange and disconnected",
+        "feel disconnected",
+        "my head feels weird",
+    ]
+    for p in confusion_phrases:
+        if p in t:
+            return True
+
+    # ---- 4) FOCAL NEURO DEFICITS (FACE / ARM / HAND) ----
+    focal_phrases = [
+        "my face feels numb on one side",
+        "face feels numb on one side",
+        "face numb on one side",
+        "one side of my face feels numb",
+        "my arm feels numb/tingly and weak",
+        "my arm feels numb and weak",
+        "my arm feels numb and tingly",
+        "my hand suddenly feels heavy and won't work right",
+        "my hand suddenly feels heavy and wont work right",
+        "my hand suddenly feels heavy",
+        "hand suddenly feels heavy",
+    ]
+    for p in focal_phrases:
+        if p in t:
+            return True
+
+    # also treat any "face" + "numb" + "one side" as emergent
+    if "face" in t and "numb" in t and ("one side" in t or "one-sided" in t):
+        return True
+
+    # ---- 5) SPEECH DIFFICULTY ----
+    speech_phrases = [
+        "having trouble getting my words out",
+        "trouble getting my words out",
+        "i'm having trouble getting my words out",
+        "im having trouble getting my words out",
+        "my words are slurring",
+        "i feel like i'm slurring my words",
+        "i feel like im slurring my words",
+        "slurring my words",
+        "my mouth isn't moving right when i talk",
+        "my mouth isnt moving right when i talk",
+        "my speech is coming out as gibberish",
+        "speech is coming out as gibberish",
+    ]
+    for p in speech_phrases:
+        if p in t:
+            return True
+
+    # ---- 6) SHAKING / TWITCHING / SEIZURE-LIKE ----
+    seizure_like_phrases = [
+        "i feel really shaky and it's hard to control my body",
+        "i feel really shaky and its hard to control my body",
+        "my hands or arms are twitching and i can't stop it",
+        "my hands or arms are twitching and i cant stop it",
+        "my hands are jerking uncontrollably and i can't stop them",
+        "my hands are jerking uncontrollably and i cant stop them",
+        "my arms are jerking uncontrollably",
+        "i'm about to have a seizure",
+        "im about to have a seizure",
+        "about to have a seizure",
+        "having a seizure",
+        "seizure",
+    ]
+    for p in seizure_like_phrases:
+        if p in t:
+            return True
+
+    # ---- 7) NEWBORN NEURO RED FLAGS ----
+    baby_words = ["baby", "newborn", "infant"]
+    if any(b in t for b in baby_words):
+        baby_neuro_phrases = [
+            "baby looks dazed",
+            "looks dazed and wont focus on me",
+            "looks dazed and won't focus on me",
+            "won't focus on me", "wont focus on me",
+            "feels floppy",
+            "feels very stiff",
+            "seems harder to wake than usual",
+            "harder to wake than usual",
+            "isn't responding to me", "isnt responding to me",
+            "isn't responding", "isnt responding",
+            "keeps jerking or twitching",
+            "keeps jerking", "keeps twitching",
+            "arms are shaking and i can't get them to stop",
+            "arms are shaking and i cant get them to stop",
+            "turned pale and looks out of it",
+            "looks out of it",
+        ]
+        for p in baby_neuro_phrases:
+            if p in t:
+                return True
+
+    # If nothing above matched, don't treat as neuro emergent
+    return False
 
 def route_note_intelligently(note_text: str) -> str:
     """
@@ -726,7 +912,9 @@ def classify_escalation_tier(text: str) -> str:
       - 'routine'  : everything else
 
     Any heart/chest/breathing/color-change flagged by
-    _has_heart_breath_color_emergent() -> 'emergent'.
+    _has_heart_breath_color_emergent()
+    OR neuro red flags from _has_neuro_emergent()
+    -> 'emergent'.
     """
     if not text:
         return "routine"
@@ -735,22 +923,12 @@ def classify_escalation_tier(text: str) -> str:
     t = text.lower().strip()
     t = t.replace("’", "'").replace("“", '"').replace("”", '"')
 
-    # 1) Heart/chest/breathing/color-change → EMERGENT
+    # 1) Cardio-respiratory / color-change → EMERGENT
     if _has_heart_breath_color_emergent(t):
         return "emergent"
 
-    # 1b) NEW: breathing + dizziness / presyncope combo → EMERGENT
-    breathing_words = ["breath", "breathe", "breathing", "air", "lungs"]
-    dizzy_words = [
-        "dizzy", "dizziness",
-        "lightheaded", "light headed",
-        "faint", "fainting",
-        "about to faint", "about to pass out",
-        "going to faint", "going to pass out",
-        "feel like i'm going to pass out",
-        "feel like im going to pass out",
-    ]
-    if any(w in t for w in breathing_words) and any(d in t for d in dizzy_words):
+    # 1b) NEW: Neuro emergent → EMERGENT
+    if _has_neuro_emergent(t):
         return "emergent"
 
     # 2) Other explicit EMERGENT phrases
@@ -765,7 +943,7 @@ def classify_escalation_tier(text: str) -> str:
         "feel like i'm dying", "feel like im dying",
         "call 911",
 
-        # newborn emergencies
+        # newborn emergencies (non-neuro)
         "my baby is choking",
         "baby is choking",
         "baby is limp",
@@ -826,6 +1004,7 @@ def classify_escalation_tier(text: str) -> str:
 
     # Everything else is routine
     return "routine"
+
 
 
 
@@ -2126,6 +2305,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
