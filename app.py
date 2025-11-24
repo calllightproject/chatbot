@@ -401,7 +401,7 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
     t = text.lower()
     t = t.replace("’", "'").replace("“", '"').replace("”", '"')
 
-    # A version with only letters/spaces for regex matching
+    # Letters-only version for regex matching
     alpha = re.sub(r"[^a-z\s]", " ", t)
     alpha = re.sub(r"\s+", " ", alpha).strip()
 
@@ -428,37 +428,81 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         "all of a sudden it's hard to get a deep breath",
         "all of a sudden its hard to get a deep breath",
 
+        # newer breathing phrases / suffocation / gasping / shallow
+        "i feel like i'm suffocating",
+        "i feel like im suffocating",
+        "feel like i'm suffocating",
+        "feel like im suffocating",
+        "suffocating",
+        "my breathing feels shallow and scary",
+        "breathing feels shallow and scary",
+        "i'm gasping for air",
+        "im gasping for air",
+        "gasping for air",
+        "i'm gasping for air and can't control it",
+        "im gasping for air and cant control it",
+        "can't get any air",
+        "cant get any air",
+        "can't get any air in my lungs",
+        "cant get any air in my lungs",
+        "my breathing is getting worse every minute",
+        "breathing is getting worse every minute",
+
         # chest/heart
         "chest pain",
         "my chest hurts",
         "chest hurts",
         "my chest feels heavy",
+        "chest feels heavy",
         "my chest feels tight",
+        "chest feels tight",
         "my chest feels tight and strange",
         "my chest feels tight and heavy",
         "my chest feels heavy and it's getting worse",
         "my chest feels heavy and its getting worse",
         "it feels like someone is sitting on my chest",
         "it feels like something is sitting on my chest",
+        "pressure in my chest",
+        "strong pressure in my chest",
+        "my chest feels like it's being crushed",
+        "my chest feels like its being crushed",
+        "chest feels like it's being crushed",
+        "chest feels like its being crushed",
+
         "my heart keeps doing something weird",
         "my heart feels weak or off",
         "my heart feels weak and off",
+        "my heart feels weak",
+        "my heart feels off",
+        "my heart feels strange",
         "my heart feels fluttery and not normal",
         "my heart feels like it skips beats",
-        "pressure in my chest",
-        "strong pressure in my chest",
+        "heart feels weird",
+        "heart feels off",
+        "heart feels strange",
+        "heart feels weak",
+        "heart keeps doing something weird",
+
+        "my heart feels like it's beating out of my chest",
+        "my heart feels like its beating out of my chest",
+        "heart feels like it's beating out of my chest",
+        "heart feels like its beating out of my chest",
+
+        "my heart feels like it's stopping and starting",
+        "my heart feels like its stopping and starting",
+        "heart feels like it's stopping and starting",
+        "heart feels like its stopping and starting",
     ]
     for p in direct_phrases:
         if p in t:
             return True
 
     # --- generic heart / chest weirdness ---
-    # Allow words between "heart/chest" and the scary descriptor
     heart_chest_pattern = re.compile(
         r"(heart|chest).{0,60}"
         r"(weird|off|funny|strange|uncomfortable|not normal|not right|"
         r"fluttery|flutters|skipping|skips|skipped|pounding|racing|"
-        r"heavy|tight|tightness|weak|pressure|sitting on)"
+        r"heavy|tight|tightness|weak|pressure|sitting on|crushed)"
     )
     if heart_chest_pattern.search(alpha):
         return True
@@ -469,7 +513,15 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         r"breath(ing)?\s+difficulty",
         r"can\s*t\s+(catch|get)\s+(\w+\s+)?breath",
         r"cant\s+(catch|get)\s+(\w+\s+)?breath",
-        r"hard\w*\s+to\s*breathe",  # matches "hard to breathe", "harder to breathe"
+        r"cannot\s+(catch|get)\s+(\w+\s+)?breath",
+        r"hard\w*\s+to\s*breathe",                # hard to / harder to breathe
+        r"gasping\s+for\s+air",
+        r"can\s*t\s*get\s+any\s+air",
+        r"cant\s*get\s+any\s+air",
+        r"can\s*t\s*get\s+.*air\s+in\s+my\s+lungs",
+        r"cant\s*get\s+.*air\s+in\s+my\s+lungs",
+        r"breath(ing)?\s+is\s+getting\s+worse",
+        r"my\s+breath(ing)?\s+is\s+getting\s+worse",
     ]
     for rg in breath_patterns:
         if re.search(rg, alpha):
@@ -492,7 +544,6 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         return True
 
     return False
-
 
 
 def route_note_intelligently(note_text: str) -> str:
@@ -2098,6 +2149,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
