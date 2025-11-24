@@ -397,12 +397,19 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
     if not text:
         return False
 
+    # Normalize to lowercase and fix curly quotes (can’t -> can't, etc.)
     t = text.lower()
+    t = t.replace("’", "'").replace("“", '"').replace("”", '"')
 
-    # --- obvious multi-word triggers ---
+    # A version with only letters/spaces for regex matching
+    alpha = re.sub(r"[^a-z\s]", " ", t)
+    alpha = re.sub(r"\s+", " ", alpha).strip()
+
+    # --- obvious multi-word triggers (English only) ---
     direct_phrases = [
         # breathing
         "short of breath",
+        "shortness of breath",
         "hard to breathe",
         "having trouble breathing",
         "trouble breathing",
@@ -411,6 +418,7 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         "breathing difficulty",
         "can't breathe",
         "cant breathe",
+        "cannot breathe",
         "can't catch my breath",
         "cant catch my breath",
         "can't get a deep breath",
@@ -418,44 +426,53 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         "can't get a full breath",
         "cant get a full breath",
         "all of a sudden it's hard to get a deep breath",
+        "all of a sudden its hard to get a deep breath",
+
         # chest/heart
-        "it feels like someone is sitting on my chest",
+        "chest pain",
+        "my chest hurts",
+        "chest hurts",
         "my chest feels heavy",
         "my chest feels tight",
         "my chest feels tight and strange",
         "my chest feels tight and heavy",
         "my chest feels heavy and it's getting worse",
+        "my chest feels heavy and its getting worse",
+        "it feels like someone is sitting on my chest",
+        "it feels like something is sitting on my chest",
         "my heart keeps doing something weird",
         "my heart feels weak or off",
         "my heart feels weak and off",
         "my heart feels fluttery and not normal",
         "my heart feels like it skips beats",
+        "pressure in my chest",
+        "strong pressure in my chest",
     ]
     for p in direct_phrases:
         if p in t:
             return True
 
     # --- generic heart / chest weirdness ---
+    # Allow words between "heart/chest" and the scary descriptor
     heart_chest_pattern = re.compile(
-        r"(heart|chest)[^a-z]*"
-        r"(feels|feeling|is|keeps|kept|keeps on|doing)?[^a-z]*"
+        r"(heart|chest).{0,60}"
         r"(weird|off|funny|strange|uncomfortable|not normal|not right|"
         r"fluttery|flutters|skipping|skips|skipped|pounding|racing|"
         r"heavy|tight|tightness|weak|pressure|sitting on)"
     )
-    if heart_chest_pattern.search(t):
+    if heart_chest_pattern.search(alpha):
         return True
 
     # --- breathing trouble patterns (regex) ---
     breath_patterns = [
         r"(difficulty|difficult|trouble)\s+breath(ing)?",
         r"breath(ing)?\s+difficulty",
-        r"can't\s+(catch|get)\s+(\w+\s+)?breath",
+        r"can\s*t\s+(catch|get)\s+(\w+\s+)?breath",
         r"cant\s+(catch|get)\s+(\w+\s+)?breath",
-        r"hard\s+to\s*breathe",
+        r"hard\w*\s+to\s*breathe",  # matches "hard to breathe", "harder to breathe"
     ]
     for rg in breath_patterns:
-        if re.search(rg, t):
+        if re.search(rg, alpha):
             return True
 
     # --- color change (purple / blue / grey / gray) with body/baby context ---
@@ -686,7 +703,9 @@ def classify_escalation_tier(text: str) -> str:
     if not text:
         return "routine"
 
+    # Normalize case + curly quotes
     t = text.lower().strip()
+    t = t.replace("’", "'").replace("“", '"').replace("”", '"')
 
     def has_phrase(phrase: str) -> bool:
         pattern = r"\b" + re.escape(phrase) + r"\b"
@@ -710,6 +729,8 @@ def classify_escalation_tier(text: str) -> str:
         "baby not breathing",
         "baby isn't breathing",
         "baby isnt breathing",
+        "my baby isn't breathing",
+        "my baby isnt breathing",
         "baby can't breathe",
         "baby cant breathe",
         "baby turned blue",
@@ -2077,6 +2098,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
