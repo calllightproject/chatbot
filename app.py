@@ -584,6 +584,88 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
 
     return False
 
+def _has_neuro_emergent(text: str) -> bool:
+    """
+    STRICT neurologic emergent screener (postpartum).
+
+    If this returns True, classify as EMERGENT and route to NURSE.
+
+    Very sensitive on:
+      - seizures / jerking / violent shaking
+      - sudden loss of speech or understanding
+      - sudden inability to move part of body
+      - loss of awareness / can't respond
+      - scary whole-body shaking + doom feelings
+      - baby neuro red flags
+    """
+    if not text:
+        return False
+
+    t = text.lower().strip()
+    t = t.replace("’", "'").replace("“", '"').replace("”", '"')
+
+    # 1) Direct phrase hits from the master list
+    for phrase in EMERGENT_NEURO_PHRASES:
+        if phrase in t:
+            return True
+
+    # 2) Sudden problems with understanding or speaking
+    if "sudden" in t or "suddenly" in t:
+        if any(p in t for p in [
+            "can't understand", "cant understand",
+            "can't get any words out", "cant get any words out",
+            "can't speak", "cant speak",
+            "can't talk", "cant talk",
+            "can't move my mouth", "cant move my mouth",
+        ]):
+            return True
+
+        # sudden focal weakness / control loss
+        if any(p in t for p in [
+            "right arm", "left arm", "right hand", "left hand",
+            "right leg", "left leg",
+            "arm dropped", "dropped my arm",
+            "leg gave out", "legs gave out",
+        ]) and any(p in t for p in [
+            "can't move", "cant move",
+            "can't control", "cant control",
+            "went weak", "feels weak",
+        ]):
+            return True
+
+    # 3) Can't respond / can't move mouth when awake
+    if any(p in t for p in ["can't respond", "cant respond"]):
+        if any(p in t for p in [
+            "move my mouth", "move my lips",
+            "talk", "speak", "get words out",
+        ]):
+            return True
+
+    # 4) Whole-body shaking / jerking
+    if ("whole body" in t or "my whole body" in t) and any(
+        w in t for w in ["shaky", "shaking", "jerking", "twitching"]
+    ):
+        return True
+
+    # 5) Hands shaking violently and not stopping
+    if "hands" in t and any(w in t for w in ["shaking", "jerking", "twitching"]):
+        if any(p in t for p in [
+            "can't make them stop", "cant make them stop",
+            "can't control them", "cant control them",
+            "won't stop", "wont stop",
+        ]):
+            return True
+
+    # 6) Shaky + sick + sense something terrible is about to happen
+    if any(w in t for w in ["shaky", "shaking"]) and "sick" in t:
+        if any(p in t for p in [
+            "something terrible is about to happen",
+            "sense that something terrible is about to happen",
+            "i feel this sense that something terrible is about to happen",
+        ]):
+            return True
+
+    return False
 
 def _has_htn_emergent(text: str) -> bool:
     """
@@ -2461,6 +2543,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
