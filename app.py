@@ -1041,7 +1041,7 @@ def _has_neuro_emergent(t: str) -> bool:
         "baby staring off", "baby staring through me",
     ]
 
-    return any(phrase in t for phrase in EMERGENT_NEURO_PHRASES))
+    return any(phrase in t for phrase in EMERGENT_NEURO_PHRASES)
 
 
 
@@ -2450,6 +2450,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
