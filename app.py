@@ -924,6 +924,57 @@ def route_note_intelligently(note_text: str) -> str:
     return "cna"
 
 
+def _has_neuro_emergent(t: str) -> bool:
+    """
+    Detects severe neurologic postpartum emergencies.
+    Very strict: these ALWAYS return True.
+    """
+
+    if not t:
+        return False
+
+    t = t.lower()
+
+    EMERGENT_NEURO_PHRASES = [
+        "seizure", "seizing",
+        "postictal", "convulsion", "convulsing",
+
+        "unconscious", "not waking up",
+        "can't wake", "cant wake",
+        "won't wake", "wont wake",
+
+        "unresponsive", "not responding",
+        "stiff", "floppy",
+
+        "vision fading", "vision going dark",
+        "vision is dark",
+        "spots in vision", "flashing lights",
+
+        "confused and disoriented",
+        "suddenly confused",
+        "can’t think straight", "cant think straight",
+
+        "speech is slurred", "words are slurring",
+        "gibberish", "can't speak", "cant speak",
+
+        "left side feels weak", "right side feels weak",
+        "drooping face", "face drooping",
+        "can't move my arm", "cant move my arm",
+        "can't move my leg", "cant move my leg",
+
+        "worst headache of my life",
+        "thunderclap headache",
+
+        "my baby feels stiff",
+        "my baby feels floppy",
+        "my baby won't respond", "baby not responding",
+        "baby not waking", "baby won’t wake",
+        "baby keeps twitching", "baby jerking",
+    ]
+
+    return any(phrase in t for phrase in EMERGENT_NEURO_PHRASES)
+
+
 def classify_escalation_tier(text: str) -> str:
     """
     Classify a request into an escalation tier (ENGLISH ONLY):
@@ -2159,9 +2210,9 @@ def patient_join(data):
         socketio.emit("patient:error", {"error": "join_exception"}, namespace="/patient")
 
 @socketio.on("disconnect", namespace="/patient")
-def patient_disconnect():
-    # Reason is not directly provided by Flask-SocketIO here; this is just for visibility.
-    print("[patient] client disconnected")
+def patient_disconnect(reason=None):
+    # You can keep your logging and also see the reason if it's provided
+    print("[patient] client disconnected", f"reason={reason!r}")
 
 # --- Default error logger for any namespace/event ---
 @socketio.on_error_default
@@ -2328,6 +2379,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
