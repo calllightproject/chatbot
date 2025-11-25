@@ -412,6 +412,9 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         # can't breathe / no air
         "can't breathe", "cant breathe", "cannot breathe",
         "can't get air", "cant get air",
+        "can't catch my breath", "cant catch my breath",
+        "short of breath", "shortness of breath",
+        "out of breath",
         "no air", "not getting air",
         "can't pull in a breath", "cant pull in a breath",
         "can't get a breath", "cant get a breath",
@@ -438,7 +441,9 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
     # -------- 2. BREATHING / AIRWAY PATTERNS --------
     breath_tokens = [
         "breath", "breathe", "breathing",
-        "air", "lungs", "inhale", "exhale"
+        "air", "lungs", "inhale", "exhale",
+        "short of breath", "shortness of breath",
+        "can't catch my breath", "cant catch my breath",
     ]
     breath_severity = [
         "hard", "harder",
@@ -498,7 +503,8 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
 
         # combo patterns with air
         if ("can't get air" in t or "cant get air" in t or
-            "can't pull in a breath" in t or "cant pull in a breath" in t):
+            "can't pull in a breath" in t or "cant pull in a breath" in t or
+            "can't catch my breath" in t or "cant catch my breath" in t):
             return True
 
     # -------- 5. BABY + BREATHING (generic) --------
@@ -506,7 +512,8 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         if any(p in t for p in [
             "not breathing", "isn't breathing", "isnt breathing",
             "stopped breathing", "chest isn't rising", "chest isnt rising",
-            "breathing seems off", "breathing seems weird"
+            "breathing seems off", "breathing seems weird",
+            "breathing looks weird", "breathing looks off",
         ]):
             return True
 
@@ -527,8 +534,6 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         return True
 
     # -------- 7. POSTPARTUM HEMORRHAGE (PPH) / HEAVY BLEEDING --------
-    # High strictness: heavy / worsening / gushing / running / soaking / large clots,
-    # especially with dizziness/faintness/weakness/cold/sweaty.
     bleed_tokens = ["bleeding", "blood"]
     if any(b in t for b in bleed_tokens):
         # strong severity phrases
@@ -536,6 +541,7 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
             "running down my legs", "running down my leg",
             "down my legs", "down my leg",
             "gushing", "gushes", "pouring", "pours",
+            "like a faucet", "blood everywhere",
             "soaking through pads", "soaking pads", "soaking my pad",
             "soaked through pad", "soaked through the pad",
             "pad was totally soaked", "pad is totally soaked",
@@ -577,6 +583,7 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
             return True
 
     return False
+
 
 def _has_htn_emergent(text: str) -> bool:
     """
@@ -721,7 +728,8 @@ def _has_htn_emergent(text: str) -> bool:
             return True
 
     # Any near-syncope feeling alone is emergent in this context
-    if "about to pass out" in t or "going to pass out" in t or "about to faint" in t or "going to faint" in t:
+    if ("about to pass out" in t or "going to pass out" in t or
+        "about to faint" in t or "going to faint" in t):
         return True
 
     # ---- 7) SHAKY + NAUSEOUS/SICK + DOOM ----
@@ -763,6 +771,7 @@ def _has_htn_emergent(text: str) -> bool:
 
     return False
 
+
 def route_note_intelligently(note_text: str) -> str:
     """
     Decide 'nurse' vs 'cna' for free-text notes using:
@@ -803,7 +812,7 @@ def route_note_intelligently(note_text: str) -> str:
                     return True
         return False
 
-    # 🔴 NEW: global EMERGENT override
+    # 🔴 GLOBAL EMERGENT OVERRIDE
     # If the tier logic says "emergent", ALWAYS route to nurse.
     if classify_escalation_tier(note_text) == "emergent":
         return "nurse"
@@ -957,6 +966,7 @@ def route_note_intelligently(note_text: str) -> str:
 
     # 8) DEFAULT: CNA
     return "cna"
+
 
 EMERGENT_NEURO_PHRASES = [
 
@@ -2451,6 +2461,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
