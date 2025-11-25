@@ -1138,6 +1138,17 @@ EMERGENT_NEURO_PHRASES = [
     "eyes seem to drift upward", "eyes drift upward",
 ]
 
+STRICT_NEURO_SENTENCES = [
+    # speech / awareness
+    "my speech suddenly got slurred and i can't get the words out right",
+    "i keep losing awareness for a few seconds at a time",
+    "i feel like i'm drifting away and can't stay awake or alert",
+    "my words keep coming out wrong and i can't say what i'm thinking",
+
+    # baby neuro
+    "my baby is staring straight ahead and won't react when i touch them",
+    "my baby's eyes keep rolling back and they won't respond when i talk or touch them",
+]
 
 def classify_escalation_tier(text: str) -> str:
     """
@@ -1145,12 +1156,14 @@ def classify_escalation_tier(text: str) -> str:
       - 'emergent' : life-threatening / severe red flags
       - 'routine'  : everything else
 
-    Any of the following helpers returning True:
+    Triggered by:
+      - STRICT_NEURO_SENTENCES
       - _has_heart_breath_color_emergent()
       - _has_neuro_emergent()
       - _has_htn_emergent()
-    -> 'emergent'.
+      - explicit emergency phrases
     """
+
     if not text:
         return "routine"
 
@@ -1158,19 +1171,24 @@ def classify_escalation_tier(text: str) -> str:
     t = text.lower().strip()
     t = t.replace("’", "'").replace("“", '"').replace("”", '"')
 
+    # 🔴 STRICT NEURO SENTENCE MATCHES (always emergent)
+    for phrase in STRICT_NEURO_SENTENCES:
+        if phrase in t:
+            return "emergent"
+
     # 1) Cardio-respiratory / color-change → EMERGENT
     if _has_heart_breath_color_emergent(t):
         return "emergent"
 
-    # 1b) Neuro emergent → EMERGENT
+    # 1b) Neuro emergent (pattern-based)
     if _has_neuro_emergent(t):
         return "emergent"
 
-    # 1c) HTN / preeclampsia emergent → EMERGENT
+    # 1c) HTN / preeclampsia emergent
     if _has_htn_emergent(t):
         return "emergent"
 
-    # 2) Other explicit EMERGENT phrases (existing logic)
+    # 2) Direct emergency language
     def has_phrase(phrase: str) -> bool:
         pattern = r"\b" + re.escape(phrase) + r"\b"
         return re.search(pattern, t) is not None
@@ -1182,7 +1200,7 @@ def classify_escalation_tier(text: str) -> str:
         "feel like i'm dying", "feel like im dying",
         "call 911",
 
-        # newborn emergencies (non-neuro, non-respiratory)
+        # newborn emergencies
         "my baby is choking",
         "baby is choking",
         "baby is limp",
@@ -1243,7 +1261,6 @@ def classify_escalation_tier(text: str) -> str:
 
     # Everything else is routine
     return "routine"
-
 
 
 # --- Core Helper Functions ---
@@ -2543,6 +2560,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
