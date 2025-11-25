@@ -961,89 +961,120 @@ def _has_neuro_emergent(t: str) -> bool:
     if not t:
         return False
 
-    t = t.lower()
+    # normalize
+    t = t.lower().strip()
+    t = t.replace("’", "'").replace("“", '"').replace("”", '"')
 
+    # --- 1) Direct substring triggers (short, generic) ---
     EMERGENT_NEURO_PHRASES = [
-
-        # --- Seizure activity ---
+        # Seizure activity / uncontrolled movements
         "seizure", "seizing",
         "postictal", "convulsion", "convulsing",
         "my body is jerking", "body keeps jerking",
         "twitching uncontrollably", "twitching and jerking",
+        "jerking on their own", "jerking on its own",
+        "uncontrollable shaking", "shaking uncontrollably",
 
-        # --- Unresponsive / consciousness changes ---
+        # Unresponsive / consciousness changes
         "unconscious", "not waking up",
         "can't wake", "cant wake",
         "won't wake", "wont wake",
         "blacking out", "blacked out",
+        "keep blacking out", "keep passing out",
         "fading out", "fading away",
         "can't stay conscious", "cant stay conscious",
         "in and out of consciousness",
 
-        # --- Loss of awareness / confusion ---
+        # Confusion / altered awareness
         "suddenly confused",
         "extremely confused",
+        "very confused",
         "disoriented", "confused and disoriented",
-        "can't think straight", "cant think straight",
-        "can't understand", "cant understand",
-        "can't make sense of", "cant make sense of",
         "brain is shutting down",
+        "everything feels unreal",
 
-        # --- Speech disturbances ---
-        "speech is slurred", "words are slurring",
-        "slurred speech",
-        "can't speak", "cant speak",
-        "words sound scrambled",
-        "can't form words", "cant form words",
-
-        # --- Focal neurologic deficits ---
-        "left side feels weak", "right side feels weak",
-        "left side is weak", "right side is weak",
-        "suddenly weak on one side",
-        "face drooping", "drooping face",
-        "crooked smile",
-        "can't move my face", "cant move my face",
-        "face feels numb", "mouth feels numb",
-        "can't move my mouth", "cant move my mouth",
-        "can't move my arm", "cant move my arm",
-        "can't move my leg", "cant move my leg",
-        "legs collapsed", "legs gave out",
-        "whole body went weak",
-        "arms won't lift", "arms wont lift",
-
-        # --- Severe headaches / neuro pain ---
+        # Severe headaches / neuro pain
         "worst headache of my life",
         "thunderclap headache",
         "head feels like it's exploding",
         "head feels like its exploding",
+        "exploding pain in my head",
         "intense pressure in my head",
 
-        # --- Vision changes ---
+        # Vision changes
         "vision fading", "vision going dark",
         "vision is dark", "tunnel vision",
         "spots in vision", "flashing lights",
-        "eyes rolling back",
+        "bright flashing lights",
+        "eyes rolling back", "eyes are rolling back",
 
-        # --- Motor control problems ---
-        "can't control my hands", "cant control my hands",
-        "hands curling", "hands locked up",
-        "body locked up", "muscles locking up",
-        "can't move anything", "cant move anything",
-
-        # --- Baby neuro red flags ---
-        "my baby feels stiff",
-        "my baby feels floppy",
-        "my baby won't respond", "baby not responding",
-        "baby not waking", "baby wont wake",
-        "baby keeps twitching", "baby jerking",
-        "baby eyes rolling back",
-        "baby won't track", "baby wont track",
-        "baby staring off", "baby staring through me",
+        # Focal weakness (generic)
+        "whole body went weak",
+        "legs collapsed", "legs gave out",
+        "went completely limp",
     ]
 
-    return any(phrase in t for phrase in EMERGENT_NEURO_PHRASES)
+    if any(phrase in t for phrase in EMERGENT_NEURO_PHRASES):
+        return True
 
+    # --- 2) Pattern-based triggers (combos of keywords) ---
 
+    # a) Slurred / scrambled speech
+    if "slurred" in t and ("speech" in t or "words" in t):
+        return True
+    if ("can't form words" in t or "cant form words" in t or
+        "can't get the words out" in t or "cant get the words out" in t):
+        return True
+
+    # b) Global comprehension failure
+    if ("can't understand" in t or "cant understand" in t or
+        "can't make sense of" in t or "cant make sense of" in t):
+        if "people" in t or "words" in t or "what people are saying" in t or "what you are saying" in t:
+            return True
+
+    # c) Face / mouth droop or asymmetry
+    if ("face" in t or "mouth" in t or "smile" in t):
+        if ("droop" in t or "drooping" in t or "crooked" in t or
+            "not moving right" in t or "can't move" in t or "cant move" in t):
+            return True
+
+    # d) Focal motor loss (arms/legs/body not responding)
+    if ("arm" in t or "arms" in t or "leg" in t or "legs" in t or "body" in t):
+        if ("can't move" in t or "cant move" in t or
+            "won't move" in t or "wont move" in t or
+            "won't respond" in t or "wont respond" in t or
+            "won't do what i tell them" in t or "wont do what i tell them" in t):
+            return True
+
+    # e) Hands/arms locking, curling, or jerking
+    if ("hand" in t or "hands" in t or "arm" in t or "arms" in t):
+        if ("locking up" in t or "locked up" in t or
+            "curling" in t or "curl in" in t or
+            "jerking" in t or "twitching" in t or
+            "shaking" in t) and ("can't stop" in t or "cant stop" in t or "uncontrollably" in t):
+            return True
+
+    # f) Baby neurologic red flags
+    if "baby" in t or "newborn" in t or "infant" in t:
+        # floppy or stiff
+        if ("feels floppy" in t or "very floppy" in t or
+            "feels stiff" in t or "very stiff" in t):
+            return True
+
+        # unresponsive / not reacting
+        if ("won't respond" in t or "wont respond" in t or
+            "not responding" in t or "won't react" in t or "wont react" in t):
+            return True
+
+        # eyes / tracking issues
+        if "eyes" in t:
+            if ("rolling back" in t or "keep rolling back" in t or
+                "staring blankly" in t or "staring straight ahead" in t or
+                "won't track" in t or "wont track" in t or
+                "not tracking" in t or "staring through me" in t):
+                return True
+
+    return False
 
 
 def classify_escalation_tier(text: str) -> str:
@@ -2450,6 +2481,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
