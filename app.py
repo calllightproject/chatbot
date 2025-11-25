@@ -953,187 +953,249 @@ def route_note_intelligently(note_text: str) -> str:
     return "cna"
 
 
-def _has_neuro_emergent(text: str) -> bool:
+def _has_neuro_emergent(t: str) -> bool:
     """
-    Detects severe neurologic emergencies (mom or baby).
-    VERY liberal: if this returns True, we will treat as EMERGENT.
-    ENGLISH ONLY.
+    Detects severe neurologic postpartum emergencies.
+    STRICT MODE:
+      - Any strong confusion, disorientation, loss of comprehension
+      - Sudden weakness/numbness/heaviness (especially one-sided)
+      - Severe head pressure/headache with neuro features
+      - Vision changes with neuro context
+      - Shaking/jerking/twitching that can't be controlled
+      - Blacking out / fading in and out
+      - Baby appearing floppy, stiff, or unresponsive
+
+    If this returns True, ALWAYS treat as emergent.
     """
-    if not text:
+
+    if not t:
         return False
 
-    # normalize
-    t = text.lower().strip()
+    t = t.lower().strip()
     t = t.replace("’", "'").replace("“", '"').replace("”", '"')
 
-    # ---- 1) Direct "big red flag" phrases ----
-    hard_phrases = [
-        # seizures / convulsions
-        "seizure", "seizing", "convulsion", "convulsing",
+    # --- 1) Direct high-risk phrases (substrings) ---
+    EMERGENT_NEURO_PHRASES = [
+        # Seizure-like
+        "seizure", "seizing",
+        "postictal", "convulsion", "convulsing",
 
-        # loss of consciousness / blacking out
-        "about to black out",
-        "black out", "blacking out",
-        "lose consciousness", "losing consciousness",
-        "about to lose consciousness",
-        "cant stay conscious", "can't stay conscious",
-        "cant stay awake", "can't stay awake",
-        "keep fading in and out", "fading in and out",
+        # Unconscious / not waking
+        "unconscious", "not waking up",
+        "can't wake", "cant wake",
+        "won't wake", "wont wake",
 
-        # very severe headaches
+        # Unresponsive / floppy / stiff
+        "unresponsive", "not responding",
+        "my baby feels stiff", "baby feels stiff",
+        "my baby feels floppy", "baby feels floppy",
+        "my baby won't respond", "baby not responding",
+        "baby not waking", "baby won’t wake",
+        "baby keeps twitching", "baby jerking",
+
+        # Vision + head / neuro
+        "vision fading", "vision going dark",
+        "vision is dark",
+        "spots in vision", "flashing lights",
+        "everything is blurry", "everything went blurry",
+        "my vision went blurry", "my vision is blurry",
+
+        # Classic confusion/aphasia
+        "confused and disoriented",
+        "suddenly confused",
+        "suddenly very confused",
+        "i suddenly feel confused",
+        "i suddenly feel really confused",
+        "can’t think straight", "cant think straight",
+        "my brain isn’t working", "my brain isn't working",
+        "i feel extremely confused",
+        "i feel very confused",
+        "i feel really confused",
+        "i feel extremely confused and something is seriously wrong",
+        "i feel extremely confused and something is wrong",
+
+        # Comprehension failure
+        "can't understand what people are saying",
+        "cant understand what people are saying",
+        "can't understand the words people are saying",
+        "cant understand the words people are saying",
+        "i suddenly can’t understand the words people are saying",
+        "i suddenly cant understand the words people are saying",
+        "i suddenly can't understand what you're saying",
+        "i suddenly cant understand what you're saying",
+        "i suddenly can't understand what people are saying",
+        "i suddenly cant understand what people are saying",
+
+        # Speech problems
+        "speech is slurred", "words are slurring",
+        "my words are slurring",
+        "can't speak", "cant speak",
+        "can't get words out", "cant get words out",
+        "i'm having trouble getting my words out",
+        "im having trouble getting my words out",
+        "feel like i’m slurring my words",
+        "feel like im slurring my words",
+
+        # One-sided / focal weakness or numbness
+        "left side feels weak", "right side feels weak",
+        "left side suddenly feels weak", "right side suddenly feels weak",
+        "left side suddenly feels weak and heavy",
+        "right side suddenly feels weak and heavy",
+        "drooping face", "face drooping",
+        "my smile looks crooked",
+        "suddenly can’t move my face normally",
+        "suddenly cant move my face normally",
+        "can't move my arm", "cant move my arm",
+        "can't move my leg", "cant move my leg",
+        "my right arm dropped suddenly",
+        "my left arm dropped suddenly",
+        "arm dropped suddenly",
+        "right arm dropped", "left arm dropped",
+        "can't control my hand", "cant control my hand",
+        "can't control my arm", "cant control my arm",
+
+        # Severe headache / pressure
         "worst headache of my life",
         "thunderclap headache",
-        "headache exploded suddenly",
-        "my headache exploded suddenly",
-        "headache came on suddenly",
-        "sudden severe headache",
+        "head feels like it exploded",
+        "my head feels like it exploded",
+        "head feels like it might explode",
+        "head feels like it's going to explode",
+        "head feels like its going to explode",
         "crushing pressure in my head",
+        "pressure in my skull",
+        "intense pressure in my head",
+        "intense pressure in my skull",
+        "i feel a crushing pressure in my head",
+        "i feel pressure in my skull and it's making me confused and slow",
+        "i feel pressure in my skull and its making me confused and slow",
 
-        # visual neuro red flags (some overlap with htn helper; double coverage ok)
-        "vision fading", "vision going dark", "vision is dark",
-        "spots in vision", "flashing lights",
-        "bright lights are making it worse",
-        "light hurts my eyes",
-        "lights are blinding me",
+        # Shaking / jerking / not under control
+        "my whole body is twitching and jerking and i can’t stop it",
+        "my whole body is twitching and jerking and i cant stop it",
+        "my whole body suddenly feels numb and heavy and i can’t think",
+        "my whole body suddenly feels numb and heavy and i cant think",
+        "my body keeps jerking on its own and i can’t stop it",
+        "my body keeps jerking on its own and i cant stop it",
+        "my hands and arms keep locking up and trembling uncontrollably",
+        "i can’t stop shaking and my body won’t respond when i try to move",
+        "i cant stop shaking and my body wont respond when i try to move",
 
-        # global confusion
-        "extremely confused",
-        "very confused",
-        "feel really confused",
-        "feel confused and disoriented",
-        "i feel confused and disoriented",
-        "brain isnt working", "brain isn't working",
-        "my brain isn’t working", "my brain isnt working",
-        "feel out of it", "feel kind of out of it",
-        "feel detached", "feel disconnected",
+        # Blacking out / fading
+        "i keep fading in and out and can’t stay conscious",
+        "i keep fading in and out and cant stay conscious",
+        "keep fading in and out",
+        "about to black out", "about to pass out",
+        "going to pass out",
+        "i feel like i’m about to black out",
+        "i feel like im about to black out",
 
-        # speech
-        "speech is slurred",
-        "speech suddenly got slurred",
-        "words are slurring",
-        "coming out as gibberish",
-        "cant form words", "can't form words",
-        "cant get words out", "can't get words out",
-        "cant speak clearly", "can't speak clearly",
-        "cant speak at all", "can't speak at all",
-
-        # derealization + doom + neuro
-        "everything feels slow and unreal",
+        # Feeling unreal / very wrong
         "everything around me feels unreal",
-        "feel like im drifting away", "feel like i'm drifting away",
-        "feel like something terrible is about to happen and im shaking",
-        "feel like something terrible is about to happen and i'm shaking",
+        "i feel extremely off, like i’m not fully here",
+        "i feel extremely off, like im not fully here",
+        "i feel extremely off like i’m not fully here",
+        "i feel extremely off like im not fully here",
+        "i feel extremely off and something is really wrong",
+        "something feels really wrong with my head",
+        "something feels very wrong with my head",
+
+        # Baby neuro behavior
+        "my baby is staring straight ahead and won’t react when i touch them",
+        "my baby is staring straight ahead and wont react when i touch them",
+        "my baby seems harder to wake than usual",
+        "my baby isn’t responding to me",
+        "my baby isnt responding to me",
+        "my baby turned pale and looks out of it",
+        "my baby looks very pale and isn’t crying like usual",
+        "my baby looks very pale and isnt crying like usual",
     ]
-    if any(p in t for p in hard_phrases):
+
+    if any(p in t for p in EMERGENT_NEURO_PHRASES):
         return True
 
-    # ---- 2) Unilateral weakness / numbness / face droop ----
-    if "left" in t or "right" in t:
-        side_words = ["side", "arm", "leg", "hand", "face"]
-        weakness_words = [
-            "weak", "weakness",
-            "numb", "numbness",
-            "heavy", "heaviness",
-            "cant move", "can't move",
-            "wont move", "won't move",
-            "paralyzed", "paralysed",
-            "droopy", "droop", "crooked",
-        ]
-        if any(w in t for w in side_words) and any(w in t for w in weakness_words):
-            return True
+    # --- 2) Confusion / disorientation + severity language ---
+    confusion_words = [
+        "confused", "confusing",
+        "disoriented", "disorientation",
+        "out of it", "out-of-it",
+        "can’t think", "cant think",
+        "brain feels slow", "mind feels slow",
+        "can’t focus", "cant focus",
+        "can’t concentrate", "cant concentrate",
+        "can’t understand", "cant understand",
+    ]
+    severity_words = [
+        "suddenly", "all of a sudden",
+        "extremely", "very", "really",
+        "seriously wrong", "something is wrong",
+        "something is really wrong", "something feels wrong",
+        "something feels really wrong",
+    ]
+    if any(c in t for c in confusion_words) and any(s in t for s in severity_words):
+        return True
 
-    # ---- 3) Global numbness / heavy whole body with cognitive change ----
-    if "whole body" in t or "my whole body" in t:
-        if any(w in t for w in ["numb", "heavy", "cant think", "can't think"]):
-            return True
+    # --- 3) Focal weakness/numbness combos (side/limb/face) ---
+    if any(side in t for side in ["left", "right"]):
+        if any(loc in t for loc in ["side", "arm", "leg", "hand", "face"]):
+            if any(k in t for k in [
+                "weak", "heavy", "numb",
+                "won't move", "wont move",
+                "can't move", "cant move",
+                "dropped",
+            ]):
+                return True
 
-    # ---- 4) Consciousness / awareness drift (even without the exact phrases above) ----
-    consciousness_phrases = [
+    # --- 4) Vision + head symptoms together (stroke/preeclampsia overlap) ---
+    vision_terms = [
+        "blurry", "blurred", "blurring",
+        "double vision",
+        "seeing spots", "seeing stars", "seeing sparkles", "seeing flashes",
+        "bright spots", "vision",
+    ]
+    head_terms = [
+        "headache", "head hurts", "head is killing me",
+        "pressure in my head", "pressure in my skull",
+        "skull hurts", "skull pain",
+    ]
+    if any(v in t for v in vision_terms) and any(h in t for h in head_terms):
+        return True
+
+    # --- 5) Shaking / tremor + loss of control ---
+    shaking_terms = [
+        "shaking", "trembling", "tremors",
+        "twitching", "jerking",
+        "shaking uncontrollably", "trembling uncontrollably",
+        "can’t stop shaking", "cant stop shaking",
+    ]
+    control_loss_terms = [
+        "can’t stop", "cant stop",
+        "not under my control",
+        "on its own", "on their own",
+        "body won’t respond", "body wont respond",
+        "won’t respond when i try to move", "wont respond when i try to move",
+    ]
+    if any(s in t for s in shaking_terms) and any(c in t for c in control_loss_terms):
+        return True
+
+    # --- 6) Blacking out / fading / can't stay conscious ---
+    blackout_terms = [
+        "about to black out",
+        "about to pass out",
+        "going to pass out",
+        "i feel like i’m about to pass out",
+        "i feel like im about to pass out",
         "keep fading in and out",
         "fading in and out",
-        "going in and out",
-        "about to pass out",
-        "about to faint",
-        "i feel like im going to pass out",
-        "i feel like i'm going to pass out",
-        "losing awareness",
-        "cant stay alert", "can't stay alert",
-        "hard to stay awake",
+        "can’t stay conscious", "cant stay conscious",
+        "can’t stay awake", "cant stay awake",
+        "losing awareness", "losing consciousness",
     ]
-    if any(p in t for p in consciousness_phrases):
+    if any(b in t for b in blackout_terms):
         return True
-
-    # ---- 5) Speech / understanding problems ----
-    speech_phrases = [
-        "slurring my words",
-        "my words are slurring",
-        "having trouble getting my words out",
-        "trouble getting my words out",
-        "trouble speaking",
-        "cant talk right", "can't talk right",
-        "cant get my words out", "can't get my words out",
-    ]
-    if any(p in t for p in speech_phrases):
-        return True
-
-    understanding_phrases = [
-        "cant understand what people are saying",
-        "can't understand what people are saying",
-        "cant understand people", "can't understand people",
-        "cant understand anyone", "can't understand anyone",
-    ]
-    if any(p in t for p in understanding_phrases):
-        return True
-
-    # ---- 6) Jerking / twitching / locking up (seizure-like) ----
-    if any(k in t for k in ["jerking", "twitching", "trembling", "locking up"]):
-        if "cant stop" in t or "can't stop" in t or "on its own" in t:
-            return True
-
-    jerk_specific = [
-        "my whole body is twitching and jerking",
-        "my body keeps jerking on its own",
-        "strange jerking movements i cant stop",
-        "strange jerking movements i can't stop",
-        "my hands and arms keep locking up and trembling uncontrollably",
-        "my body is shaking and i cant control it",
-        "my body is shaking and i can't control it",
-    ]
-    if any(p in t for p in jerk_specific):
-        return True
-
-    # ---- 7) Head pain + neuro symptoms combo ----
-    if "head" in t and ("pressure" in t or "pain" in t or "headache" in t):
-        if any(w in t for w in [
-            "crushing", "exploded", "sudden", "suddenly", "worst",
-            "light hurts my eyes", "lights are blinding me",
-            "bright lights are making it worse",
-        ]):
-            return True
-
-    # ---- 8) Baby neuro red flags ----
-    if any(b in t for b in ["baby", "newborn", "infant"]):
-        baby_phrases = [
-            "staring blankly",
-            "staring straight ahead",
-            "not reacting to sound or touch",
-            "wont react when i touch", "won't react when i touch",
-            "not responding to me",
-            "isn't responding", "isnt responding",
-            "wont respond", "won't respond",
-            "won't wake up", "wont wake up",
-            "went limp", "suddenly went limp",
-            "feels floppy", "feels very floppy",
-            "feels very stiff", "feels stiff",
-            "eyes are rolling back", "eyes rolling back",
-            "keeps twitching", "keeps jerking",
-            "arms are shaking and i cant get them to stop",
-            "arms are shaking and i can't get them to stop",
-        ]
-        if any(p in t for p in baby_phrases):
-            return True
 
     return False
+
 
 
 
@@ -2541,6 +2603,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
