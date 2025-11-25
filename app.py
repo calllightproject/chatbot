@@ -714,23 +714,29 @@ def _has_htn_emergent(text: str) -> bool:
         "feel extremely off",
         "i feel extremely off",
         "feel very off",
+        # extra forms to catch “sense that something terrible is about to happen”
+        "sense that something terrible is about to happen",
+        "sense that something bad is about to happen",
+        "something terrible is about to happen",
     ]
     for p in doom_phrases:
         if p in t:
             return True
 
     # Any near-syncope feeling alone is emergent in this context
-    if "about to pass out" in t or "going to pass out" in t or "about to faint" in t or "going to faint" in t:
+    if ("about to pass out" in t or "going to pass out" in t or
+        "about to faint" in t or "going to faint" in t):
         return True
 
     # ---- 7) SHAKY + NAUSEOUS + FEELING WRONG ----
-    # (original condition)
     if "shaky" in t or "shake" in t or "shaking" in t:
-        if "nausea" in t or "nauseous" in t or "nauseated" in t or "sick to my stomach" in t:
-            if "something bad" in t or "something feels wrong" in t or "something is wrong" in t:
+        if ("nausea" in t or "nauseous" in t or "nauseated" in t or
+            "sick to my stomach" in t):
+            if ("something bad" in t or "something feels wrong" in t or
+                "something is wrong" in t):
                 return True
 
-    # ---- 7b) SHAKY + WEAK + DOOM (no nausea) ----
+    # ---- 7b) SHAKY + WEAK/WOBBLY + DOOM (no nausea needed) ----
     if "shaky" in t or "shake" in t or "shaking" in t:
         if "weak" in t or "weakness" in t or "wobbly" in t:
             if ("something bad" in t or "something terrible" in t or
@@ -2445,6 +2451,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
