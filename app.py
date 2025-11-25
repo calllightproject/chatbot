@@ -624,7 +624,6 @@ def _has_htn_emergent(text: str) -> bool:
                 return True
 
     # ---- 2) WORSENING SWELLING / EDEMA ----
-    # specific phrase you gave:
     if "swelling got way worse really fast" in t and "face feels tight" in t:
         return True
 
@@ -657,7 +656,7 @@ def _has_htn_emergent(text: str) -> bool:
         if any(s in t for s in htn_headache_severity):
             return True
 
-    # ---- 4) VISUAL CHANGES (reinforce preeclampsia risk) ----
+    # ---- 4) VISUAL CHANGES ----
     vision_patterns = [
         "seeing spots", "seeing sparkles", "seeing flashes",
         "bright spots", "halos", "halo around lights",
@@ -699,6 +698,8 @@ def _has_htn_emergent(text: str) -> bool:
         "like something bad is about to happen",
         "like something bad is going to happen",
         "like something terrible is about to happen",
+        "something terrible is about to happen",
+        "sense that something terrible is about to happen",
         "feel like something bad is happening",
         "feel like something bad is going to happen",
         "feel like something is really wrong",
@@ -714,29 +715,28 @@ def _has_htn_emergent(text: str) -> bool:
         "feel extremely off",
         "i feel extremely off",
         "feel very off",
-        # extra forms to catch “sense that something terrible is about to happen”
-        "sense that something terrible is about to happen",
-        "sense that something bad is about to happen",
-        "something terrible is about to happen",
     ]
     for p in doom_phrases:
         if p in t:
             return True
 
     # Any near-syncope feeling alone is emergent in this context
-    if ("about to pass out" in t or "going to pass out" in t or
-        "about to faint" in t or "going to faint" in t):
+    if "about to pass out" in t or "going to pass out" in t or "about to faint" in t or "going to faint" in t:
         return True
 
-    # ---- 7) SHAKY + NAUSEOUS + FEELING WRONG ----
+    # ---- 7) SHAKY + NAUSEOUS/SICK + DOOM ----
     if "shaky" in t or "shake" in t or "shaking" in t:
-        if ("nausea" in t or "nauseous" in t or "nauseated" in t or
-            "sick to my stomach" in t):
-            if ("something bad" in t or "something feels wrong" in t or
-                "something is wrong" in t):
+        if (
+            "nausea" in t or "nauseous" in t or "nauseated" in t
+            or "sick to my stomach" in t
+            or "feel sick" in t or "feels sick" in t or "sick and" in t or "sick " in t
+        ):
+            if ("something bad" in t or "something terrible" in t or
+                "something is wrong" in t or "something feels wrong" in t or
+                "something really wrong" in t or "something seriously wrong" in t):
                 return True
 
-    # ---- 7b) SHAKY + WEAK/WOBBLY + DOOM (no nausea needed) ----
+    # ---- 7b) SHAKY + WEAK + DOOM (no nausea) ----
     if "shaky" in t or "shake" in t or "shaking" in t:
         if "weak" in t or "weakness" in t or "wobbly" in t:
             if ("something bad" in t or "something terrible" in t or
@@ -2451,6 +2451,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
