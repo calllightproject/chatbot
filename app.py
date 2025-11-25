@@ -953,55 +953,188 @@ def route_note_intelligently(note_text: str) -> str:
     return "cna"
 
 
-def _has_neuro_emergent(t: str) -> bool:
+def _has_neuro_emergent(text: str) -> bool:
     """
-    Detects severe neurologic postpartum emergencies.
-    Very strict: these ALWAYS return True.
+    Detects severe neurologic emergencies (mom or baby).
+    VERY liberal: if this returns True, we will treat as EMERGENT.
+    ENGLISH ONLY.
     """
-
-    if not t:
+    if not text:
         return False
 
-    t = t.lower()
+    # normalize
+    t = text.lower().strip()
+    t = t.replace("’", "'").replace("“", '"').replace("”", '"')
 
-    EMERGENT_NEURO_PHRASES = [
-        "seizure", "seizing",
-        "postictal", "convulsion", "convulsing",
+    # ---- 1) Direct "big red flag" phrases ----
+    hard_phrases = [
+        # seizures / convulsions
+        "seizure", "seizing", "convulsion", "convulsing",
 
-        "unconscious", "not waking up",
-        "can't wake", "cant wake",
-        "won't wake", "wont wake",
+        # loss of consciousness / blacking out
+        "about to black out",
+        "black out", "blacking out",
+        "lose consciousness", "losing consciousness",
+        "about to lose consciousness",
+        "cant stay conscious", "can't stay conscious",
+        "cant stay awake", "can't stay awake",
+        "keep fading in and out", "fading in and out",
 
-        "unresponsive", "not responding",
-        "stiff", "floppy",
-
-        "vision fading", "vision going dark",
-        "vision is dark",
-        "spots in vision", "flashing lights",
-
-        "confused and disoriented",
-        "suddenly confused",
-        "can’t think straight", "cant think straight",
-
-        "speech is slurred", "words are slurring",
-        "gibberish", "can't speak", "cant speak",
-
-        "left side feels weak", "right side feels weak",
-        "drooping face", "face drooping",
-        "can't move my arm", "cant move my arm",
-        "can't move my leg", "cant move my leg",
-
+        # very severe headaches
         "worst headache of my life",
         "thunderclap headache",
+        "headache exploded suddenly",
+        "my headache exploded suddenly",
+        "headache came on suddenly",
+        "sudden severe headache",
+        "crushing pressure in my head",
 
-        "my baby feels stiff",
-        "my baby feels floppy",
-        "my baby won't respond", "baby not responding",
-        "baby not waking", "baby won’t wake",
-        "baby keeps twitching", "baby jerking",
+        # visual neuro red flags (some overlap with htn helper; double coverage ok)
+        "vision fading", "vision going dark", "vision is dark",
+        "spots in vision", "flashing lights",
+        "bright lights are making it worse",
+        "light hurts my eyes",
+        "lights are blinding me",
+
+        # global confusion
+        "extremely confused",
+        "very confused",
+        "feel really confused",
+        "feel confused and disoriented",
+        "i feel confused and disoriented",
+        "brain isnt working", "brain isn't working",
+        "my brain isn’t working", "my brain isnt working",
+        "feel out of it", "feel kind of out of it",
+        "feel detached", "feel disconnected",
+
+        # speech
+        "speech is slurred",
+        "speech suddenly got slurred",
+        "words are slurring",
+        "coming out as gibberish",
+        "cant form words", "can't form words",
+        "cant get words out", "can't get words out",
+        "cant speak clearly", "can't speak clearly",
+        "cant speak at all", "can't speak at all",
+
+        # derealization + doom + neuro
+        "everything feels slow and unreal",
+        "everything around me feels unreal",
+        "feel like im drifting away", "feel like i'm drifting away",
+        "feel like something terrible is about to happen and im shaking",
+        "feel like something terrible is about to happen and i'm shaking",
     ]
+    if any(p in t for p in hard_phrases):
+        return True
 
-    return any(phrase in t for phrase in EMERGENT_NEURO_PHRASES)
+    # ---- 2) Unilateral weakness / numbness / face droop ----
+    if "left" in t or "right" in t:
+        side_words = ["side", "arm", "leg", "hand", "face"]
+        weakness_words = [
+            "weak", "weakness",
+            "numb", "numbness",
+            "heavy", "heaviness",
+            "cant move", "can't move",
+            "wont move", "won't move",
+            "paralyzed", "paralysed",
+            "droopy", "droop", "crooked",
+        ]
+        if any(w in t for w in side_words) and any(w in t for w in weakness_words):
+            return True
+
+    # ---- 3) Global numbness / heavy whole body with cognitive change ----
+    if "whole body" in t or "my whole body" in t:
+        if any(w in t for w in ["numb", "heavy", "cant think", "can't think"]):
+            return True
+
+    # ---- 4) Consciousness / awareness drift (even without the exact phrases above) ----
+    consciousness_phrases = [
+        "keep fading in and out",
+        "fading in and out",
+        "going in and out",
+        "about to pass out",
+        "about to faint",
+        "i feel like im going to pass out",
+        "i feel like i'm going to pass out",
+        "losing awareness",
+        "cant stay alert", "can't stay alert",
+        "hard to stay awake",
+    ]
+    if any(p in t for p in consciousness_phrases):
+        return True
+
+    # ---- 5) Speech / understanding problems ----
+    speech_phrases = [
+        "slurring my words",
+        "my words are slurring",
+        "having trouble getting my words out",
+        "trouble getting my words out",
+        "trouble speaking",
+        "cant talk right", "can't talk right",
+        "cant get my words out", "can't get my words out",
+    ]
+    if any(p in t for p in speech_phrases):
+        return True
+
+    understanding_phrases = [
+        "cant understand what people are saying",
+        "can't understand what people are saying",
+        "cant understand people", "can't understand people",
+        "cant understand anyone", "can't understand anyone",
+    ]
+    if any(p in t for p in understanding_phrases):
+        return True
+
+    # ---- 6) Jerking / twitching / locking up (seizure-like) ----
+    if any(k in t for k in ["jerking", "twitching", "trembling", "locking up"]):
+        if "cant stop" in t or "can't stop" in t or "on its own" in t:
+            return True
+
+    jerk_specific = [
+        "my whole body is twitching and jerking",
+        "my body keeps jerking on its own",
+        "strange jerking movements i cant stop",
+        "strange jerking movements i can't stop",
+        "my hands and arms keep locking up and trembling uncontrollably",
+        "my body is shaking and i cant control it",
+        "my body is shaking and i can't control it",
+    ]
+    if any(p in t for p in jerk_specific):
+        return True
+
+    # ---- 7) Head pain + neuro symptoms combo ----
+    if "head" in t and ("pressure" in t or "pain" in t or "headache" in t):
+        if any(w in t for w in [
+            "crushing", "exploded", "sudden", "suddenly", "worst",
+            "light hurts my eyes", "lights are blinding me",
+            "bright lights are making it worse",
+        ]):
+            return True
+
+    # ---- 8) Baby neuro red flags ----
+    if any(b in t for b in ["baby", "newborn", "infant"]):
+        baby_phrases = [
+            "staring blankly",
+            "staring straight ahead",
+            "not reacting to sound or touch",
+            "wont react when i touch", "won't react when i touch",
+            "not responding to me",
+            "isn't responding", "isnt responding",
+            "wont respond", "won't respond",
+            "won't wake up", "wont wake up",
+            "went limp", "suddenly went limp",
+            "feels floppy", "feels very floppy",
+            "feels very stiff", "feels stiff",
+            "eyes are rolling back", "eyes rolling back",
+            "keeps twitching", "keeps jerking",
+            "arms are shaking and i cant get them to stop",
+            "arms are shaking and i can't get them to stop",
+        ]
+        if any(p in t for p in baby_phrases):
+            return True
+
+    return False
+
 
 
 def classify_escalation_tier(text: str) -> str:
@@ -2408,6 +2541,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
