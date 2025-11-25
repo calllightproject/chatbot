@@ -665,6 +665,36 @@ def _has_neuro_emergent(text: str) -> bool:
         ]):
             return True
 
+        # --- Focal weakness on one side ---
+    if ("left side" in t or "right side" in t) and (
+        "weak" in t or "weakness" in t or "heavy" in t
+    ):
+        if "barely move" in t or "can barely move" in t or "can't move" in t or "cant move" in t:
+            return True
+
+    # --- Crooked smile / facial asymmetry ---
+    if "smile looks crooked" in t or ("crooked" in t and "smile" in t):
+        return True
+    if ("can't move" in t or "cant move" in t) and (
+        "one side of my face" in t or "one side of my mouth" in t
+    ):
+        return True
+
+    # --- Can't stop shaking + body not responding ---
+    if ("can't stop shaking" in t or "cant stop shaking" in t) and (
+        "body won't respond" in t or "body wont respond" in t or
+        "won't respond when i try to move" in t or "wont respond when i try to move" in t
+    ):
+        return True
+
+    # --- Baby suddenly stiff + eyes not focusing ---
+    if "baby" in t and "stiff" in t and (
+        "eyes won't focus" in t or "eyes wont focus" in t or
+        "eyes not focusing" in t or "won't focus" in t or "wont focus" in t
+    ):
+        return True
+
+
     return False
 
 def _has_htn_emergent(text: str) -> bool:
@@ -2560,6 +2590,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
