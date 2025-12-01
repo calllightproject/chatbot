@@ -31,6 +31,13 @@ socketio = SocketIO(
     ping_interval=25   # was 10
 )
 
+@app.after_request
+def add_no_cache_headers(response):
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    return response
+
+
 # --- Room Configuration ---
 ALL_ROOMS = [str(room) for room in range(231, 260)]
 VALID_ROOMS = set(ALL_ROOMS)
@@ -2613,6 +2620,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
