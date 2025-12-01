@@ -91,7 +91,6 @@
     .toolbar { display:flex; align-items:center; gap:10px; margin-top:8px; }
     .muted { font-size:.85rem; color:#64748b; }
 
-    /* Tier pill: only emergent is used now */
     .tier-pill {
       display: inline-block;
       margin-left: 8px;
@@ -107,7 +106,6 @@
       border-color: #fecaca;
     }
 
-    /* Empty-state banner */
     .empty-state {
       border:1px dashed #d1d5db;
       background:#fafafa;
@@ -206,7 +204,6 @@
         </li>
       {% endfor %}
 
-      <!-- Empty state lives separately and is toggled by JS -->
       <li id="empty-state"
           class="empty-state"
           style="{% if active_requests and active_requests|length > 0 %}display:none{% endif %}">
@@ -215,7 +212,6 @@
     </ul>
   </div>
 
-  <!-- Context for JS -->
   <script>
     const NurseContext = {{ nurse_context|default(false)|tojson }};
     const NurseName    = {{ nurse_name|default('')|tojson }};
@@ -227,9 +223,8 @@
   <script type="text/javascript">
     var socket = io();
 
-    // Local caches
-    const LocalStatus = new Map();        // request_id -> status
-    const LocalStatusByKey = new Map();   // `${room}::${request_text}` -> status (for reconciliation only)
+    const LocalStatus = new Map();
+    const LocalStatusByKey = new Map();
 
     function normalizeText(s) { return (s || '').replace(/\s+/g, ' ').trim(); }
     function makeCompositeKey(room, text) {
@@ -251,12 +246,10 @@
       if (k) LocalStatusByKey.delete(k);
     }
 
-    /* ---------- Empty-state toggle ---------- */
     function toggleEmptyState() {
       const list = document.getElementById('requests-list');
       const empty = document.getElementById('empty-state');
       if (!list || !empty) return;
-      // Count ONLY real request cards
       const count = list.querySelectorAll('li.request-item').length;
       empty.style.display = (count === 0) ? '' : 'none';
     }
@@ -361,7 +354,6 @@
 
       let li = document.getElementById(req.id);
 
-      // preserve existing tier if backend doesn't send one
       const existingTier = li ? (li.dataset.tier || 'routine') : 'routine';
       const tierRaw = (req.tier || existingTier || 'routine').toLowerCase();
 
@@ -386,7 +378,6 @@
           if (spans[1]) spans[1].textContent = `For: ${(req.role || '').toUpperCase()}`;
         }
 
-        // pill handling – only emergent
         const showPill = tierRaw === 'emergent';
         let pill = li.querySelector('.tier-pill');
         if (showPill) {
@@ -434,7 +425,6 @@
       updateAllTimersAndColors();
     }
 
-    /* ---- Socket events ---- */
     socket.on('new_request', function(data) {
       addRequestToDashboard(data);
       playNotificationSound();
@@ -492,7 +482,6 @@
       toggleEmptyState();
     });
 
-    /* ---- DOM ready ---- */
     document.addEventListener('DOMContentLoaded', function() {
       const list = document.getElementById('requests-list');
       if (!list) return;
@@ -566,7 +555,6 @@
       setInterval(cleanupStaleRows, 60 * 1000);
     });
 
-    /* ---- Polling reconciliation ---- */
     function pollActiveRequests() {
       const params = new URLSearchParams();
       if (NurseContext && NurseName) {
@@ -646,22 +634,10 @@
         });
     }
 
-    /* ✅ NEW: helper to request a full sync using existing API */
-    function requestFullStateSync() {
-      pollActiveRequests();
-    }
-
-    /* ✅ NEW: when tab becomes visible again (phone reopening), force a fresh sync */
-    document.addEventListener('visibilitychange', function() {
-      if (document.visibilityState === 'visible') {
-        requestFullStateSync();
-      }
-    });
-
     function cleanupStaleRows() {
       const now = Date.now();
-      const STALE_MS_UNTOUCHED = 5 * 60 * 1000;   // 5 minutes
-      const STALE_MS_TOUCHED   = 60 * 60 * 1000;  // 60 minutes
+      const STALE_MS_UNTOUCHED = 5 * 60 * 1000;
+      const STALE_MS_TOUCHED   = 60 * 60 * 1000;
 
       document.querySelectorAll('#requests-list .request-item').forEach(li => {
         const lastSeen = Number(li.dataset.lastSeen || 0);
@@ -681,6 +657,16 @@
 
       toggleEmptyState();
     }
+
+    /* -----------------------
+       NEW: VISIBILITY REFRESH
+       ----------------------- */
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        pollActiveRequests();
+      }
+    });
+
   </script>
 </body>
 </html>
