@@ -646,6 +646,18 @@
         });
     }
 
+    /* ✅ NEW: helper to request a full sync using existing API */
+    function requestFullStateSync() {
+      pollActiveRequests();
+    }
+
+    /* ✅ NEW: when tab becomes visible again (phone reopening), force a fresh sync */
+    document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState === 'visible') {
+        requestFullStateSync();
+      }
+    });
+
     function cleanupStaleRows() {
       const now = Date.now();
       const STALE_MS_UNTOUCHED = 5 * 60 * 1000;   // 5 minutes
