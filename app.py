@@ -792,19 +792,28 @@ def _has_htn_emergent(text: str) -> bool:
         if any(s in t for s in htn_headache_severity):
             return True
 
-        # ---- 4) VISUAL CHANGES ----
+            # ---- 4) VISUAL CHANGES ----
     vision_patterns = [
-        "seeing spots", "seeing sparkles", "seeing flashes",
-        "bright spots", "halos", "halo around lights",
+        "seeing spots", "seeing spot", "seeing sparkles", "seeing sparks",
+        "seeing flashes", "seeing flashing", "flashing spots", "flashing lights",
+        "bright spots", "bright dots", "bright dots everywhere",
+        "sparkly things", "sparkly", "sparkles", "bright lil dots", "little dots",
+        "lil dots", "dots everywhere", "dots when i blink",
         "vision is blurry", "vision feels blurry",
         "vision is dim", "vision feels dim",
-        "vision is flickering", "vision is fading", "vision fading",
-        "double vision",
-        "flashing spots", "flashing lights",  # NEW common phrasing
+        "vision is flickering", "vision flickering", "vision is fading",
+        "vision going dark", "everything went dark", "went black", "goes black",
+        "blacked out", "almost blacked out",
+        "double vision", "seeing double",
     ]
     for p in vision_patterns:
         if p in t:
             return True
+    # ---- 4b) HEADACHE + VISION COMBO ----
+    if ("spot" in t or "spark" in t or "dot" in t or "flash" in t or "flashing" in t):
+        if "head" in t and ("hurt" in t or "killing" in t or "pounding" in t or "throbbing" in t):
+            return True
+
 
 
     # ---- 5) CONFUSION / DISORIENTATION / FEELING OFF ----
@@ -901,6 +910,11 @@ def _has_htn_emergent(text: str) -> bool:
         return True
 
     return False
+    # ---- 4c) PRESYNCOPE / BLACKOUT ----
+    if ("went black" in t or "goes black" in t or "everything went black" in t or
+        "blacked out" in t or "almost blacked out" in t or
+        "almost hit the floor" in t or "almost fainted" in t):
+        return True
 
 
 def route_note_intelligently(note_text: str) -> str:
@@ -2630,6 +2644,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
