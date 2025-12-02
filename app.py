@@ -546,8 +546,8 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         "turned bluish" in t or "turning bluish" in t):
         return True
 
-    # -------- 7. POSTPARTUM HEMORRHAGE (PPH) / HEAVY BLEEDING --------
-    bleed_tokens = ["bleeding", "blood"]
+       # -------- 7. POSTPARTUM HEMORRHAGE (PPH) / HEAVY BLEEDING --------
+    bleed_tokens = ["bleeding", "blood", "clot", "clots"]  # added clot/clots
     if any(b in t for b in bleed_tokens):
         # strong severity phrases
         severe_bleed_phrases = [
@@ -567,21 +567,22 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         if any(p in t for p in severe_bleed_phrases):
             return True
 
-        # large clots
-        clot_phrases = [
-            "big clots", "big clot",
-            "large clots", "large clot",
-            "clot the size of a golf ball",
-            "clot the size of a softball",
-            "clot the size of a baseball",
-            "clot the size of my fist",
-            "golf ball sized clot",
-            "bigger than a quarter",
-        ]
-        if any(p in t for p in clot_phrases):
-            return True
+    # large clots (now ALWAYS considered emergent, even if 'blood' isn't said)
+    clot_phrases = [
+        "big clots", "big clot",
+        "large clots", "large clot",
+        "clot the size of a golf ball",
+        "clot the size of a softball",
+        "clot the size of a baseball",
+        "clot the size of my fist",
+        "golf ball sized clot",
+        "bigger than a quarter",
+    ]
+    if any(p in t for p in clot_phrases):
+        return True
 
-        # bleeding + symptoms of hypovolemia
+    # bleeding + symptoms of hypovolemia
+    if any(b in t for b in bleed_tokens):
         hypovolemia_words = [
             "dizzy", "dizziness",
             "lightheaded", "light headed",
@@ -791,7 +792,7 @@ def _has_htn_emergent(text: str) -> bool:
         if any(s in t for s in htn_headache_severity):
             return True
 
-    # ---- 4) VISUAL CHANGES ----
+        # ---- 4) VISUAL CHANGES ----
     vision_patterns = [
         "seeing spots", "seeing sparkles", "seeing flashes",
         "bright spots", "halos", "halo around lights",
@@ -799,10 +800,12 @@ def _has_htn_emergent(text: str) -> bool:
         "vision is dim", "vision feels dim",
         "vision is flickering", "vision is fading", "vision fading",
         "double vision",
+        "flashing spots", "flashing lights",  # NEW common phrasing
     ]
     for p in vision_patterns:
         if p in t:
             return True
+
 
     # ---- 5) CONFUSION / DISORIENTATION / FEELING OFF ----
     confusion_phrases = [
@@ -2627,6 +2630,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
