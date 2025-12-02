@@ -429,6 +429,10 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         "suffocating", "suffocate", "feel like i am suffocating",
         "throat is closing",
 
+        # NEW: very common phrasings
+        "trouble breathing", "having trouble breathing",  # NEW
+        "hard time breathing", "difficulty breathing",    # NEW
+
         # very explicit baby emergencies
         "baby suddenly stopped breathing",
         "my baby suddenly stopped breathing",
@@ -455,7 +459,7 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
     breath_severity = [
         "hard", "harder",
         "struggling", "struggle",
-        "trouble", "difficulty",
+        "trouble", "difficulty",                # NEW: mirrors instant_triggers
         "getting worse", "worse",
         "stopping", "stopped", "keeps stopping", "keeps pausing", "pausing",
         "shallow", "irregular",
@@ -464,6 +468,8 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         "locking up", "locked up", "blocked", "blocking",
         "can't", "cant", "cannot",
         "no air", "not getting air",
+        # NEW: softer patient language that still means “off”
+        "weird", "off", "funny",                # NEW: “breathing feels weird/off/funny”
     ]
 
     if any(tok in t for tok in breath_tokens) and any(s in t for s in breath_severity):
@@ -590,6 +596,7 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
             return True
 
     return False
+
 
 def _has_neuro_emergent(text: str) -> bool:
     """
@@ -2620,6 +2627,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
