@@ -622,7 +622,8 @@ def _has_neuro_emergent(text: str) -> bool:
       - sudden inability to move part of body
       - loss of awareness / can't respond
       - scary whole-body shaking + doom feelings
-      - baby neuro red flags (stiff, floppy, not responding)
+      - baby neuro red flags
+      - expressive aphasia (brain clear but words/sentences wrong)
     """
     if not text:
         return False
@@ -691,16 +692,15 @@ def _has_neuro_emergent(text: str) -> bool:
         ]):
             return True
 
-    # 7) Focal weakness on one side (arm/leg/face feels weak/heavy/can't move)
-    if ("left side" in t or "right side" in t or "one side" in t):
-        if any(w in t for w in ["arm", "hand", "leg", "face", "mouth"]):
-            if any(s in t for s in ["weak", "weakness", "heavy", "heaviness"]):
-                if ("barely move" in t or "can barely move" in t or
-                    "can't move" in t or "cant move" in t or
-                    "won't move" in t or "wont move" in t):
-                    return True
+    # 7) Focal weakness on one side
+    if ("left side" in t or "right side" in t) and (
+        "weak" in t or "weakness" in t or "heavy" in t
+    ):
+        if ("barely move" in t or "can barely move" in t or
+            "can't move" in t or "cant move" in t):
+            return True
 
-    # Crooked smile / facial asymmetry
+    # 8) Crooked smile / facial asymmetry
     if "smile looks crooked" in t or ("crooked" in t and "smile" in t):
         return True
     if ("can't move" in t or "cant move" in t) and (
@@ -708,66 +708,90 @@ def _has_neuro_emergent(text: str) -> bool:
     ):
         return True
 
-    # Can't stop shaking + body not responding
+    # 9) Can't stop shaking + body not responding
     if ("can't stop shaking" in t or "cant stop shaking" in t) and (
         "body won't respond" in t or "body wont respond" in t or
         "won't respond when i try to move" in t or "wont respond when i try to move" in t
     ):
         return True
 
-    # Baby suddenly stiff + eyes not focusing
+    # 10) Baby suddenly stiff + eyes not focusing
     if "baby" in t and "stiff" in t and (
         "eyes won't focus" in t or "eyes wont focus" in t or
         "eyes not focusing" in t or "won't focus" in t or "wont focus" in t
     ):
         return True
 
-    # Baby floppy/limp/unresponsive/not waking up (ALWAYS emergent)
-    if "baby" in t or "newborn" in t or "infant" in t:
-        if any(w in t for w in ["floppy", "limp", "loose", "too loose"]):
-            return True
+    # 11) Baby floppy / unresponsive (ALWAYS emergent)
+    if "baby" in t:
         if any(p in t for p in [
+            "feels floppy", "feels super floppy", "feels too floppy",
+            "feels loose", "too loose",
+            "arms feel floppy", "legs feel floppy",
+            "arms feel loose", "legs feel loose",
+            "body feels floppy", "body feels loose",
+            "is floppy", "is super floppy",
+        ]):
+            return True
+
+        if any(p in t for p in [
+            "not waking up", "not waking", "won't wake up", "wont wake up",
+            "won't wake", "wont wake",
             "not responding", "isn't responding", "isnt responding",
             "won't respond", "wont respond",
-            "not waking up", "won't wake up", "wont wake up",
-            "won't wake", "wont wake",
-            "unresponsive",
+            "not really responding",
         ]):
             return True
-        # combo: arms/legs hanging + not responding
-        if any(w in t for w in ["arms", "legs", "body"]) and "hanging" in t:
+
+        if any(p in t for p in [
+            "just laying there", "just lying there",
+            "just lay there", "just lie there",
+        ]) and any(p in t for p in [
+            "not doing anything", "not really doing anything",
+            "not moving much", "barely moving",
+        ]):
             return True
 
-    # Expressive aphasia / wrong-words patterns (no "sudden" needed)
-    speech_tokens = ["word", "words", "speech", "talk", "talking", "speak", "speaking", "sentence", "sentences"]
-    if any(tok in t for tok in speech_tokens):
-        aphasia_patterns = [
-            "coming out wrong", "come out wrong",
-            "won't come out right", "wont come out right",
-            "won't come out", "wont come out",
-            "won't form", "wont form",
-            "all jumbled", "jumbled",
-            "mixed up", "mixed together",
-            "scrambled", "messed up",
-            "not making sense", "dont make sense", "don't make sense",
-            "wrong words keep coming out", "wrong word keeps coming out",
-            "sentences come out all wrong", "sentences are all wrong",
+    # 12) Expressive aphasia / brain–mouth mismatch
+    # Catch patterns like:
+    #  - brain/mind/thoughts clear but words/sentences wrong, tangled, mixed, not matching
+    #  - "mouth not doing what my brain/mind says"
+    if any(w in t for w in ["mouth", "speech", "talk", "speaking", "words", "word", "sentence", "sentences"]):
+        brain_words = ["brain", "mind", "thinking", "thought", "thoughts", "know what i want to say", "know exactly what i want to say"]
+        aphasia_descriptors = [
+            "not matching", "dont match", "don't match", "won't match", "wont match",
+            "mixed up", "mixed-up", "mixed together",
+            "tangled", "scrambled", "jumbled",
+            "all wrong", "coming out wrong", "keep coming out wrong",
+            "wrong words", "wrong thing", "wrong things",
+            "sentences fall apart", "fall apart when i try to talk",
+            "sentences keep falling apart",
+            "mouth won't cooperate", "mouth wont cooperate",
+            "mouth isn't listening", "mouth isnt listening",
+            "mouth not doing what", "mouth isn't doing what", "mouth isnt doing what",
+            "mouth won't follow", "mouth wont follow",
         ]
-        if any(p in t for p in aphasia_patterns):
+
+        # Brain/mind + messed-up words/sentences
+        if any(b in t for b in brain_words) and any(a in t for a in aphasia_descriptors):
             return True
 
-        # brain–mouth mismatch style language
-        if "mouth" in t and any(p in t for p in [
-            "isn't matching", "isnt matching", "not matching",
-            "not connected", "isn't connected", "isnt connected",
-            "won't cooperate", "wont cooperate",
+        # "I know what I want to say but..." patterns
+        if "i know what i want to say" in t or "i know exactly what i want to say" in t:
+            if any(a in t for a in [
+                "wrong words", "coming out wrong", "mixed up", "mixed together",
+                "scrambled", "tangled", "jumbled",
+                "not matching", "dont match", "don't match",
+            ]):
+                return True
+
+        # Clear-thinking but speech wrong
+        if any(p in t for p in [
+            "my brain is clear", "brain feels clear",
+            "thinking totally clear", "thinking clearly", "mind is clear",
         ]):
-            return True
-
-        # can't get the right words out
-        if (("can't get" in t or "cant get" in t or "can't make" in t or "cant make" in t)
-            and "right words" in t):
-            return True
+            if any(a in t for a in aphasia_descriptors):
+                return True
 
     return False
 
@@ -818,6 +842,9 @@ def _has_htn_emergent(text: str) -> bool:
                 return True
 
     # ---- 2) WORSENING SWELLING / EDEMA ----
+    if "swelling got way worse really fast" in t and "face feels tight" in t:
+        return True
+
     swelling_keywords = ["swelling", "swollen", "puffiness", "puffy"]
     swelling_severity = [
         "got way worse", "got worse", "getting worse",
@@ -835,7 +862,7 @@ def _has_htn_emergent(text: str) -> bool:
         return True
 
     # ---- 3) HEADACHE + PREECLAMPSIA CONTEXT ----
-    if "headache" in t or "head hurts" in t or "my head hurts" in t or "head is killing me" in t:
+    if "headache" in t:
         htn_headache_severity = [
             "really bad", "very bad", "so bad",
             "worst", "worst of my life",
@@ -843,7 +870,6 @@ def _has_htn_emergent(text: str) -> bool:
             "won't go away", "wont go away", "not going away",
             "even after meds", "even after medicine", "meds not helping",
             "pounding", "throbbing",
-            "killing me",
         ]
         if any(s in t for s in htn_headache_severity):
             return True
@@ -857,21 +883,38 @@ def _has_htn_emergent(text: str) -> bool:
         "lil dots", "dots everywhere", "dots when i blink",
         "vision is blurry", "vision feels blurry",
         "vision is dim", "vision feels dim",
-        "vision is flickering", "vision flickering",
-        "vision is fading",
-        "vision going dark", "everything went dark",
-        "went black", "goes black",
-        "blacked out", "almost blacked out",
+        "vision is flickering", "vision flickering", "vision is fading",
+        "vision going dark", "vision is dark",
+        "everything went dark", "everything goes dark",
+        "everything went black", "went black", "goes black",
+        "vision went black", "vision goes black",
         "double vision", "seeing double",
+        "room went dark", "room goes dark",
+        "sight went dark", "sight goes dark", "sight gets dark",
+        "gets dark and shadowy", "dark and shadowy",
+        "vision dimmed", "vision dims",
+        "everything dimmed", "everything dims",
+        "starts to go black", "starting to go black", "start to go black",
+        "started to go black",
     ]
     for p in vision_patterns:
         if p in t:
             return True
 
-    # 4b) HEAD + SPOTS / FLASHES combo, even if word "headache" not used
+    # 4b) HEADACHE + VISION COMBO without the exact phrases above
     if ("spot" in t or "spark" in t or "dot" in t or "flash" in t or "flashing" in t):
         if "head" in t and ("hurt" in t or "hurts" in t or "killing" in t or "pounding" in t or "throbbing" in t):
             return True
+
+    # 4c) PRESYNCOPE / BLACKOUT FEELING
+    if ("went black" in t or "goes black" in t or
+        "everything went dark" in t or "everything goes dark" in t or
+        "room went dark" in t or "room goes dark" in t or
+        "almost blacked out" in t or "almost passed out" in t or
+        "almost hit the floor" in t or "almost went down" in t or
+        "felt like i might collapse" in t or "feel like i might collapse" in t or
+        "about to black out" in t or "about to pass out" in t):
+        return True
 
     # ---- 5) CONFUSION / DISORIENTATION / FEELING OFF ----
     confusion_phrases = [
@@ -934,7 +977,7 @@ def _has_htn_emergent(text: str) -> bool:
         if (
             "nausea" in t or "nauseous" in t or "nauseated" in t
             or "sick to my stomach" in t
-            or "feel sick" in t or "feels sick" in t or "sick and" in t
+            or "feel sick" in t or "feels sick" in t or "sick and" in t or "sick " in t
         ):
             if ("something bad" in t or "something terrible" in t or
                 "something is wrong" in t or "something feels wrong" in t or
@@ -964,13 +1007,6 @@ def _has_htn_emergent(text: str) -> bool:
         "very high bp",
     ]
     if any(k in t for k in bp_keywords):
-        return True
-
-    # ---- 9) PRESYNCOPE / BLACKOUT (even without explicit "spots") ----
-    if ("went black" in t or "goes black" in t or
-        "everything went black" in t or
-        "blacked out" in t or "almost blacked out" in t or
-        "almost hit the floor" in t or "almost fainted" in t):
         return True
 
     return False
@@ -2703,6 +2739,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
