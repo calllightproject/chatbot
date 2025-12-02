@@ -1051,10 +1051,190 @@ def route_note_intelligently(note_text: str) -> str:
                 if ratio >= threshold:
                     return True
         return False
+def _normalize_text(text: str) -> str:
+    if not text:
+        return ""
+    t = text.lower().strip()
+    t = t.replace("’", "'").replace("“", '"').replace("”", '"')
+    return t
 
-    # 🔴 GLOBAL EMERGENT OVERRIDE
+
+def _has_expressive_aphasia_pattern(text: str) -> bool:
+    """
+    Expressive aphasia / speech mismatch:
+    - Brain is clear / thinking is fine
+    - Words / sentences / mouth are wrong, jumbled, tangled, not matching
+    ALWAYS emergent in postpartum, even if minimized or mixed with routine stuff.
+    """
+    t = _normalize_text(text)
+    if not t:
+        return False
+
+    # Talking / speech context
+    speech_tokens = [
+        "talk", "talking", "speak", "speaking",
+        "speech", "sentence", "sentences",
+        "words", "word",
+        "mouth", "saying", "say",
+    ]
+
+    # Specific mismatch phrases we keep seeing in your tests
+    mismatch_patterns = [
+        "wrong words", "words keep coming out wrong",
+        "words come out wrong", "come out wrong",
+        "come out all wrong", "come out twisted", "come out mixed up",
+        "mixed up and wrong", "all mixed up", "all jumbled", "all scrambled",
+        "sentences fall apart", "sentences keep falling apart",
+        "words feel tangled", "words feel all tangled",
+        "tangled and wrong", "twisted and wrong",
+        "jumbled and not right",
+        "won't come out right", "wont come out right",
+        "not coming out right",
+        "not what i mean", "not what i'm trying to say", "not what im trying to say",
+        "scrambled instead of how i mean them",
+    ]
+
+    # Brain/mouth mismatch phrases
+    brain_mouth_patterns = [
+        "brain and mouth aren't syncing", "brain and mouth arent syncing",
+        "brain and mouth are not syncing",
+        "mouth isn't matching my thoughts", "mouth isnt matching my thoughts",
+        "mouth isn't matching what i'm thinking", "mouth isnt matching what im thinking",
+        "mouth isn't doing what my brain wants", "mouth isnt doing what my brain wants",
+        "mouth won't do what my brain says", "mouth wont do what my brain says",
+        "mouth won't cooperate", "mouth wont cooperate",
+        "mouth isn't listening", "mouth isnt listening",
+        "my brain is clear but my mouth", "thinking clearly but my mouth",
+        "brain knows exactly what i want to say",
+        "i know what i want to say",
+        "i know exactly what i want to say",
+    ]
+
+    has_speech_context = any(tok in t for tok in speech_tokens)
+    has_mismatch = any(p in t for p in mismatch_patterns)
+    has_brain_mouth = any(p in t for p in brain_mouth_patterns)
+
+    # Core rule: speech context + (mismatch OR brain-mouth mismatch)
+    if has_speech_context and (has_mismatch or has_brain_mouth):
+        return True
+
+    # Extra: if both mismatch + brain-mouth phrasing appear, that’s enough even
+    # if we somehow missed a speech word
+    if has_mismatch and has_brain_mouth:
+        return True
+
+    return False
+
+
+def _has_baby_floppy_unresponsive(text: str) -> bool:
+    """
+    Baby / newborn floppy + unresponsive / not waking:
+    ALWAYS emergent (even if mixed with routine asks).
+    """
+    t = _normalize_text(text)
+    if not t:
+        return False
+
+    baby_words = ["baby", "newborn", "infant"]
+    if not any(b in t for b in baby_words):
+        return False
+
+    floppy_words = [
+        "floppy", "limp", "loose",
+        "too loose", "feels too loose",
+        "just hanging", "just hang there",
+        "arms just fall", "legs just fall",
+        "arms fall limp", "arms feel limp",
+        "body feels limp", "body feels too loose",
+    ]
+
+    unresponsive_words = [
+        "not waking", "is not waking", "isn't waking", "isnt waking",
+        "won't wake", "wont wake", "won't wake up", "wont wake up",
+        "not waking up", "hard to wake", "won't really wake", "wont really wake",
+        "not responding", "isn't responding", "isnt responding",
+        "won't respond", "wont respond",
+        "not reacting", "isn't reacting", "isnt reacting",
+        "won't look at me", "wont look at me",
+        "won't move", "wont move", "barely moving",
+        "won't really move", "wont really move",
+    ]
+
+    if any(f in t for f in floppy_words) and any(u in t for u in unresponsive_words):
+        return True
+
+    return False
+
+
+def _has_presyncope_blackout(text: str) -> bool:
+    """
+    Stand-up → vision goes dark/black/dim/blurry + almost falls / has to grab something.
+    Treat as emergent (near-syncope) in this postpartum context.
+    """
+    t = _normalize_text(text)
+    if not t:
+        return False
+
+    stand_tokens = [
+        "when i stand", "when i stand up",
+        "when i get up", "when i try to get up",
+        "when i tried to get up",
+        "when i stood up",
+        "i stood up", "i stand up", "i try to stand", "i tried standing",
+        "getting out of bed", "got out of bed",
+    ]
+
+    vision_tokens = [
+        "went black", "goes black", "going black",
+        "everything went black", "everything goes black",
+        "everything went dark", "everything goes dark",
+        "vision went dark", "vision goes dark",
+        "went dark", "goes dark",
+        "went dim", "goes dim", "gets dim",
+        "shadowy", "shadowy and dim",
+        "tunnel vision", "vision closing in",
+        "room went dark", "room goes dark",
+        "all blurry", "everything went blurry", "everything gets blurry",
+        "my sight goes blurry", "my sight gets blurry",
+        "sight went dark", "sight went shadowy",
+        "bright spots everywhere", "bright dots everywhere",
+    ]
+
+    instability_tokens = [
+        "almost fell", "nearly fell",
+        "almost hit the floor", "almost hit the ground",
+        "about to fall", "about to collapse",
+        "felt like i might fall", "felt like i might collapse",
+        "feel like i might fall", "feel like i might collapse",
+        "had to grab something", "had to grab onto something",
+        "had to hold onto", "had to hold on to",
+        "almost went down", "nearly went down",
+        "almost dropped to the floor",
+        "almost passed out", "nearly passed out",
+        "felt like i was going to pass out",
+        "feel like i'm going to pass out", "feel like im going to pass out",
+    ]
+
+    if any(s in t for s in stand_tokens) and any(v in t for v in vision_tokens) and any(i in t for i in instability_tokens):
+        return True
+
+    return False
+
+       # 🔴 GLOBAL EMERGENT OVERRIDE
     # If the tier logic says "emergent", ALWAYS route to nurse.
     if classify_escalation_tier(note_text) == "emergent":
+        return "nurse"
+
+    # 🔴 NEW: HARD-STOP NURSE ROUTES EVEN IF TIER MISSES IT
+    # These patterns are ALWAYS emergent in your ruleset,
+    # even if mixed with routine requests.
+    if _has_baby_floppy_unresponsive(note_text):
+        return "nurse"
+
+    if _has_expressive_aphasia_pattern(note_text):
+        return "nurse"
+
+    if _has_presyncope_blackout(note_text):
         return "nurse"
 
     # 0) COLD PACK / ICE PACK => CNA (only if NOT emergent)
@@ -1206,7 +1386,6 @@ def route_note_intelligently(note_text: str) -> str:
 
     # 8) DEFAULT: CNA
     return "cna"
-
 
 EMERGENT_NEURO_PHRASES = [
 
@@ -2739,6 +2918,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
