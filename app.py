@@ -393,6 +393,15 @@ def send_email_alert(subject, body, room_number):
         print(f"EMAIL disabled or failed: {e}")
 
 import re
+import difflib
+
+def _normalize_text(text: str) -> str:
+    if not text:
+        return ""
+    t = text.lower().strip()
+    t = t.replace("’", "'").replace("“", '"').replace("”", '"')
+    return t
+
 
 def _has_heart_breath_color_emergent(text: str) -> bool:
     """
@@ -411,8 +420,7 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         return False
 
     # Normalize case + curly quotes
-    t = text.lower().strip()
-    t = t.replace("’", "'").replace("“", '"').replace("”", '"')
+    t = _normalize_text(text)
 
     # -------- 1. INSTANT STRING TRIGGERS (on their own are emergent) --------
     instant_triggers = [
@@ -628,8 +636,7 @@ def _has_neuro_emergent(text: str) -> bool:
     if not text:
         return False
 
-    t = text.lower().strip()
-    t = t.replace("’", "'").replace("“", '"').replace("”", '"')
+    t = _normalize_text(text)
 
     # 1) Direct phrase hits from the master list
     for phrase in EMERGENT_NEURO_PHRASES:
@@ -723,75 +730,12 @@ def _has_neuro_emergent(text: str) -> bool:
         return True
 
     # 11) Baby floppy / unresponsive (ALWAYS emergent)
-    if "baby" in t:
-        if any(p in t for p in [
-            "feels floppy", "feels super floppy", "feels too floppy",
-            "feels loose", "too loose",
-            "arms feel floppy", "legs feel floppy",
-            "arms feel loose", "legs feel loose",
-            "body feels floppy", "body feels loose",
-            "is floppy", "is super floppy",
-        ]):
-            return True
-
-        if any(p in t for p in [
-            "not waking up", "not waking", "won't wake up", "wont wake up",
-            "won't wake", "wont wake",
-            "not responding", "isn't responding", "isnt responding",
-            "won't respond", "wont respond",
-            "not really responding",
-        ]):
-            return True
-
-        if any(p in t for p in [
-            "just laying there", "just lying there",
-            "just lay there", "just lie there",
-        ]) and any(p in t for p in [
-            "not doing anything", "not really doing anything",
-            "not moving much", "barely moving",
-        ]):
-            return True
+    if _has_baby_floppy_unresponsive(text):
+        return True
 
     # 12) Expressive aphasia / brain–mouth mismatch
-    # Catch patterns like:
-    #  - brain/mind/thoughts clear but words/sentences wrong, tangled, mixed, not matching
-    #  - "mouth not doing what my brain/mind says"
-    if any(w in t for w in ["mouth", "speech", "talk", "speaking", "words", "word", "sentence", "sentences"]):
-        brain_words = ["brain", "mind", "thinking", "thought", "thoughts", "know what i want to say", "know exactly what i want to say"]
-        aphasia_descriptors = [
-            "not matching", "dont match", "don't match", "won't match", "wont match",
-            "mixed up", "mixed-up", "mixed together",
-            "tangled", "scrambled", "jumbled",
-            "all wrong", "coming out wrong", "keep coming out wrong",
-            "wrong words", "wrong thing", "wrong things",
-            "sentences fall apart", "fall apart when i try to talk",
-            "sentences keep falling apart",
-            "mouth won't cooperate", "mouth wont cooperate",
-            "mouth isn't listening", "mouth isnt listening",
-            "mouth not doing what", "mouth isn't doing what", "mouth isnt doing what",
-            "mouth won't follow", "mouth wont follow",
-        ]
-
-        # Brain/mind + messed-up words/sentences
-        if any(b in t for b in brain_words) and any(a in t for a in aphasia_descriptors):
-            return True
-
-        # "I know what I want to say but..." patterns
-        if "i know what i want to say" in t or "i know exactly what i want to say" in t:
-            if any(a in t for a in [
-                "wrong words", "coming out wrong", "mixed up", "mixed together",
-                "scrambled", "tangled", "jumbled",
-                "not matching", "dont match", "don't match",
-            ]):
-                return True
-
-        # Clear-thinking but speech wrong
-        if any(p in t for p in [
-            "my brain is clear", "brain feels clear",
-            "thinking totally clear", "thinking clearly", "mind is clear",
-        ]):
-            if any(a in t for a in aphasia_descriptors):
-                return True
+    if _has_expressive_aphasia_pattern(text):
+        return True
 
     return False
 
@@ -811,8 +755,7 @@ def _has_htn_emergent(text: str) -> bool:
         return False
 
     # normalize
-    t = text.lower().strip()
-    t = t.replace("’", "'").replace("“", '"').replace("”", '"')
+    t = _normalize_text(text)
 
     # ---- 1) RUQ / epigastric pain (ALWAYS emergent) ----
     ruq_phrases = [
@@ -1012,53 +955,6 @@ def _has_htn_emergent(text: str) -> bool:
     return False
 
 
-def route_note_intelligently(note_text: str) -> str:
-    """
-    Decide 'nurse' vs 'cna' for free-text notes using:
-      - Hard safety rules (escalation_tier 'emergent' => NURSE)
-      - Blood/pain/incision/neuro => NURSE
-      - Environment/cleaning/bedding => CNA
-      - Supplies/mobility/help-to-bed/bathroom/shower => CNA
-      - Breastfeeding & baby-feeding rules
-      - Fuzzy matching for typos
-    NOTE: Per user rule, ANY cold/ice pack request -> CNA,
-    BUT emergencies always override and go to nurse.
-    """
-    if not note_text:
-        return "cna"
-
-    text = note_text.lower().strip()
-    norm = re.sub(r"[^a-z0-9\s]", " ", text)
-    tokens = [t for t in norm.split() if t]
-
-    def contains_any(words):
-        return any(w in text for w in words)
-
-    def fuzzy_hit(keywords, threshold=0.78):
-        """Return True if any token is fuzzily close to any keyword."""
-        if not tokens:
-            return False
-        for kw in keywords:
-            kw_clean = kw.lower().strip()
-            # phrase match (for multiword patterns)
-            if " " in kw_clean and kw_clean in norm:
-                return True
-            # token-level fuzzy match (for typos)
-            for t in tokens:
-                if len(t) < 3:
-                    continue
-                ratio = difflib.SequenceMatcher(None, t, kw_clean).ratio()
-                if ratio >= threshold:
-                    return True
-        return False
-def _normalize_text(text: str) -> str:
-    if not text:
-        return ""
-    t = text.lower().strip()
-    t = t.replace("’", "'").replace("“", '"').replace("”", '"')
-    return t
-
-
 def _has_expressive_aphasia_pattern(text: str) -> bool:
     """
     Expressive aphasia / speech mismatch:
@@ -1215,12 +1111,57 @@ def _has_presyncope_blackout(text: str) -> bool:
         "feel like i'm going to pass out", "feel like im going to pass out",
     ]
 
-    if any(s in t for s in stand_tokens) and any(v in t for v in vision_tokens) and any(i in t for i in instability_tokens):
+    if (any(s in t for s in stand_tokens) and
+        any(v in t for v in vision_tokens) and
+        any(i in t for i in instability_tokens)):
         return True
 
     return False
 
-       # 🔴 GLOBAL EMERGENT OVERRIDE
+
+def route_note_intelligently(note_text: str) -> str:
+    """
+    Decide 'nurse' vs 'cna' for free-text notes using:
+      - Hard safety rules (escalation_tier 'emergent' => NURSE)
+      - Explicit emergency helper functions
+      - Blood/pain/incision/neuro => NURSE
+      - Environment/cleaning/bedding => CNA
+      - Supplies/mobility/help-to-bed/bathroom/shower => CNA
+      - Breastfeeding & baby-feeding rules
+      - Fuzzy matching for typos
+
+    NOTE: Per user rule, ANY cold/ice pack request -> CNA,
+    BUT emergencies always override and go to nurse.
+    """
+    if not note_text:
+        return "cna"
+
+    text = note_text.lower().strip()
+    norm = re.sub(r"[^a-z0-9\s]", " ", text)
+    tokens = [t for t in norm.split() if t]
+
+    def contains_any(words):
+        return any(w in text for w in words)
+
+    def fuzzy_hit(keywords, threshold=0.78):
+        """Return True if any token is fuzzily close to any keyword."""
+        if not tokens:
+            return False
+        for kw in keywords:
+            kw_clean = kw.lower().strip()
+            # phrase match (for multiword patterns)
+            if " " in kw_clean and kw_clean in norm:
+                return True
+            # token-level fuzzy match (for typos)
+            for t in tokens:
+                if len(t) < 3:
+                    continue
+                ratio = difflib.SequenceMatcher(None, t, kw_clean).ratio()
+                if ratio >= threshold:
+                    return True
+        return False
+
+    # 🔴 GLOBAL EMERGENT OVERRIDE
     # If the tier logic says "emergent", ALWAYS route to nurse.
     if classify_escalation_tier(note_text) == "emergent":
         return "nurse"
@@ -1228,13 +1169,12 @@ def _has_presyncope_blackout(text: str) -> bool:
     # 🔴 NEW: HARD-STOP NURSE ROUTES EVEN IF TIER MISSES IT
     # These patterns are ALWAYS emergent in your ruleset,
     # even if mixed with routine requests.
-    if _has_baby_floppy_unresponsive(note_text):
-        return "nurse"
-
-    if _has_expressive_aphasia_pattern(note_text):
-        return "nurse"
-
-    if _has_presyncope_blackout(note_text):
+    if (_has_baby_floppy_unresponsive(note_text) or
+        _has_expressive_aphasia_pattern(note_text) or
+        _has_presyncope_blackout(note_text) or
+        _has_heart_breath_color_emergent(note_text) or
+        _has_neuro_emergent(note_text) or
+        _has_htn_emergent(note_text)):
         return "nurse"
 
     # 0) COLD PACK / ICE PACK => CNA (only if NOT emergent)
@@ -2918,6 +2858,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
