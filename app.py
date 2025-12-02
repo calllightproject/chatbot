@@ -1286,36 +1286,32 @@ EMERGENT_NEURO_PHRASES = [
     # --- Baby neuro red flags ---
     "my baby feels stiff",
     "my baby feels floppy",
-    "my baby won't respond", "baby not responding",
+    "my baby feels limp",
+    "my baby is floppy",
+    "my baby is limp",
+
+    "my baby won't respond", "my baby wont respond",
+    "baby not responding",
+
     "baby not waking", "baby wont wake",
-    "baby keeps twitching", "baby jerking",
-    "baby eyes rolling back",
-    "baby won't track", "baby wont track",
-    "baby staring off", "baby staring through me",
-    "baby keeps staring off",
-    "eyes seem to drift upward", "eyes drift upward",
-        # --- Baby neuro red flags ---
-    "my baby feels stiff",
-    "my baby feels floppy",
-    "my baby won't respond", "baby not responding",
-    "baby not waking", "baby wont wake",
-    "baby keeps twitching", "baby jerking",
-    "baby eyes rolling back",
-    "baby won't track", "baby wont track",
     "baby is floppy", "baby feels floppy",
+    "baby is limp", "baby feels limp",
 
-    # NEW — catching "won't react"
-    "my baby won't react", "baby won't react", "baby wont react",
+    # NEW: baby not waking up (with and without apostrophe)
+    "my baby isn't waking up", "my baby isnt waking up",
+    "baby isn't waking up", "baby isnt waking up",
+
+    # NEW: baby not reacting / won’t react
+    "my baby won't react", "my baby wont react",
+    "baby won't react", "baby wont react",
     "won't react", "wont react",
-
-    # NEW — catching "not reacting"
     "not reacting", "no reaction",
 
     "baby staring off", "baby staring through me",
     "baby keeps staring off",
     "eyes seem to drift upward", "eyes drift upward",
-
 ]
+
 
 STRICT_NEURO_SENTENCES = [
     # speech / awareness
@@ -2739,6 +2735,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
