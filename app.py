@@ -429,7 +429,7 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         "suffocating", "suffocate", "feel like i am suffocating",
         "throat is closing",
 
-        # very common phrasings
+        # NEW: very common phrasings
         "trouble breathing", "having trouble breathing",
         "hard time breathing", "difficulty breathing",
 
@@ -469,7 +469,7 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         "can't", "cant", "cannot",
         "no air", "not getting air",
         # softer language that still means “off”
-        "weird", "off", "funny",
+        "weird", "off", "funny",  # “breathing feels weird/off/funny”
     ]
 
     if any(tok in t for tok in breath_tokens) and any(s in t for s in breath_severity):
@@ -484,13 +484,8 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
     # -------- 3. HEART PATTERNS --------
     if "heart" in t:
         heart_severity = [
-            "racing", "pounding",
-            "beating so fast", "beating fast",
+            "racing", "pounding", "beating so fast", "beating fast",
             "beating out of my chest",
-            "beating so wild",                      # NEW
-            "jumping in my throat",                 # NEW
-            "feels like it's jumping in my throat", # NEW
-            "feels like its jumping in my throat",  # NEW
             "skipping", "skips", "skipped",
             "stopping", "stopped",
             "flutter", "fluttering",
@@ -554,18 +549,31 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
     # -------- 7. POSTPARTUM HEMORRHAGE (PPH) / HEAVY BLEEDING --------
     bleed_tokens = ["bleeding", "blood", "clot", "clots"]
     if any(b in t for b in bleed_tokens):
-        # strong severity phrases
         severe_bleed_phrases = [
             "running down my legs", "running down my leg",
             "down my legs", "down my leg",
             "gushing", "gushes", "pouring", "pours",
             "like a faucet", "blood everywhere",
+
             "soaking through pads", "soaking pads", "soaking my pad",
-            "soaking through the pad",                # NEW
             "soaked through pad", "soaked through the pad",
             "pad was totally soaked", "pad is totally soaked",
             "totally soaked within an hour", "soaked within an hour",
-            "dripping onto the floor", "dripping on the floor",  # NEW
+
+            # NEW: pad filling very fast
+            "filling a pad in minutes",
+            "fill a pad in minutes",
+            "fills a pad in minutes",
+            "pad fills in minutes",
+            "pad filling in minutes",
+
+            # NEW: floor involvement
+            "running onto the floor",
+            "running on the floor",
+            "dripping onto the floor",
+            "dripping on the floor",
+            "blood on the floor",
+
             "bleeding a lot more than before",
             "bleeding a lot", "bleeding heavily", "bleeding is heavy",
             "won't stop", "wont stop", "not stopping",
@@ -574,16 +582,17 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         if any(p in t for p in severe_bleed_phrases):
             return True
 
-    # large clots (ALWAYS emergent, even if 'blood' isn't said)
+    # large clots (ALWAYS emergent, even if 'blood' isn't explicitly said)
     clot_phrases = [
         "big clots", "big clot",
         "large clots", "large clot",
-        "clot the size of a golf ball", "clots the size of a golf ball",
-        "clot the size of a softball", "clots the size of a softball",
-        "clot the size of a baseball", "clots the size of a baseball",
-        "clot the size of my fist", "clots the size of my fist",
-        "golf ball sized clot", "golf ball sized clots",
-        "bigger than a quarter", "clots bigger than a quarter",
+        "clot the size of a golf ball",
+        "clot the size of a softball",
+        "clot the size of a baseball",
+        "clot the size of my fist",
+        "golf ball sized clot",
+        "golf-ball sized clot",
+        "bigger than a quarter",
     ]
     if any(p in t for p in clot_phrases):
         return True
@@ -606,7 +615,6 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
     return False
 
 
-
 def _has_neuro_emergent(text: str) -> bool:
     """
     STRICT neurologic emergent screener (postpartum).
@@ -616,10 +624,10 @@ def _has_neuro_emergent(text: str) -> bool:
     Very sensitive on:
       - seizures / jerking / violent shaking
       - sudden loss of speech or understanding
-      - sudden inability to move or feel part of body
+      - sudden inability to move part of body
       - loss of awareness / can't respond
       - scary whole-body shaking + doom feelings
-      - baby neuro red flags (stiff OR floppy, unresponsive)
+      - baby neuro red flags
     """
     if not text:
         return False
@@ -656,6 +664,39 @@ def _has_neuro_emergent(text: str) -> bool:
         ]):
             return True
 
+    # 2b) Expressive aphasia / jumbled speech (even without the word “sudden”)
+    aphasia_phrases = [
+        "words keep coming out wrong",
+        "wrong words keep coming out",
+        "words coming out wrong",
+        "words getting all jumbled",
+        "words get all jumbled",
+        "words are all jumbled",
+        "words all jumbled together",
+        "words all mixed up",
+        "getting my words mixed up",
+        "my words keep getting mixed up",
+        "my words are getting mixed up",
+        "jumbled and mixed together",
+        "all jumbled and mixed together",
+        "mouth isn't matching my thoughts",
+        "mouth isnt matching my thoughts",
+        "can't get the right words out",
+        "cant get the right words out",
+        "can't say the right words",
+        "cant say the right words",
+        "i know what i want to say but",
+        "know what i want to say but",
+    ]
+    for p in aphasia_phrases:
+        if p in t:
+            return True
+
+    # generic: talking + jumbled/mixed/scrambled words
+    if any(w in t for w in ["talk", "say", "speak", "speaking", "talking", "words"]):
+        if any(w in t for w in ["jumbled", "mixed up", "mixed together", "scrambled"]):
+            return True
+
     # 3) Can't respond / can't move mouth when awake
     if any(p in t for p in ["can't respond", "cant respond"]):
         if any(p in t for p in [
@@ -664,40 +705,22 @@ def _has_neuro_emergent(text: str) -> bool:
         ]):
             return True
 
-    # 4) Speech impairment even without 'sudden'
-    #    (slurred, wrong words, can't get words out normally)
-    if "slurred" in t or "slurring" in t:
-        return True
-
-    if "words" in t and any(p in t for p in [
-        "coming out wrong", "come out wrong",
-        "not coming out right", "not coming out normal", "not coming out normally",
-        "won't come out right", "wont come out right",
-        "can't get the right words out", "cant get the right words out",
-        "can't get words out right", "cant get words out right",
-        "can't get my words out right", "cant get my words out right",
-        "can't get words out normally", "cant get words out normally",
-    ]):
-        return True
-
-    # 5) Whole-body shaking / jerking
+    # 4) Whole-body shaking / jerking
     if ("whole body" in t or "my whole body" in t) and any(
         w in t for w in ["shaky", "shaking", "jerking", "twitching"]
     ):
         return True
 
-    # 6) Hands shaking violently / functionally bad
+    # 5) Hands shaking violently and not stopping
     if "hands" in t and any(w in t for w in ["shaking", "jerking", "twitching"]):
         if any(p in t for p in [
             "can't make them stop", "cant make them stop",
             "can't control them", "cant control them",
             "won't stop", "wont stop",
-            "can't hold anything", "cant hold anything",
-            "can't hold onto anything", "cant hold onto anything",
         ]):
             return True
 
-    # 7) Shaky + sick + sense something terrible is about to happen
+    # 6) Shaky + sick + sense something terrible is about to happen
     if any(w in t for w in ["shaky", "shaking"]) and "sick" in t:
         if any(p in t for p in [
             "something terrible is about to happen",
@@ -706,19 +729,16 @@ def _has_neuro_emergent(text: str) -> bool:
         ]):
             return True
 
-    # 8) Focal side symptoms (left/right side)
-    if ("left side" in t or "right side" in t):
-        if any(p in t for p in [
-            "weak", "weakness", "heavy", "numb", "numbness"
-        ]):
-            return True
-        if any(p in t for p in [
-            "barely move", "can barely move",
-            "can't move", "cant move",
-        ]):
+    # 7) Focal weakness on one side
+    if ("left side" in t or "right side" in t) and (
+        "weak" in t or "weakness" in t or "heavy" in t or "numb" in t or "numbness" in t
+    ):
+        if ("barely move" in t or "can barely move" in t or
+            "can't move" in t or "cant move" in t or
+            "not doing what i tell it" in t or "not doing what i tell it to do" in t):
             return True
 
-    # 9) Crooked smile / facial asymmetry
+    # Crooked smile / facial asymmetry
     if "smile looks crooked" in t or ("crooked" in t and "smile" in t):
         return True
     if ("can't move" in t or "cant move" in t) and (
@@ -726,72 +746,35 @@ def _has_neuro_emergent(text: str) -> bool:
     ):
         return True
 
-    # 10) Can't stop shaking + body not responding
+    # Can't stop shaking + body not responding
     if ("can't stop shaking" in t or "cant stop shaking" in t) and (
         "body won't respond" in t or "body wont respond" in t or
         "won't respond when i try to move" in t or "wont respond when i try to move" in t
     ):
         return True
 
-    # 11) Arm/leg sensory + motor problems (your “arm went numb n tingly” / “not doing what I tell it to do”)
-    limb_words = ["arm", "hand", "leg", "foot"]
-    if any(lw in t for lw in limb_words):
-        # sensory loss
-        if any(p in t for p in [
-            "can't feel", "cant feel",
-            "no feeling", "lost feeling",
-            "went numb", "is numb", "feels numb",
-            "numb and tingly", "numb n tingly", "numb & tingly",
-            "tingly", "tingling", "pins and needles",
-        ]):
-            return True
-        # motor failure / not obeying
-        if any(p in t for p in [
-            "can't move", "cant move",
-            "can't really move", "cant really move",
-            "barely move", "can barely move",
-            "not doing what i tell it to do",
-            "not doing what i tell it to",
-            "not doing what i want it to do",
-            "not doing what i want",
-            "won't do what i tell it", "wont do what i tell it",
-        ]):
-            return True
-
-    # 12) Baby suddenly stiff + eyes not focusing
-    if "baby" in t and "stiff" in t and any(
-        p in t for p in [
-            "eyes won't focus", "eyes wont focus",
-            "eyes not focusing", "won't focus", "wont focus"
-        ]
+    # Baby suddenly stiff + eyes not focusing
+    if "baby" in t and "stiff" in t and (
+        "eyes won't focus" in t or "eyes wont focus" in t or
+        "eyes not focusing" in t or "won't focus" in t or "wont focus" in t
     ):
         return True
 
-    # 13) Baby floppy/limp/unresponsive/not waking
-    if any(w in t for w in ["baby", "newborn", "infant"]):
-        # floppy / limp
-        if any(p in t for p in ["floppy", "limp", "loose"]):
-            return True
-        # not waking / unresponsive / no reaction
+    # Baby floppy / limp / unresponsive / not waking (ALWAYS emergent)
+    if "baby" in t or "newborn" in t or "infant" in t:
         if any(p in t for p in [
-            "won't wake", "wont wake",
-            "isn't waking", "isnt waking",
-            "not waking", "won't wake up", "wont wake up",
-            "not waking up",
-            "won't respond", "wont respond",
+            "feels floppy", "feels super floppy", "is floppy",
+            "feels limp", "is limp", "super limp",
             "not responding", "isn't responding", "isnt responding",
-            "doesn't respond", "doesnt respond",
-            "no reaction", "not reacting",
-            "won't react", "wont react",
+            "won't respond", "wont respond",
+            "not waking", "isn't waking", "isnt waking",
+            "won't wake", "wont wake",
+            "not really doing anything", "just laying there", "just lying there",
         ]):
-            return True
-        # “just laying there not really doing anything”
-        if ("just laying there" in t or "just lying there" in t or "just layin there" in t):
-            return True
-        if "not really doing anything" in t or "not doing anything" in t:
             return True
 
     return False
+
 
 def _has_htn_emergent(text: str) -> bool:
     """
@@ -881,9 +864,7 @@ def _has_htn_emergent(text: str) -> bool:
         "vision is blurry", "vision feels blurry",
         "vision is dim", "vision feels dim",
         "vision is flickering", "vision flickering", "vision is fading",
-        "vision going dark", "everything went dark",
-        "vision going black", "everything went black",
-        "went black", "goes black",
+        "vision going dark", "everything went dark", "went black", "goes black",
         "blacked out", "almost blacked out",
         "double vision", "seeing double",
     ]
@@ -891,11 +872,47 @@ def _has_htn_emergent(text: str) -> bool:
         if p in t:
             return True
 
-    # ---- 4b) HEADACHE + VISION COMBO (for slang-y descriptions) ----
+    # ---- 4b) HEADACHE + VISION COMBO (catch slangy “sparkles + head hurts”) ----
     if ("spot" in t or "spark" in t or "dot" in t or "flash" in t or "flashing" in t):
-        if "head" in t and any(p in t for p in [
-            "hurt", "hurts", "killing", "pounding", "throbbing"
-        ]):
+        if "head" in t and ("hurt" in t or "hurts" in t or "killing" in t or "pounding" in t or "throbbing" in t):
+            return True
+
+    # ---- 4c) PRESYNCOPE / BLACKOUT (especially on standing) ----
+    presyncope_phrases = [
+        "everything went black",
+        "everything goes black",
+        "went black for a second",
+        "went black for a sec",
+        "room went dark",
+        "room goes dark",
+        "room got dark",
+        "room goes blurry",
+        "room went blurry",
+        "everything went blurry",
+        "everything blurred",
+        "vision went blurry",
+        "vision went dark",
+        "almost blacked out",
+        "almost passed out",
+        "almost hit the floor",
+        "almost hit the ground",
+        "almost fell over",
+        "had to grab something",
+        "had to grab onto something",
+    ]
+    if any(p in t for p in presyncope_phrases):
+        return True
+
+    # posture + visual + near-syncope combo
+    if any(p in t for p in [
+        "when i stand up", "when i try to stand up",
+        "when i get up", "when i try to get up",
+        "when i stand", "when i try to stand",
+        "stood up", "stand up", "get up", "got up"
+    ]):
+        if any(w in t for w in ["blurry", "blurred", "dark", "went black", "goes black"]):
+            return True
+        if any(w in t for w in ["almost passed out", "almost fainted", "almost fell", "had to grab"]):
             return True
 
     # ---- 5) CONFUSION / DISORIENTATION / FEELING OFF ----
@@ -991,15 +1008,7 @@ def _has_htn_emergent(text: str) -> bool:
     if any(k in t for k in bp_keywords):
         return True
 
-    # ---- 9) PRESYNCOPE / BLACKOUT (moved BEFORE return) ----
-    if ("went black" in t or "goes black" in t or "everything went black" in t or
-        "blacked out" in t or "almost blacked out" in t or
-        "everything went dark" in t or
-        "almost hit the floor" in t or "almost fainted" in t):
-        return True
-
     return False
-
 
 
 def route_note_intelligently(note_text: str) -> str:
@@ -2729,6 +2738,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
