@@ -724,25 +724,37 @@ def _has_neuro_emergent(text: str) -> bool:
 
     # 11) Baby floppy / unresponsive (ALWAYS emergent)
     if "baby" in t:
-        if any(p in t for p in [
+        # floppy / loose / hanging
+        floppy_patterns = [
             "feels floppy", "feels super floppy", "feels too floppy",
             "feels loose", "too loose",
             "arms feel floppy", "legs feel floppy",
             "arms feel loose", "legs feel loose",
             "body feels floppy", "body feels loose",
             "is floppy", "is super floppy",
-        ]):
+            "arms just hang there", "legs just hang there",
+            "just hang there loose", "hang there loose",
+            "just hanging there loose",
+        ]
+        if any(p in t for p in floppy_patterns):
             return True
 
-        if any(p in t for p in [
-            "not waking up", "not waking", "won't wake up", "wont wake up",
+        # not waking / not responding
+        unresponsive_patterns = [
+            "not waking up", "not waking",
+            "won't wake up", "wont wake up",
             "won't wake", "wont wake",
             "not responding", "isn't responding", "isnt responding",
             "won't respond", "wont respond",
             "not really responding",
-        ]):
+            "won't wake up when i call", "wont wake up when i call",
+            "won't wake up when i call their name", "wont wake up when i call their name",
+            "won't wake when i call", "wont wake when i call",
+        ]
+        if any(p in t for p in unresponsive_patterns):
             return True
 
+        # just lying there + barely moving
         if any(p in t for p in [
             "just laying there", "just lying there",
             "just lay there", "just lie there",
@@ -753,11 +765,11 @@ def _has_neuro_emergent(text: str) -> bool:
             return True
 
     # 12) Expressive aphasia / brain–mouth mismatch
-    # Catch patterns like:
-    #  - brain/mind/thoughts clear but words/sentences wrong, tangled, mixed, not matching
-    #  - "mouth not doing what my brain/mind says"
     if any(w in t for w in ["mouth", "speech", "talk", "speaking", "words", "word", "sentence", "sentences"]):
-        brain_words = ["brain", "mind", "thinking", "thought", "thoughts", "know what i want to say", "know exactly what i want to say"]
+        brain_words = [
+            "brain", "mind", "thinking", "thought", "thoughts",
+            "know what i want to say", "know exactly what i want to say"
+        ]
         aphasia_descriptors = [
             "not matching", "dont match", "don't match", "won't match", "wont match",
             "mixed up", "mixed-up", "mixed together",
@@ -794,6 +806,7 @@ def _has_neuro_emergent(text: str) -> bool:
                 return True
 
     return False
+
 
 
 def _has_htn_emergent(text: str) -> bool:
@@ -1021,8 +1034,9 @@ def route_note_intelligently(note_text: str) -> str:
       - Supplies/mobility/help-to-bed/bathroom/shower => CNA
       - Breastfeeding & baby-feeding rules
       - Fuzzy matching for typos
-    NOTE: Per user rule, ANY cold/ice pack request -> CNA,
-    BUT emergencies always override and go to nurse.
+
+    RULE: If a note contains BOTH CNA-able items and nurse-level items,
+    it will be routed to NURSE (CNA can still help, but nurse must know).
     """
     if not note_text:
         return "cna"
@@ -1052,22 +1066,24 @@ def route_note_intelligently(note_text: str) -> str:
                     return True
         return False
 
-    # 🔴 GLOBAL EMERGENT OVERRIDE
-    # If the tier logic says "emergent", ALWAYS route to nurse.
+    # 🔴 1) GLOBAL EMERGENT OVERRIDE
     if classify_escalation_tier(note_text) == "emergent":
         return "nurse"
+
+    # We'll collect signals, THEN decide:
+    nurse_flag = False
+    cna_flag = False
 
     # 0) COLD PACK / ICE PACK => CNA (only if NOT emergent)
     COLD_PACK_PHRASES = [
         "cold pack", "cold packs", "ice pack", "ice packs", "icepack", "icepacks"
     ]
     if contains_any(COLD_PACK_PHRASES):
-        return "cna"
+        cna_flag = True
 
     # 1) ANY scary heart/chest/breathing/color-change => NURSE
-    # (kept for safety, though emergent override above already catches these)
     if _has_heart_breath_color_emergent(text):
-        return "nurse"
+        nurse_flag = True
 
     # 2) GENERAL CLINICAL (blood/pain/incision/neuro) -> NURSE
     BLOOD_KEYWORDS = [
@@ -1085,12 +1101,12 @@ def route_note_intelligently(note_text: str) -> str:
     ]
 
     if contains_any(BLOOD_KEYWORDS) or fuzzy_hit(BLOOD_KEYWORDS + PAIN_INCISION_KEYWORDS, threshold=0.72):
-        return "nurse"
+        nurse_flag = True
 
     # 3) BREASTFEEDING & BABY FEEDING
-    # Formula refill (non-clinical) -> CNA, unless already caught as emergent above
+    # Formula refill (non-clinical) -> CNA, unless already emergent above
     if "formula" in text and any(w in text for w in ["more", "extra", "another", "refill", "ran out", "run out"]):
-        return "cna"
+        cna_flag = True
 
     FEED_NURSE_KEYWORDS = [
         "breastfeeding", "breast feeding", "latch", "latching",
@@ -1101,7 +1117,7 @@ def route_note_intelligently(note_text: str) -> str:
         "help me breastfeed", "help with breastfeeding",
     ]
     if contains_any(FEED_NURSE_KEYWORDS) or fuzzy_hit(FEED_NURSE_KEYWORDS, threshold=0.72):
-        return "nurse"
+        nurse_flag = True
 
     # 4) ENVIRONMENT / CLEANING / BEDDING -> CNA
     ENV_KEYWORDS = [
@@ -1120,13 +1136,13 @@ def route_note_intelligently(note_text: str) -> str:
     ]
 
     if any(w in norm for w in ["sheet", "sheets", "dirty sheets", "dirty sheet"]):
-        return "cna"
+        cna_flag = True
 
     if "bed" in norm and "pad" in norm:
-        return "cna"
+        cna_flag = True
 
     if fuzzy_hit(ENV_KEYWORDS, threshold=0.70) or fuzzy_hit(CNA_CLEANING, threshold=0.75):
-        return "cna"
+        cna_flag = True
 
     # 5) MOBILITY / BATHROOM / SHOWER HELP -> CNA
     MOBILITY_CNA_PHRASES = [
@@ -1141,17 +1157,17 @@ def route_note_intelligently(note_text: str) -> str:
         "help me to the nursery", "help me to the sink",
     ]
     if contains_any(MOBILITY_CNA_PHRASES) or fuzzy_hit(MOBILITY_CNA_PHRASES, threshold=0.78):
-        return "cna"
+        cna_flag = True
 
     if any(w in text for w in ["toilet", "bathroom", "shower"]) and not contains_any(PAIN_INCISION_KEYWORDS):
-        return "cna"
+        cna_flag = True
 
     INCONTINENCE_PHRASES = [
         "peed the bed", "peed in the bed", "peeing the bed",
         "i peed in the hat", "i peed in hat", "urinated in bed",
     ]
     if contains_any(INCONTINENCE_PHRASES) or fuzzy_hit(INCONTINENCE_PHRASES, threshold=0.78):
-        return "cna"
+        cna_flag = True
 
     # 6) DEVICES / ROOM EQUIPMENT
     DEVICE_CNA_PHRASES = [
@@ -1169,10 +1185,10 @@ def route_note_intelligently(note_text: str) -> str:
     ]
 
     if contains_any(IV_PUMP_PHRASES) or fuzzy_hit(IV_PUMP_PHRASES, threshold=0.78):
-        return "nurse"
+        nurse_flag = True
 
     if contains_any(DEVICE_CNA_PHRASES) or fuzzy_hit(DEVICE_CNA_PHRASES, threshold=0.78):
-        return "cna"
+        cna_flag = True
 
     # 7) GENERAL CLINICAL vs GENERAL SUPPORT
     NURSE_KEYWORDS = [
@@ -1200,12 +1216,19 @@ def route_note_intelligently(note_text: str) -> str:
     ]
 
     if fuzzy_hit(NURSE_KEYWORDS, threshold=0.78):
-        return "nurse"
+        nurse_flag = True
     if fuzzy_hit(CNA_SUPPORT_KEYWORDS, threshold=0.78):
+        cna_flag = True
+
+    # 🔚 Final decision: nurse wins if both flags are present
+    if nurse_flag:
+        return "nurse"
+    if cna_flag:
         return "cna"
 
     # 8) DEFAULT: CNA
     return "cna"
+
 
 
 EMERGENT_NEURO_PHRASES = [
@@ -2735,6 +2758,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
