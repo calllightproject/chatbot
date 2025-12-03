@@ -418,7 +418,7 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
     instant_triggers = [
         # can't breathe / no air
         "can't breathe", "cant breathe", "cannot breathe",
-        "can't get air", "cant get air",
+        "can't get air", "cant get air", "cantwordsout",
         "can't catch my breath", "cant catch my breath",
         "short of breath", "shortness of breath",
         "out of breath",
@@ -2758,6 +2758,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
