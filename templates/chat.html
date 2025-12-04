@@ -58,7 +58,21 @@
       display: flex;
       align-items: center;
       justify-content: center;
-    }
+  transition: background-color 0.3s ease;
+}
+
+/* 🔔 Brief highlight when status changes */
+@keyframes bannerPulse {
+  0%   { background-color: #ebf0fa; }
+  30%  { background-color: #ffeaa7; }  /* soft yellow */
+  60%  { background-color: #fff3c4; }
+  100% { background-color: #ebf0fa; }
+}
+
+.bot-reply.flash {
+  animation: bannerPulse 0.8s ease-out 2;
+}
+
     .options button {
       display: block;
       width: 100%;
@@ -181,6 +195,13 @@
   </form>
 </div>
 
+function flashBanner() {
+  const banner = document.querySelector(".bot-reply");
+  if (!banner) return;
+  banner.classList.remove("flash"); // reset if still active
+  void banner.offsetWidth;          // force restart animation
+  banner.classList.add("flash");
+}
 
     <!-- Socket.IO -->
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
@@ -195,7 +216,7 @@
       const statusEl = document.getElementById('live-status');
       const greetingEl = document.getElementById('greeting-text');
 
-      function toast(msg) {
+                 function toast(msg) {
         const el = document.createElement('div');
         el.className = 'toast';
         el.textContent = msg;
@@ -206,6 +227,15 @@
       const defaultGreeting = greetingEl?.dataset?.default || (greetingEl?.textContent ?? "Hello! How can I help you?");
       function setGreeting(msg) { if (greetingEl) greetingEl.textContent = msg; }
       function resetGreeting() { if (greetingEl) greetingEl.textContent = defaultGreeting; }
+
+      // 🔔 Soft flash for the top banner
+      function flashBanner() {
+        const banner = document.querySelector(".bot-reply");
+        if (!banner) return;
+        banner.classList.remove("flash"); // reset if still active
+        void banner.offsetWidth;          // force restart animation
+        banner.classList.add("flash");
+      }
 
       function showLiveConnected() {
         statusEl.textContent = "Live updates enabled for Room " + (ROOM_NUMBER || "—");
@@ -261,6 +291,7 @@
         if (String(data.room_id) !== String(ROOM_NUMBER)) return;
         setGreeting("We received your request and are coordinating support.");
         toast("Request received.");
+        flashBanner();                           <!-- 🔔 here -->
         startNudge(6 * 60 * 1000);
       });
 
@@ -273,12 +304,15 @@
         if (status === "ack") {
           setGreeting(`Your request has been acknowledged${who}.`);
           toast("Request acknowledged.");
+          flashBanner();                         <!-- 🔔 here -->
         } else if (status === "omw") {
           setGreeting(`Your nurse/CNA is on the way${who}.`);
           toast("On the way.");
+          flashBanner();                         <!-- 🔔 here -->
         } else if (status === "asap") {
           setGreeting(`Your nurse/CNA is in another room and will be with you as soon as possible${who}.`);
           toast("They’ll be there ASAP.");
+          flashBanner();                         <!-- 🔔 here -->
         }
       });
 
@@ -287,12 +321,8 @@
         cancelNudge();
         setGreeting("All set — your request has been marked complete.");
         toast("Request completed.");
+        flashBanner();                           <!-- 🔔 here -->
         setTimeout(resetGreeting, 8000);
       });
 
       patientSocket.on('disconnect', showReconnecting);
-    </script>
-  </div>
-</body>
-</html>
-
