@@ -140,7 +140,8 @@
   <div class="chat-box">
     <div class="header">
       <h2>Postpartum CareConnect</h2>
-      <a href="{{ url_for('reset_language') }}" class="language-link">Change Language</a>
+      <!-- 🔴 CHANGED: pass room_number when resetting language -->
+      <a href="{{ url_for('reset_language', room=room_number) }}" class="language-link">Change Language</a>
     </div>
 
     <!-- Greeting banner that will be replaced by live nurse replies -->
@@ -161,133 +162,132 @@
     </div>
 
     <div class="note-section">
-  <!-- Keep ?room= in POST action -->
-  <form method="POST" action="{{ url_for('handle_chat', room=room_number) }}">
-    <input type="hidden" name="action" value="send_note">
-    <label for="custom_note" class="note-label">
-      {{ button_data.get(
-        'custom_note_placeholder',
-        "If your request isn’t listed or you need more than one item, please type a short message in the box below."
-      ) }}
-    </label>
-    <div class="note-form">
-      <textarea id="custom_note" name="custom_note" rows="2" placeholder="Type your message here..."></textarea>
-      <button type="submit">{{ button_data.get('send_note_button', 'Send Note') }}</button>
+      <!-- Keep ?room= in POST action -->
+      <form method="POST" action="{{ url_for('handle_chat', room=room_number) }}">
+        <input type="hidden" name="action" value="send_note">
+        <label for="custom_note" class="note-label">
+          {{ button_data.get(
+            'custom_note_placeholder',
+            "If your request isn’t listed or you need more than one item, please type a short message in the box below."
+          ) }}
+        </label>
+        <div class="note-form">
+          <textarea id="custom_note" name="custom_note" rows="2" placeholder="Type your message here..."></textarea>
+          <button type="submit">{{ button_data.get('send_note_button', 'Send Note') }}</button>
+        </div>
+      </form>
     </div>
-  </form>
-</div>
 
+    <!-- Socket.IO -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script>
+      // ---------- room resolution ----------
+      const TEMPLATE_ROOM = "{{ room_number or '' }}";
+      const urlParams = new URLSearchParams(location.search);
+      const urlRoomRaw = urlParams.get('room') || '';
+      const urlRoom = /^\d+$/.test(urlRoomRaw) ? urlRoomRaw : '';
+      const ROOM_NUMBER = (TEMPLATE_ROOM && TEMPLATE_ROOM !== 'None') ? TEMPLATE_ROOM : urlRoom;
 
-  <!-- Socket.IO -->
-  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script>
-    // ---------- room resolution ----------
-    const TEMPLATE_ROOM = "{{ room_number or '' }}";
-    const urlParams = new URLSearchParams(location.search);
-    const urlRoomRaw = urlParams.get('room') || '';
-    const urlRoom = /^\d+$/.test(urlRoomRaw) ? urlRoomRaw : '';
-    const ROOM_NUMBER = (TEMPLATE_ROOM && TEMPLATE_ROOM !== 'None') ? TEMPLATE_ROOM : urlRoom;
+      const statusEl = document.getElementById('live-status');
+      const greetingEl = document.getElementById('greeting-text');
 
-    const statusEl = document.getElementById('live-status');
-    const greetingEl = document.getElementById('greeting-text');
-
-    function toast(msg) {
-      const el = document.createElement('div');
-      el.className = 'toast';
-      el.textContent = msg;
-      document.body.appendChild(el);
-      setTimeout(() => el.remove(), 2800);
-    }
-
-    const defaultGreeting = greetingEl?.dataset?.default || (greetingEl?.textContent ?? "Hello! How can I help you?");
-    function setGreeting(msg) { if (greetingEl) greetingEl.textContent = msg; }
-    function resetGreeting() { if (greetingEl) greetingEl.textContent = defaultGreeting; }
-
-    function showLiveConnected() {
-      statusEl.textContent = "Live updates enabled for Room " + (ROOM_NUMBER || "—");
-      statusEl.style.display = 'block';
-    }
-    function showReconnecting() {
-      statusEl.textContent = "Reconnecting…";
-      statusEl.style.display = 'block';
-    }
-    function showConnectError(err) {
-      const msg = "Connection error" + (err ? (": " + err) : "");
-      statusEl.textContent = msg;
-      statusEl.style.display = 'block';
-    }
-
-    if (!ROOM_NUMBER) showConnectError("No room number found. Try /chat?room=241");
-
-    const patientSocket = io('/patient', {
-      query: { room_id: ROOM_NUMBER || '' },
-      transports: ['websocket','polling'],
-      reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelayMax: 5000
-    });
-
-    patientSocket.on('connect', () => {
-      if (ROOM_NUMBER) {
-        patientSocket.emit('patient:join', { room_id: String(ROOM_NUMBER) });
+      function toast(msg) {
+        const el = document.createElement('div');
+        el.className = 'toast';
+        el.textContent = msg;
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 2800);
       }
-    });
 
-    patientSocket.on('patient:joined', (payload) => {
-      if (String(payload.room_id) === String(ROOM_NUMBER)) {
-        showLiveConnected();
-        resetGreeting();
+      const defaultGreeting = greetingEl?.dataset?.default || (greetingEl?.textContent ?? "Hello! How can I help you?");
+      function setGreeting(msg) { if (greetingEl) greetingEl.textContent = msg; }
+      function resetGreeting() { if (greetingEl) greetingEl.textContent = defaultGreeting; }
+
+      function showLiveConnected() {
+        statusEl.textContent = "Live updates enabled for Room " + (ROOM_NUMBER || "—");
+        statusEl.style.display = 'block';
+      }
+      function showReconnecting() {
+        statusEl.textContent = "Reconnecting…";
+        statusEl.style.display = 'block';
+      }
+      function showConnectError(err) {
+        const msg = "Connection error" + (err ? (": " + err) : "");
+        statusEl.textContent = msg;
+        statusEl.style.display = 'block';
+      }
+
+      if (!ROOM_NUMBER) showConnectError("No room number found. Try /chat?room=241");
+
+      const patientSocket = io('/patient', {
+        query: { room_id: ROOM_NUMBER || '' },
+        transports: ['websocket','polling'],
+        reconnection: true,
+        reconnectionAttempts: 10,
+        reconnectionDelayMax: 5000
+      });
+
+      patientSocket.on('connect', () => {
+        if (ROOM_NUMBER) {
+          patientSocket.emit('patient:join', { room_id: String(ROOM_NUMBER) });
+        }
+      });
+
+      patientSocket.on('patient:joined', (payload) => {
+        if (String(payload.room_id) === String(ROOM_NUMBER)) {
+          showLiveConnected();
+          resetGreeting();
+          cancelNudge();
+        }
+      });
+
+      patientSocket.on('patient:error', err => showConnectError("Room join failed."));
+      patientSocket.on('connect_error', err => showConnectError(err?.message || "unknown"));
+
+      let nudgeTimer = null;
+      function cancelNudge() { if (nudgeTimer) { clearTimeout(nudgeTimer); nudgeTimer = null; } }
+      function startNudge(ms) {
         cancelNudge();
+        nudgeTimer = setTimeout(() => {
+          toast("Still in queue — a team member will be with you soon.");
+        }, ms);
       }
-    });
 
-    patientSocket.on('patient:error', err => showConnectError("Room join failed."));
-    patientSocket.on('connect_error', err => showConnectError(err?.message || "unknown"));
+      patientSocket.on('request:received', data => {
+        if (String(data.room_id) !== String(ROOM_NUMBER)) return;
+        setGreeting("We received your request and are coordinating support.");
+        toast("Request received.");
+        startNudge(6 * 60 * 1000);
+      });
 
-    let nudgeTimer = null;
-    function cancelNudge() { if (nudgeTimer) { clearTimeout(nudgeTimer); nudgeTimer = null; } }
-    function startNudge(ms) {
-      cancelNudge();
-      nudgeTimer = setTimeout(() => {
-        toast("Still in queue — a team member will be with you soon.");
-      }, ms);
-    }
+      patientSocket.on('request:status', data => {
+        if (String(data.room_id) !== String(ROOM_NUMBER)) return;
+        cancelNudge();
+        const who = data.nurse ? ` (${data.nurse})` : "";
+        const status = (data.status || "").toLowerCase();
 
-    patientSocket.on('request:received', data => {
-      if (String(data.room_id) !== String(ROOM_NUMBER)) return;
-      setGreeting("We received your request and are coordinating support.");
-      toast("Request received.");
-      startNudge(6 * 60 * 1000);
-    });
+        if (status === "ack") {
+          setGreeting(`Your request has been acknowledged${who}.`);
+          toast("Request acknowledged.");
+        } else if (status === "omw") {
+          setGreeting(`Your nurse/CNA is on the way${who}.`);
+          toast("On the way.");
+        } else if (status === "asap") {
+          setGreeting(`Your nurse/CNA is in another room and will be with you as soon as possible${who}.`);
+          toast("They’ll be there ASAP.");
+        }
+      });
 
-    patientSocket.on('request:status', data => {
-      if (String(data.room_id) !== String(ROOM_NUMBER)) return;
-      cancelNudge();
-      const who = data.nurse ? ` (${data.nurse})` : "";
-      const status = (data.status || "").toLowerCase();
+      patientSocket.on('request:done', data => {
+        if (String(data.room_id) !== String(ROOM_NUMBER)) return;
+        cancelNudge();
+        setGreeting("All set — your request has been marked complete.");
+        toast("Request completed.");
+        setTimeout(resetGreeting, 8000);
+      });
 
-      if (status === "ack") {
-        setGreeting(`Your request has been acknowledged${who}.`);
-        toast("Request acknowledged.");
-      } else if (status === "omw") {
-        setGreeting(`Your nurse/CNA is on the way${who}.`);
-        toast("On the way.");
-      } else if (status === "asap") {
-        setGreeting(`Your nurse/CNA is in another room and will be with you as soon as possible${who}.`);
-        toast("They’ll be there ASAP.");
-      }
-    });
-
-    patientSocket.on('request:done', data => {
-      if (String(data.room_id) !== String(ROOM_NUMBER)) return;
-      cancelNudge();
-      setGreeting("All set — your request has been marked complete.");
-      toast("Request completed.");
-      setTimeout(resetGreeting, 8000);
-    });
-
-    patientSocket.on('disconnect', showReconnecting);
-  </script>
+      patientSocket.on('disconnect', showReconnecting);
+    </script>
+  </div>
 </body>
 </html>
-
