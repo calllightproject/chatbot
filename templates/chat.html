@@ -12,12 +12,14 @@
       --light-gray-background: #f5f5f5;
       --white: #ffffff;
     }
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       padding: 20px;
       background-color: var(--light-gray-background);
       color: var(--neutral-gray-text);
     }
+
     .chat-box {
       max-width: 500px;
       margin: 20px auto;
@@ -26,6 +28,7 @@
       border-radius: 8px;
       box-shadow: 0 0 10px rgba(0,0,0,0.1);
     }
+
     .header {
       display: flex;
       justify-content: space-between;
@@ -34,11 +37,13 @@
       border-bottom: 1px solid #e1e1e2;
       margin-bottom: 20px;
     }
+
     .header h2 {
       color: var(--core-blue);
       margin: 0;
       font-size: 22px;
     }
+
     .language-link {
       text-decoration: none;
       color: var(--accent-blue);
@@ -46,6 +51,7 @@
       white-space: nowrap;
       margin-left: 10px;
     }
+
     /* Top banner that now shows dynamic nurse updates */
     .bot-reply {
       background-color: #ebf0fa;
@@ -58,20 +64,20 @@
       display: flex;
       align-items: center;
       justify-content: center;
-  transition: background-color 0.3s ease;
-}
+      transition: background-color 0.3s ease;
+    }
 
-/* 🔔 Brief highlight when status changes */
-@keyframes bannerPulse {
-  0%   { background-color: #ebf0fa; }
-  30%  { background-color: #ffeaa7; }  /* soft yellow */
-  60%  { background-color: #fff3c4; }
-  100% { background-color: #ebf0fa; }
-}
+    /* 🔔 Brief highlight when status changes */
+    @keyframes bannerPulse {
+      0%   { background-color: #ebf0fa; }
+      30%  { background-color: #ffeaa7; }  /* soft yellow */
+      60%  { background-color: #fff3c4; }
+      100% { background-color: #ebf0fa; }
+    }
 
-.bot-reply.flash {
-  animation: bannerPulse 0.8s ease-out 2;
-}
+    .bot-reply.flash {
+      animation: bannerPulse 0.8s ease-out 2;
+    }
 
     .options button {
       display: block;
@@ -88,24 +94,30 @@
       text-align: left;
       transition: background-color 0.3s;
     }
-    .options button:hover, .options button:focus {
+
+    .options button:hover,
+    .options button:focus {
       background-color: #093582;
     }
+
     .note-section {
       border-top: 1px solid #e1e1e2;
       padding-top: 20px;
       margin-top: 20px;
     }
+
     .note-label {
       display: block;
       margin-bottom: 10px;
       font-size: 14px;
       color: #4b5563;
     }
+
     .note-form {
       display: flex;
       gap: 10px;
     }
+
     .note-form textarea {
       flex-grow: 1;
       border-radius: 5px;
@@ -113,6 +125,7 @@
       padding: 10px;
       font-size: 14px;
     }
+
     .note-form button {
       flex-shrink: 0;
       padding: 10px 15px;
@@ -124,9 +137,11 @@
       font-size: 14px;
       transition: background-color 0.3s;
     }
+
     .note-form button:hover {
       background-color: #093582;
     }
+
     /* Connection-only status chip */
     #live-status {
       margin-top: 10px;
@@ -137,6 +152,7 @@
       font-size: 14px;
       display: none;
     }
+
     .toast {
       position: fixed;
       bottom: 20px;
@@ -154,7 +170,7 @@
   <div class="chat-box">
     <div class="header">
       <h2>Postpartum CareConnect</h2>
-      <!-- 🔴 CHANGED: pass room_number when resetting language -->
+      <!-- Pass room_number so reset-language keeps the room in the URL/session logic -->
       <a href="{{ url_for('reset_language', room=room_number) }}" class="language-link">Change Language</a>
     </div>
 
@@ -175,33 +191,25 @@
       </form>
     </div>
 
-   <div class="note-section">
-  <!-- Keep ?room= in POST action -->
-  <form method="POST" action="{{ url_for('handle_chat', room=room_number) }}">
-    <input type="hidden" name="action" value="send_note">
-    <label for="custom_note" class="note-label">
-      {{ button_data.get(
-        'custom_note_placeholder',
-        "If your request isn’t listed or you need more than one item, please type a short message in the box below."
-      ) }}
-    </label>
-    <div class="note-form">
-      <textarea id="custom_note"
-                name="custom_note"
-                rows="2"
-                placeholder="{{ button_data.get('empty_custom_note', 'Type your message here...') }}"></textarea>
-      <button type="submit">{{ button_data.get('send_note_button', 'Send Note') }}</button>
+    <div class="note-section">
+      <!-- Keep ?room= in POST action -->
+      <form method="POST" action="{{ url_for('handle_chat', room=room_number) }}">
+        <input type="hidden" name="action" value="send_note">
+        <label for="custom_note" class="note-label">
+          {{ button_data.get(
+            'custom_note_placeholder',
+            "If your request isn’t listed or you need more than one item, please type a short message in the box below."
+          ) }}
+        </label>
+        <div class="note-form">
+          <textarea id="custom_note"
+                    name="custom_note"
+                    rows="2"
+                    placeholder="{{ button_data.get('empty_custom_note', 'Type your message here...') }}"></textarea>
+          <button type="submit">{{ button_data.get('send_note_button', 'Send Note') }}</button>
+        </div>
+      </form>
     </div>
-  </form>
-</div>
-
-function flashBanner() {
-  const banner = document.querySelector(".bot-reply");
-  if (!banner) return;
-  banner.classList.remove("flash"); // reset if still active
-  void banner.offsetWidth;          // force restart animation
-  banner.classList.add("flash");
-}
 
     <!-- Socket.IO -->
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
@@ -216,7 +224,7 @@ function flashBanner() {
       const statusEl = document.getElementById('live-status');
       const greetingEl = document.getElementById('greeting-text');
 
-                 function toast(msg) {
+      function toast(msg) {
         const el = document.createElement('div');
         el.className = 'toast';
         el.textContent = msg;
@@ -232,8 +240,8 @@ function flashBanner() {
       function flashBanner() {
         const banner = document.querySelector(".bot-reply");
         if (!banner) return;
-        banner.classList.remove("flash"); // reset if still active
-        void banner.offsetWidth;          // force restart animation
+        banner.classList.remove("flash");  // reset if still active
+        void banner.offsetWidth;           // force restart animation
         banner.classList.add("flash");
       }
 
@@ -279,7 +287,12 @@ function flashBanner() {
       patientSocket.on('connect_error', err => showConnectError(err?.message || "unknown"));
 
       let nudgeTimer = null;
-      function cancelNudge() { if (nudgeTimer) { clearTimeout(nudgeTimer); nudgeTimer = null; } }
+      function cancelNudge() {
+        if (nudgeTimer) {
+          clearTimeout(nudgeTimer);
+          nudgeTimer = null;
+        }
+      }
       function startNudge(ms) {
         cancelNudge();
         nudgeTimer = setTimeout(() => {
@@ -291,7 +304,7 @@ function flashBanner() {
         if (String(data.room_id) !== String(ROOM_NUMBER)) return;
         setGreeting("We received your request and are coordinating support.");
         toast("Request received.");
-        flashBanner();                           <!-- 🔔 here -->
+        flashBanner();  // highlight banner
         startNudge(6 * 60 * 1000);
       });
 
@@ -304,15 +317,15 @@ function flashBanner() {
         if (status === "ack") {
           setGreeting(`Your request has been acknowledged${who}.`);
           toast("Request acknowledged.");
-          flashBanner();                         <!-- 🔔 here -->
+          flashBanner();
         } else if (status === "omw") {
           setGreeting(`Your nurse/CNA is on the way${who}.`);
           toast("On the way.");
-          flashBanner();                         <!-- 🔔 here -->
+          flashBanner();
         } else if (status === "asap") {
           setGreeting(`Your nurse/CNA is in another room and will be with you as soon as possible${who}.`);
           toast("They’ll be there ASAP.");
-          flashBanner();                         <!-- 🔔 here -->
+          flashBanner();
         }
       });
 
@@ -321,8 +334,12 @@ function flashBanner() {
         cancelNudge();
         setGreeting("All set — your request has been marked complete.");
         toast("Request completed.");
-        flashBanner();                           <!-- 🔔 here -->
+        flashBanner();
         setTimeout(resetGreeting, 8000);
       });
 
       patientSocket.on('disconnect', showReconnecting);
+    </script>
+  </div>
+</body>
+</html>
