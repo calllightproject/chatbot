@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 button_data = {
     "greeting": "您好！我能为您做些什么？",
-    "custom_note_placeholder": "如果您找不到符合的选项，或需要多样物品，请在下面的方框里简单说明您的需求。"
+    "custom_note_placeholder": "如果您找不到符合的选项，或需要多样物品，请在下面的方框里简单说明您的需求。",
     "empty_custom_note": "请先在文本框中输入留言。",
     "send_note_button": "发送留言",
     "back_text": "⬅ 返回",
@@ -155,5 +155,6 @@ button_data = {
     "我什么时候能拿到出院文件？": {"note": "产科与儿科录入医嘱/出院指令后，护士即可打印。"},
     "我必须坐轮椅吗？": {"note": "无需强制，但需工作人员陪同；护士忙时由运送人员协助。"}
 }
+
 
 
