@@ -1,7 +1,7 @@
 # button_config_bereavement_es.py
 button_data = {
     "greeting": "Hola. Estamos aquí para apoyarle.",
-    "custom_note_placeholder": "Escriba su nota para la enfermera aquí...",
+    "custom_note_placeholder": "Si no encuentra lo que necesita o requiere más de un artículo, por favor escriba un breve mensaje en el recuadro de abajo.",
     "empty_custom_note": "Por favor, escriba un mensaje en el cuadro.",
     "send_note_button": "Enviar nota",
     "cna_notification": "✅ Se ha notificado al asistente de enfermería.",
@@ -118,3 +118,4 @@ button_data = {
     "¿Cuándo recibiré mis papeles de alta?": {"note": "Una vez que el ginecólogo ingrese notas y órdenes de alta, su enfermera imprimirá la documentación."},
     "¿Tengo que usar una silla de ruedas?": {"note": "No es obligatorio, pero alguien del personal debe acompañarle. Si enfermería está ocupada, le llevará personal de traslado."}
 }
+
