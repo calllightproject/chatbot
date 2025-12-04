@@ -532,12 +532,20 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
 
     # -------- 6. COLOR CHANGE (cyanosis) --------
     color_words = ["blue", "bluish", "purple", "grey", "gray"]
-    context_words = [
-        "baby", "newborn", "infant",
-        "me", "my", "skin", "face", "lips",
-        "mouth", "hands", "feet", "fingers", "toes", "nose"
+    body_part_words = [
+        "skin", "face", "lips", "mouth",
+        "hands", "hand", "feet", "foot",
+        "fingers", "toes", "tongue", "nose"
     ]
-    if any(c in t for c in color_words) and any(w in t for w in context_words):
+
+    # Color on a body part (avoid obvious supply contexts like pads/blankets)
+    if any(c in t for c in color_words) and any(w in t for w in body_part_words):
+        if not any(s in t for s in ["pad", "pads", "blanket", "sheets", "sheet", "pillow", "gown"]):
+            return True
+
+    # Explicit "my baby is blue" style phrases (treat as emergent)
+    if ("baby is blue" in t or "my baby is blue" in t or
+        "baby looks blue" in t or "my baby looks blue"):
         return True
 
     if ("turned blue" in t or "turning blue" in t or
@@ -1025,440 +1033,475 @@ def _has_htn_emergent(text: str) -> bool:
     return False
 
 
+# =========================================================
+# 1) Weighted emergent scoring safety net
+# =========================================================
+from collections import Counter
+
+# Balanced sensitivity. Lower to 5 (more sensitive), raise to 7 (stricter)
+EMERGENT_SCORE_THRESHOLD = 6
+
+
+def _normalize_text(text: str) -> str:
+    """Lowercase and trim; safe handling of None."""
+    return (text or "").strip().lower()
+
+
+def compute_emergent_score(raw_text: str):
+    """
+    Weighted emergent scoring safety net.
+
+    Returns:
+        total_score (int)
+        breakdown (Counter)  # points by category (for logging/QA)
+        hard_stop (bool)     # True = treat as emergent regardless of score
+    """
+    text = _normalize_text(raw_text)
+    score = 0
+    breakdown = Counter()
+    hard_stop = False
+
+    def add_points(category: str, pts: int):
+        nonlocal score
+        score += pts
+        breakdown[category] += pts
+
+    def contains_any(phrases):
+        return any(p in text for p in phrases)
+
+    # -------------------------------------------------
+    # BABY FLOPPY / UNRESPONSIVE (always high priority)
+    # -------------------------------------------------
+    baby_words = ["baby", "my son", "my daughter"]
+    floppy_words = [
+        "floppy", "limp", "like a rag doll", "loose", "won't hold", "feels lifeless"
+    ]
+    unresponsive_words = [
+        "won't wake up", "not waking up", "hard to wake",
+        "won't respond", "not responding", "barely moving", "not really moving"
+    ]
+
+    has_baby = contains_any(baby_words)
+    has_floppy = contains_any(floppy_words)
+    has_unresponsive = contains_any(unresponsive_words)
+
+    # HARD-STOP: baby floppy/limp + not waking/not responding/barely moving
+    if has_baby and (has_floppy or has_unresponsive):
+        hard_stop = True
+        add_points("baby_floppy_combo", 10)
+
+    # Graded points if only part of the pattern shows up
+    if has_baby:
+        add_points("baby_concern", 2)
+    if has_floppy:
+        add_points("baby_floppy", 4)
+    if has_unresponsive:
+        add_points("baby_unresponsive", 4)
+
+    # -------------------------------------------------
+    # PRESYNCOPE / BLACKING OUT / VISION DARK
+    # -------------------------------------------------
+    presyncope_core = [
+        "about to pass out",
+        "might pass out",
+        "feel like i'm going to pass out",
+        "almost passed out",
+        "almost fainted",
+    ]
+    presyncope_support = [
+        "really faint",
+        "so faint",
+        "so dizzy",
+        "very dizzy",
+        "room is spinning",
+        "lightheaded when i stand",
+        "dizzy when i stand",
+    ]
+    vision_dark = [
+        "vision went black",
+        "vision went dark",
+        "everything went black",
+        "everything went dark",
+        "tunnel vision",
+        "seeing spots",
+        "seeing stars",
+        "black spots in my vision",
+    ]
+
+    if contains_any(presyncope_core) or contains_any(vision_dark):
+        # HARD-STOP: these should always escalate
+        hard_stop = True
+        add_points("presyncope_core", 6)
+
+    if contains_any(presyncope_support):
+        add_points("presyncope_support", 3)
+
+    if contains_any(vision_dark):
+        add_points("vision_dark", 4)
+
+    # -------------------------------------------------
+    # NEURO MOTOR / STROKE-LIKE (one-sided, arm/leg/face)
+    # -------------------------------------------------
+    neuro_one_side_patterns = [
+        "one side of my body",
+        "one side of my face",
+        "one side feels weak",
+        "one side is weak",
+        "one side won't move",
+    ]
+    neuro_motor_patterns = [
+        "arm won't move",
+        "arm won't do what i tell it",
+        "arm not doing what i tell it",
+        "arm won't listen",
+        "leg won't move",
+        "leg won't do what i tell it",
+        "leg not doing what i tell it",
+        "leg won't listen",
+        "my arm keeps giving out",
+        "my leg keeps giving out",
+        "can't move my arm",
+        "can't move my leg",
+        "lost control of my arm",
+        "lost control of my leg",
+        "heaviness in my arm",
+        "heaviness in my leg",
+        "sudden weakness",
+        "suddenly weak",
+    ]
+    face_droop_patterns = [
+        "face drooping",
+        "face is drooping",
+        "mouth drooping",
+        "crooked smile",
+        "one side of my mouth",
+        "can't move one side of my face",
+        "can't move one side of my mouth",
+    ]
+
+    if (contains_any(neuro_one_side_patterns) or
+        contains_any(neuro_motor_patterns) or
+        contains_any(face_droop_patterns)):
+        # HARD-STOP: focal neuro deficits
+        hard_stop = True
+        add_points("neuro_motor_or_face", 6)
+
+    # -------------------------------------------------
+    # EXPRESSIVE APHASIA (brain clear, words wrong)
+    # -------------------------------------------------
+    clear_brain_phrases = [
+        "brain is clear",
+        "my brain is clear",
+        "my brain feels clear",
+        "i know what i want to say",
+        "i know exactly what i want to say",
+        "i know what i'm trying to say",
+        "my thoughts are clear",
+    ]
+    words_wrong_phrases = [
+        "words keep coming out wrong",
+        "words coming out wrong",
+        "words come out wrong",
+        "words keep getting mixed up",
+        "words keep mixing up",
+        "mouth won't cooperate",
+        "mouth won't do what i want",
+        "i can't get the words out right",
+        "the words come out jumbled",
+        "speech keeps coming out wrong",
+        "what i'm saying isn't what i mean",
+    ]
+
+    has_clear_brain = contains_any(clear_brain_phrases)
+    has_words_wrong = contains_any(words_wrong_phrases)
+
+    if has_clear_brain:
+        add_points("expressive_clear_brain", 3)
+    if has_words_wrong:
+        add_points("expressive_words_wrong", 3)
+
+    # HARD-STOP: classic expressive aphasia combo
+    if has_clear_brain and has_words_wrong:
+        hard_stop = True
+        add_points("expressive_aphasia_combo", 4)
+
+    # -------------------------------------------------
+    # BREATHING / CHEST / HEART
+    # -------------------------------------------------
+    breathing_patterns = [
+        "can't breathe",
+        "can t breathe",  # common typo without apostrophe
+        "can't catch my breath",
+        "hard to breathe",
+        "difficult to breathe",
+        "trouble breathing",
+        "short of breath",
+        "so short of breath",
+        "gasping for air",
+        "wheezing",
+        "breathing feels heavy",
+    ]
+    chest_pain_patterns = [
+        "chest pain",
+        "pain in my chest",
+        "pressure in my chest",
+        "chest feels tight",
+        "tightness in my chest",
+        "crushing chest",
+        "squeezing in my chest",
+    ]
+    heart_patterns = [
+        "heart is racing",
+        "heart keeps racing",
+        "heart is pounding",
+        "really strong heartbeat",
+        "palpitations",
+    ]
+
+    if contains_any(breathing_patterns):
+        # Treat breathing complaints as high-risk
+        add_points("breathing", 5)
+        hard_stop = True  # you can make this False if you want more nuance
+
+    if contains_any(chest_pain_patterns):
+        add_points("chest_pain", 4)
+
+    if contains_any(heart_patterns) and (contains_any(presyncope_core) or contains_any(breathing_patterns)):
+        add_points("heart_plus_other", 3)
+
+    # -------------------------------------------------
+    # BLEEDING / POSTPARTUM HEMORRHAGE (PPH)
+    # -------------------------------------------------
+    bright_red_patterns = [
+        "bright red blood",
+        "lots of red blood",
+        "a lot of red blood",
+        "gushing blood",
+        "blood pouring out",
+        "blood running down",
+    ]
+    pad_soaking_patterns = [
+        "soaking through the pad",
+        "soak through the pad",
+        "pad is soaked",
+        "pad keeps filling up",
+        "filled a whole pad",
+        "pads keep filling",
+        "bleeding onto the bed",
+        "blood on the bed",
+        "bleeding onto the floor",
+        "blood on the floor",
+    ]
+    clot_patterns = [
+        "large clot",
+        "big clot",
+        "golf ball clot",
+        "golf-ball sized clot",
+        "clot the size of a golf ball",
+    ]
+
+    has_bright_red = contains_any(bright_red_patterns)
+    has_pad_soak = contains_any(pad_soaking_patterns)
+    has_big_clot = contains_any(clot_patterns)
+
+    if has_bright_red:
+        add_points("pph_bright_red", 4)
+    if has_pad_soak:
+        add_points("pph_pad_soaking", 4)
+    if has_big_clot:
+        add_points("pph_large_clot", 4)
+
+    # HARD-STOP per your rules:
+    # - bright red + pad/bed/floor
+    # - OR any large/golf-ball clot
+    if (has_bright_red and has_pad_soak) or has_big_clot:
+        hard_stop = True
+        add_points("pph_hard_combo", 4)
+
+    # -------------------------------------------------
+    # COLOR CHANGE (blue/purple/gray)
+    # -------------------------------------------------
+    color_change_patterns = [
+        "lips look blue",
+        "lips are blue",
+        "turning blue",
+        "turned blue",
+        "turning purple",
+        "turned purple",
+        "turned grey",
+        "turning grey",
+        "gray color",
+        "grey color",
+        "ashen",
+    ]
+    if contains_any(color_change_patterns):
+        add_points("color_change", 5)
+        hard_stop = True
+
+    # -------------------------------------------------
+    # HTN / PREECLAMPSIA CLUSTER
+    # -------------------------------------------------
+    ruq_patterns = [
+        "right upper quadrant pain",
+        "ruq pain",
+        "pain under my right ribs",
+        "pain under my ribs on the right",
+        "upper right abdominal pain",
+    ]
+    epigastric_patterns = [
+        "epigastric pain",
+        "pain in the top of my stomach",
+        "pain in the middle under my ribs",
+    ]
+    severe_headache_patterns = [
+        "severe headache",
+        "worst headache of my life",
+        "worst headache i've ever had",
+        "pounding headache",
+        "throbbing headache",
+        "headache that won't go away",
+    ]
+    vision_change_patterns = [
+        "blurry vision",
+        "vision is blurry",
+        "double vision",
+        "seeing double",
+        "seeing spots",
+        "seeing stars",
+        "flashing lights",
+        "sparkles in my vision",
+    ]
+    something_wrong_patterns = [
+        "something is very wrong",
+        "something is really wrong",
+        "something feels really wrong",
+        "something doesn't feel right",
+        "i feel like i'm dying",
+        "i feel like i might die",
+    ]
+
+    has_ruq = contains_any(ruq_patterns)
+    has_epi = contains_any(epigastric_patterns)
+    has_severe_ha = contains_any(severe_headache_patterns)
+    has_vision_change = contains_any(vision_change_patterns)
+    has_something_wrong = contains_any(something_wrong_patterns)
+
+    if has_ruq:
+        add_points("htn_ruq", 3)
+    if has_epi:
+        add_points("htn_epigastric", 2)
+    if has_severe_ha:
+        add_points("htn_severe_headache", 3)
+    if has_vision_change:
+        add_points("htn_vision_change", 3)
+    if has_something_wrong:
+        add_points("htn_something_wrong", 2)
+
+    # Classic severe preeclampsia picture: RUQ/Epigastric + severe HA + vision change
+    if (has_ruq or has_epi) and has_severe_ha and has_vision_change:
+        hard_stop = True
+        add_points("htn_classic_combo", 4)
+
+    # -------------------------------------------------
+    # "SOMETHING IS WRONG" with other concerning features
+    # -------------------------------------------------
+    generic_anxiety_patterns = [
+        "i don't feel right",
+        "this doesn't feel right",
+        "i feel really off",
+        "i feel off",
+    ]
+    if contains_any(generic_anxiety_patterns) and score > 0:
+        # Only bump if already some concerning signal
+        add_points("generic_wrong_plus_other", 1)
+
+    return score, breakdown, hard_stop
+
+
+# =========================================================
+# 2) Integration with your existing helpers
+# =========================================================
+
+def classify_escalation_tier(note_text: str) -> str:
+    """
+    Returns 'emergent' or 'routine'.
+
+    Order:
+      1) Existing hard-stop helpers (_has_heart_breath_color_emergent, etc.)
+      2) Weighted scoring safety net
+    """
+    text = _normalize_text(note_text)
+
+    # 1) Existing hard-stop helpers (your current logic)
+    if _has_heart_breath_color_emergent(text):
+        return "emergent"
+
+    if _has_neuro_emergent(text):
+        return "emergent"
+
+    if _has_htn_emergent(text):
+        return "emergent"
+
+    # 2) New scoring safety net
+    score, breakdown, hard_stop = compute_emergent_score(text)
+    # Optional: log for QA
+    # current_app.logger.info(f"Emergent score={score}, breakdown={breakdown}")
+
+    if hard_stop:
+        return "emergent"
+
+    if score >= EMERGENT_SCORE_THRESHOLD:
+        return "emergent"
+
+    return "routine"
+
+
 def route_note_intelligently(note_text: str) -> str:
     """
-    Decide 'nurse' vs 'cna' for free-text notes using:
-      - Hard safety rules (escalation_tier 'emergent' => NURSE)
-      - Blood/pain/incision/neuro => NURSE
-      - Environment/cleaning/bedding => CNA
-      - Supplies/mobility/help-to-bed/bathroom/shower => CNA
-      - Breastfeeding & baby-feeding rules
-      - Fuzzy matching for typos
+    Returns: 'nurse' or 'cna'
 
-    RULE: If a note contains BOTH CNA-able items and nurse-level items,
-    it will be routed to NURSE (CNA can still help, but nurse must know).
+    Logic:
+      - Any 'emergent' tier request -> nurse
+      - Routine but clearly clinical -> nurse
+      - Pure supply/comfort -> CNA
+      - Bathroom + faint/dizzy/pass out -> nurse (safety rule)
     """
-    if not note_text:
-        return "cna"
+    text = _normalize_text(note_text)
+    tier = classify_escalation_tier(text)
 
-    text = note_text.lower().strip()
-    norm = re.sub(r"[^a-z0-9\s]", " ", text)
-    tokens = [t for t in norm.split() if t]
-
-    def contains_any(words):
-        return any(w in text for w in words)
-
-    def fuzzy_hit(keywords, threshold=0.78):
-        """Return True if any token is fuzzily close to any keyword."""
-        if not tokens:
-            return False
-        for kw in keywords:
-            kw_clean = kw.lower().strip()
-            # phrase match (for multiword patterns)
-            if " " in kw_clean and kw_clean in norm:
-                return True
-            # token-level fuzzy match (for typos)
-            for t in tokens:
-                if len(t) < 3:
-                    continue
-                ratio = difflib.SequenceMatcher(None, t, kw_clean).ratio()
-                if ratio >= threshold:
-                    return True
-        return False
-
-    # 🔴 1) GLOBAL EMERGENT OVERRIDE
-    if classify_escalation_tier(note_text) == "emergent":
+    if tier == "emergent":
         return "nurse"
 
-    # We'll collect signals, THEN decide:
-    nurse_flag = False
-    cna_flag = False
-
-    # 0) COLD PACK / ICE PACK => CNA (only if NOT emergent)
-    COLD_PACK_PHRASES = [
-        "cold pack", "cold packs", "ice pack", "ice packs", "icepack", "icepacks"
-    ]
-    if contains_any(COLD_PACK_PHRASES):
-        cna_flag = True
-
-    # 1) ANY scary heart/chest/breathing/color-change => NURSE
-    if _has_heart_breath_color_emergent(text):
-        nurse_flag = True
-
-    # 2) GENERAL CLINICAL (blood/pain/incision/neuro) -> NURSE
-    BLOOD_KEYWORDS = [
-        "blood", "bleeding",
-        "clots", "golf ball", "soaked", "saturated", "hemorrhage", "hemorrhaging"
+    # Supply-only keywords (tune with your existing list)
+    supply_keywords = [
+        "mesh underwear", "underwear", "peri bottle", "peribottle",
+        "pads", "pad", "ice pack", "snacks", "water", "blanket",
+        "pillows", "towel", "blue pad", "chucks", "diaper",
+        "wipe", "wipes", "extra gown",
     ]
 
-    PAIN_INCISION_KEYWORDS = [
-        "severe pain", "sharp pain", "really bad pain", "terrible pain",
-        "incision", "staples", "stitches", "wound", "infection",
-        "infected", "drainage", "oozing",
-        "burning pain", "migraine", "severe headache", "headache",
-        "dizzy", "lightheaded", "faint", "fainted",
-        "rash", "newborn rash",
+    # Clinical-ish keywords: symptoms / meds
+    clinical_keywords = [
+        "pain", "medication", "medicine", "nausea", "vomit", "vomiting",
+        "fever", "chills", "bleeding", "blood",
+        "dizzy", "faint", "lightheaded", "short of breath", "trouble breathing",
+        "heart", "chest", "headache", "vision", "numb", "tingling",
+        "swelling", "swollen",
     ]
 
-    if contains_any(BLOOD_KEYWORDS) or fuzzy_hit(BLOOD_KEYWORDS + PAIN_INCISION_KEYWORDS, threshold=0.72):
-        nurse_flag = True
+    is_supply = any(k in text for k in supply_keywords)
+    is_clinical = any(k in text for k in clinical_keywords)
 
-    # 3) BREASTFEEDING & BABY FEEDING
-    # Formula refill (non-clinical) -> CNA, unless already emergent above
-    if "formula" in text and any(w in text for w in ["more", "extra", "another", "refill", "ran out", "run out"]):
-        cna_flag = True
-
-    FEED_NURSE_KEYWORDS = [
-        "breastfeeding", "breast feeding", "latch", "latching",
-        "nipple", "nipples", "milk", "let down", "engorged",
-        "mastitis", "pump", "pumping",
-        "baby wont eat", "baby won't eat", "baby not eating",
-        "baby wont latch", "baby won't latch",
-        "help me breastfeed", "help with breastfeeding",
-    ]
-    if contains_any(FEED_NURSE_KEYWORDS) or fuzzy_hit(FEED_NURSE_KEYWORDS, threshold=0.72):
-        nurse_flag = True
-
-    # 4) ENVIRONMENT / CLEANING / BEDDING -> CNA
-    ENV_KEYWORDS = [
-        "light", "lights", "bright", "dim", "dark", "lamp",
-        "cold", "hot", "warm", "temperature",
-        "room is cold", "too cold", "too hot",
-        "tv", "television", "volume", "loud", "noise", "noisy", "quiet",
-        "curtain", "curtains", "door",
-    ]
-
-    CNA_CLEANING = [
-        "trash is full", "trash overflowing", "trash can", "garbage",
-        "change my sheets", "change the sheets",
-        "dirty sheet", "dirty sheets", "wet bed", "leaked on bed",
-        "spilled", "spill", "clean room", "mess", "messy",
-    ]
-
-    if any(w in norm for w in ["sheet", "sheets", "dirty sheets", "dirty sheet"]):
-        cna_flag = True
-
-    if "bed" in norm and "pad" in norm:
-        cna_flag = True
-
-    if fuzzy_hit(ENV_KEYWORDS, threshold=0.70) or fuzzy_hit(CNA_CLEANING, threshold=0.75):
-        cna_flag = True
-
-    # 5) MOBILITY / BATHROOM / SHOWER HELP -> CNA
-    MOBILITY_CNA_PHRASES = [
-        "help getting out of bed", "help out of bed",
-        "help me out of bed", "help me stand up", "help standing up",
-        "help me stand", "help me to stand",
-        "help me walk", "help walking", "help to walk",
-        "help to the bathroom", "help to the toilet",
-        "help going to the bathroom", "help going to the toilet",
-        "help getting into the shower", "help me to the shower",
-        "help getting to the shower", "help me shower",
-        "help me to the nursery", "help me to the sink",
-    ]
-    if contains_any(MOBILITY_CNA_PHRASES) or fuzzy_hit(MOBILITY_CNA_PHRASES, threshold=0.78):
-        cna_flag = True
-
-    if any(w in text for w in ["toilet", "bathroom", "shower"]) and not contains_any(PAIN_INCISION_KEYWORDS):
-        cna_flag = True
-
-    INCONTINENCE_PHRASES = [
-        "peed the bed", "peed in the bed", "peeing the bed",
-        "i peed in the hat", "i peed in hat", "urinated in bed",
-    ]
-    if contains_any(INCONTINENCE_PHRASES) or fuzzy_hit(INCONTINENCE_PHRASES, threshold=0.78):
-        cna_flag = True
-
-    # 6) DEVICES / ROOM EQUIPMENT
-    DEVICE_CNA_PHRASES = [
-        "bp cuff", "blood pressure cuff",
-        "cuff isn't working", "cuff isnt working",
-        "blood pressure machine", "bp machine",
-        "call light", "call-light",
-        "tv remote", "remote not working", "remote is not working",
-        "remote broke", "remote is broken",
-    ]
-    IV_PUMP_PHRASES = [
-        "iv pump is beeping", "iv pump keeps beeping",
-        "pump is beeping", "pump keeps beeping",
-        "iv pump alarm", "pump alarm",
-    ]
-
-    if contains_any(IV_PUMP_PHRASES) or fuzzy_hit(IV_PUMP_PHRASES, threshold=0.78):
-        nurse_flag = True
-
-    if contains_any(DEVICE_CNA_PHRASES) or fuzzy_hit(DEVICE_CNA_PHRASES, threshold=0.78):
-        cna_flag = True
-
-    # 7) GENERAL CLINICAL vs GENERAL SUPPORT
-    NURSE_KEYWORDS = [
-        "pain", "hurts",
-        "medication", "meds",
-        "nausea", "nauseous", "vomit", "vomiting", "throwing up",
-        "sick", "fever", "chills",
-        "iv", "staples", "incision",
-        "rash", "newborn rash",
-        "drainage", "hurt",
-        "blood pressure", "bp",
-        "dermoplast",
-    ]
-
-    CNA_SUPPORT_KEYWORDS = [
-        "water", "ice", "ice chips", "snacks",
-        "blanket", "blankets",
-        "sheet", "sheets", "pillow", "pillows",
-        "need supplies", "supplies",
-        "pads", "mesh underwear", "diaper", "diapers",
-        "wipes", "formula", "bottle", "bottles",
-        "blue pad", "white pad",
-        "burp cloth", "burp cloths",
-        "cold pack", "cold packs", "ice pack", "ice packs",
-    ]
-
-    if fuzzy_hit(NURSE_KEYWORDS, threshold=0.78):
-        nurse_flag = True
-    if fuzzy_hit(CNA_SUPPORT_KEYWORDS, threshold=0.78):
-        cna_flag = True
-
-    # 🔚 Final decision: nurse wins if both flags are present
-    if nurse_flag:
+    # Hard rule: help to bathroom + faint/dizzy/pass out -> nurse, not CNA
+    if "bathroom" in text and ("faint" in text or "pass out" in text or "dizzy" in text):
         return "nurse"
-    if cna_flag:
+
+    if is_supply and not is_clinical:
         return "cna"
 
-    # 8) DEFAULT: CNA
-    return "cna"
+    # Default: clinical or unclear goes to nurse
+    return "nurse"
 
-
-
-EMERGENT_NEURO_PHRASES = [
-
-    # --- Seizure activity / whole-body shaking ---
-    "seizure", "seizing",
-    "postictal", "convulsion", "convulsing",
-    "my body is jerking", "body keeps jerking",
-    "twitching uncontrollably", "twitching and jerking",
-    "whole body suddenly started shaking",
-    "whole body started shaking",
-    "whole body feels shaky and sick",
-    "my whole body feels shaky and sick",
-
-    # --- Unresponsive / consciousness changes ---
-    "unconscious", "not waking up",
-    "can't wake", "cant wake",
-    "won't wake", "wont wake",
-    "blacking out", "blacked out",
-    "fading out", "fading away",
-    "can't stay conscious", "cant stay conscious",
-    "in and out of consciousness",
-
-    # --- Loss of awareness / confusion ---
-    "suddenly confused",
-    "extremely confused",
-    "disoriented", "confused and disoriented",
-    "can't think straight", "cant think straight",
-    "can't understand", "cant understand",
-    "can't make sense of", "cant make sense of",
-    "brain is shutting down",
-
-    # --- Speech disturbances ---
-    "speech is slurred", "words are slurring",
-    "slurred speech",
-    "can't speak", "cant speak",
-    "can't get any words out", "cant get any words out",
-    "words sound scrambled",
-    "can't form words", "cant form words",
-
-    # --- Focal neurologic deficits ---
-    "left side feels weak", "right side feels weak",
-    "left side is weak", "right side is weak",
-    "suddenly weak on one side",
-    "face drooping", "drooping face",
-    "crooked smile",
-    "can't move my face", "cant move my face",
-    "face feels numb", "mouth feels numb",
-    "can't move my mouth", "cant move my mouth",
-    "can't move my arm", "cant move my arm",
-    "can't move my leg", "cant move my leg",
-    "right arm dropped", "arm dropped suddenly",
-    "legs collapsed", "legs gave out",
-    "whole body went weak",
-    "arms won't lift", "arms wont lift",
-
-    # --- Severe headaches / neuro pain ---
-    "worst headache of my life",
-    "thunderclap headache",
-    "head feels like it's exploding",
-    "head feels like its exploding",
-    "sudden exploding pain in my head",
-    "intense pressure in my head",
-
-    # --- Vision changes ---
-    "vision fading", "vision going dark",
-    "vision is dark", "tunnel vision",
-    "spots in vision",
-    "flashing lights", "seeing little flashing lights",
-    "eyes rolling back",
-
-    # --- Motor control problems ---
-    "can't control my hands", "cant control my hands",
-    "hands curling", "hands locked up",
-    "body locked up", "muscles locking up",
-    "can't move anything", "cant move anything",
-
-    # --- Baby neuro red flags ---
-    "my baby feels stiff",
-    "my baby feels floppy",
-    "my baby feels limp",
-    "my baby is floppy",
-    "my baby is limp",
-
-    "my baby won't respond", "my baby wont respond",
-    "baby not responding",
-
-    "baby not waking", "baby wont wake",
-    "baby is floppy", "baby feels floppy",
-    "baby is limp", "baby feels limp",
-
-    # NEW: baby not waking up (with and without apostrophe)
-    "my baby isn't waking up", "my baby isnt waking up",
-    "baby isn't waking up", "baby isnt waking up",
-
-    # NEW: baby not reacting / won’t react
-    "my baby won't react", "my baby wont react",
-    "baby won't react", "baby wont react",
-    "won't react", "wont react",
-    "not reacting", "no reaction",
-
-    "baby staring off", "baby staring through me",
-    "baby keeps staring off",
-    "eyes seem to drift upward", "eyes drift upward",
-]
-
-
-STRICT_NEURO_SENTENCES = [
-    # speech / awareness
-    "my speech suddenly got slurred and i can't get the words out right",
-    "i keep losing awareness for a few seconds at a time",
-    "i feel like i'm drifting away and can't stay awake or alert",
-    "my words keep coming out wrong and i can't say what i'm thinking",
-
-    # baby neuro
-    "my baby is staring straight ahead and won't react when i touch them",
-    "my baby's eyes keep rolling back and they won't respond when i talk or touch them",
-]
-
-def classify_escalation_tier(text: str) -> str:
-    """
-    Classify a request into an escalation tier (ENGLISH ONLY):
-      - 'emergent' : life-threatening / severe red flags
-      - 'routine'  : everything else
-
-    Triggered by:
-      - STRICT_NEURO_SENTENCES
-      - _has_heart_breath_color_emergent()
-      - _has_neuro_emergent()
-      - _has_htn_emergent()
-      - explicit emergency phrases
-    """
-
-    if not text:
-        return "routine"
-
-    # Normalize
-    t = text.lower().strip()
-    t = t.replace("’", "'").replace("“", '"').replace("”", '"')
-
-    # 🔴 STRICT NEURO SENTENCE MATCHES (always emergent)
-    for phrase in STRICT_NEURO_SENTENCES:
-        if phrase in t:
-            return "emergent"
-
-    # 1) Cardio-respiratory / color-change → EMERGENT
-    if _has_heart_breath_color_emergent(t):
-        return "emergent"
-
-    # 1b) Neuro emergent (pattern-based)
-    if _has_neuro_emergent(t):
-        return "emergent"
-
-    # 1c) HTN / preeclampsia emergent
-    if _has_htn_emergent(t):
-        return "emergent"
-
-    # 2) Direct emergency language
-    def has_phrase(phrase: str) -> bool:
-        pattern = r"\b" + re.escape(phrase) + r"\b"
-        return re.search(pattern, t) is not None
-
-    emergent_phrases = [
-        "emergency",
-        "passed out", "fainted",
-        "seizure", "stroke",
-        "feel like i'm dying", "feel like im dying",
-        "call 911",
-
-        # newborn emergencies
-        "my baby is choking",
-        "baby is choking",
-        "baby is limp",
-        "baby feels limp",
-        "baby is not moving",
-        "baby isn't moving",
-        "baby isnt moving",
-        "dropped my baby",
-        "i dropped the baby",
-        "baby fell",
-    ]
-
-    emergent_vision_phrases = [
-        "blurry vision", "vision is blurry",
-        "vision is weird",
-        "seeing spots", "seeing stars", "seeing sparkles", "seeing flashes",
-        "bright spots",
-        "tunnel vision",
-        "vision going dark", "vision is dark",
-        "can't see", "cant see",
-    ]
-
-    emergent_bleeding_phrases = [
-        "blood gushing", "gushing blood",
-        "blood gushing down my legs",
-        "soaking through pads", "soak through pads", "soaking pads",
-        "soaked through pad", "soaked through pads",
-        "pads every 10 minutes", "pads every 20 minutes",
-        "changing pads every 10 minutes", "changing pads every 20 minutes",
-        "bright red blood running down my legs",
-        "bright red blood down my legs",
-    ]
-
-    incision_emergent_triggers = [
-        "incision is leaking", "incision leaking",
-        "incision opened", "incision popped", "incision popped open",
-        "incision came open", "incision split", "incision is open",
-        "wound opened", "wound came open",
-        "pus", "purulent drainage",
-    ]
-
-    # 2a) direct emergent phrases
-    for phrase in emergent_phrases:
-        if phrase in t or has_phrase(phrase):
-            return "emergent"
-
-    # 2b) ANY vision change
-    if any(p in t for p in emergent_vision_phrases) or has_phrase("vision"):
-        return "emergent"
-
-    # 2c) Emergent bleeding
-    if any(p in t for p in emergent_bleeding_phrases):
-        return "emergent"
-
-    # 2d) Incision catastrophes
-    if "incision" in t and any(p in t for p in incision_emergent_triggers):
-        return "emergent"
-
-    # Everything else is routine
-    return "routine"
 
 
 # --- Core Helper Functions ---
@@ -2773,6 +2816,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
