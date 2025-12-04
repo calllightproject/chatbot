@@ -2,7 +2,7 @@
 button_data = {
     # --- Core Notifications & Text ---
     "greeting": "¡Hola! ¿Cómo puedo ayudarle?",
-    "custom_note_placeholder": "Escriba su nota para la enfermera aquí...",
+    "custom_note_placeholder": "Si no encuentra lo que necesita o requiere más de un artículo, por favor escriba un breve mensaje en el recuadro de abajo.",
     "empty_custom_note": "Por favor, escriba un mensaje en el cuadro.",
     "send_note_button": "Enviar nota",
     "back_text": "⬅ Regresar",
@@ -183,4 +183,5 @@ button_data = {
     "¿Cuándo recibiré mis papeles de alta?": {"note": "Una vez que el ginecólogo y el pediatra ingresen notas y órdenes de alta, su enfermera imprimirá la documentación."},
     "¿Tengo que usar una silla de ruedas?": {"note": "No es obligatorio, pero alguien del personal debe acompañarle. Si enfermería está ocupada, le llevará personal de traslado."}
 }
+
 
