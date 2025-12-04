@@ -1852,6 +1852,35 @@ def reset_language():
     session.pop("options", None)        # clear old button set
 
     return redirect(url_for("language_selector"))
+    
+@app.route("/dashboard")
+def dashboard():
+    active_requests = []
+    try:
+        with engine.connect() as connection:
+            result = connection.execute(text("""
+                SELECT
+                    COALESCE(request_id, CAST(id AS VARCHAR)) AS request_id,
+                    room,
+                    user_input,
+                    category AS role,
+                    timestamp
+                FROM requests
+                WHERE completion_timestamp IS NULL
+                ORDER BY timestamp DESC;
+            """))
+            for row in result:
+                active_requests.append({
+                    "id": row.request_id,
+                    "room": row.room,
+                    "request": row.user_input,
+                    "role": row.role,
+                    "timestamp": row.timestamp.isoformat() if row.timestamp else None,
+                })
+    except Exception as e:
+        print(f"ERROR fetching active requests: {e}")
+
+    return render_template("dashboard.html", active_requests=active_requests)
 
 
 
@@ -2744,6 +2773,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
