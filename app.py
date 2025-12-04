@@ -1669,14 +1669,12 @@ def _emit_received_for(room_number: str, user_text: str, kind: str):
 
 @app.route("/chat", methods=["GET", "POST"])
 def handle_chat():
-    # --- Force STANDARD unless URL explicitly says bereavement ---
+    # --- Resolve pathway: allow URL override, otherwise honor existing session ---
     qp = (request.args.get("pathway") or "").strip().lower()
-    if qp == "bereavement":
-        session["pathway"] = "bereavement"
-        pathway = "bereavement"
-    else:
-        session["pathway"] = "standard"
-        pathway = "standard"
+    if qp in ("standard", "bereavement"):
+        session["pathway"] = qp
+
+    pathway = session.get("pathway", "standard")
 
     lang = session.get("language", "en")
 
@@ -1695,6 +1693,9 @@ def handle_chat():
             f"Error: Configuration file '{config_module_name}.py' is missing or invalid. "
             "Please contact support."
         )
+
+   
+
 
     # Resolve room number from ?room=, session, or POST
     room_number = _current_room()
@@ -1841,33 +1842,18 @@ def handle_chat():
 
 @app.route("/reset-language")
 def reset_language():
-    session.clear()
+    """
+    Clear only language-related state so the patient can re-choose a language,
+    but KEEP room_number and pathway intact.
+    """
+    session.pop("language", None)
+    session.pop("is_first_baby", None)  # so standard pathway re-asks the question
+    session.pop("reply", None)          # clear any old reply text
+    session.pop("options", None)        # clear old button set
+
     return redirect(url_for("language_selector"))
 
-@app.route("/dashboard")
-def dashboard():
-    active_requests = []
-    try:
-        with engine.connect() as connection:
-            result = connection.execute(text("""
-                SELECT COALESCE(request_id, CAST(id AS VARCHAR)) AS request_id,
-                    room, user_input, category as role, timestamp
 
-                FROM requests
-                WHERE completion_timestamp IS NULL
-                ORDER BY timestamp DESC;
-            """))
-            for row in result:
-                active_requests.append({
-                    'id': row.request_id,
-                    'room': row.room,
-                    'request': row.user_input,
-                    'role': row.role,
-                    'timestamp': row.timestamp.isoformat() if row.timestamp else None
-                })
-    except Exception as e:
-        print(f"ERROR fetching active requests: {e}")
-    return render_template("dashboard.html", active_requests=active_requests)
 
 # --- Analytics ---
 @app.route('/analytics')
@@ -2758,6 +2744,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
