@@ -535,7 +535,8 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
     body_part_words = [
         "skin", "face", "lips", "mouth",
         "hands", "hand", "feet", "foot",
-        "fingers", "toes", "tongue", "nose"
+        "fingers", "toes", "tongue", "nose",
+        "baby", "newborn", "infant",
     ]
 
     # Color on a body part (avoid obvious supply contexts like pads/blankets)
@@ -543,7 +544,7 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         if not any(s in t for s in ["pad", "pads", "blanket", "sheets", "sheet", "pillow", "gown"]):
             return True
 
-    # Explicit "my baby is blue" style phrases (treat as emergent)
+    # Explicit "my baby is blue" style phrases (extra hard-stop)
     if ("baby is blue" in t or "my baby is blue" in t or
         "baby looks blue" in t or "my baby looks blue"):
         return True
@@ -616,6 +617,7 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         return True
 
     return False
+
 
 
 def _has_neuro_emergent(text: str) -> bool:
@@ -1463,24 +1465,29 @@ def route_note_intelligently(note_text: str) -> str:
     Logic:
       - Any 'emergent' tier request -> nurse
       - Routine but clearly clinical -> nurse
-      - Pure supply/comfort -> CNA
-      - Bathroom + faint/dizzy/pass out -> nurse (safety rule)
+      - Pure supply/comfort/ADL help -> CNA
+      - Bathroom/shower + faint/dizzy/pass out -> nurse (safety rule)
     """
     text = _normalize_text(note_text)
     tier = classify_escalation_tier(text)
 
+    # 1) Emergent → always nurse
     if tier == "emergent":
         return "nurse"
 
-    # Supply-only keywords (tune with your existing list)
+    # 2) Supply / comfort / ADL keywords
     supply_keywords = [
         "mesh underwear", "underwear", "peri bottle", "peribottle",
-        "pads", "pad", "ice pack", "snacks", "water", "blanket",
-        "pillows", "towel", "blue pad", "chucks", "diaper",
-        "wipe", "wipes", "extra gown",
+        "pads", "pad", "blue pad", "chucks",
+        "ice pack", "snacks", "water", "blanket",
+        "pillows", "towel", "extra gown",
+        "diaper", "wipe", "wipes",
+        # ADLs / mobility help
+        "shower", "bathroom", "bath", "toilet", "commode",
+        "help me get up", "help me up", "help me walk",
     ]
 
-    # Clinical-ish keywords: symptoms / meds
+    # 3) Clinical-ish keywords: symptoms / meds
     clinical_keywords = [
         "pain", "medication", "medicine", "nausea", "vomit", "vomiting",
         "fever", "chills", "bleeding", "blood",
@@ -1492,14 +1499,17 @@ def route_note_intelligently(note_text: str) -> str:
     is_supply = any(k in text for k in supply_keywords)
     is_clinical = any(k in text for k in clinical_keywords)
 
-    # Hard rule: help to bathroom + faint/dizzy/pass out -> nurse, not CNA
-    if "bathroom" in text and ("faint" in text or "pass out" in text or "dizzy" in text):
+    # 4) Bathroom/shower + presyncope → nurse
+    if (("bathroom" in text) or ("shower" in text) or ("bath" in text)) and (
+        "faint" in text or "pass out" in text or "dizzy" in text or "lightheaded" in text
+    ):
         return "nurse"
 
+    # 5) Pure supply / ADL only → CNA
     if is_supply and not is_clinical:
         return "cna"
 
-    # Default: clinical or unclear goes to nurse
+    # 6) Default: clinical or unclear → nurse
     return "nurse"
 
 
@@ -2816,6 +2826,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
