@@ -2,7 +2,7 @@
 button_data = {
     # --- Core Notifications & Text ---
     "greeting": "Hello! How can I help you?",
-    "custom_note_placeholder": "Type your note to the nurse here...",
+    "custom_note_placeholder": "If your request isn’t listed or you need more than one item, please type a short message in the box below.",
     "send_note_button": "Send Note",
     "cna_notification": "✅ CNA has been notified.",
     "nurse_notification": "✅ Nurse has been notified.",
@@ -172,4 +172,5 @@ button_data = {
     "When will I get my discharge paperwork?": {"note": "Once the OB-GYN and the pediatrician has put in their notes and discharge orders, your nurse can print out paperwork."},
     "Do I have to take a wheelchair?": {"note": "No, but a staff member has to go with you. If the nursing staff is busy, a transport worker will be the one to escort you out."}
 }
+
 
