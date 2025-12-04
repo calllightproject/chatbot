@@ -161,22 +161,26 @@
       </form>
     </div>
 
-    <div class="note-section">
-      <!-- Keep ?room= in POST action -->
-      <form method="POST" action="{{ url_for('handle_chat', room=room_number) }}">
-        <input type="hidden" name="action" value="send_note">
-        <label for="custom_note" class="note-label">
-          {{ button_data.get(
-            'custom_note_placeholder',
-            "If your request isn’t listed or you need more than one item, please type a short message in the box below."
-          ) }}
-        </label>
-        <div class="note-form">
-          <textarea id="custom_note" name="custom_note" rows="2" placeholder="Type your message here..."></textarea>
-          <button type="submit">{{ button_data.get('send_note_button', 'Send Note') }}</button>
-        </div>
-      </form>
+   <div class="note-section">
+  <!-- Keep ?room= in POST action -->
+  <form method="POST" action="{{ url_for('handle_chat', room=room_number) }}">
+    <input type="hidden" name="action" value="send_note">
+    <label for="custom_note" class="note-label">
+      {{ button_data.get(
+        'custom_note_placeholder',
+        "If your request isn’t listed or you need more than one item, please type a short message in the box below."
+      ) }}
+    </label>
+    <div class="note-form">
+      <textarea id="custom_note"
+                name="custom_note"
+                rows="2"
+                placeholder="{{ button_data.get('empty_custom_note', 'Type your message here...') }}"></textarea>
+      <button type="submit">{{ button_data.get('send_note_button', 'Send Note') }}</button>
     </div>
+  </form>
+</div>
+
 
     <!-- Socket.IO -->
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
@@ -291,3 +295,4 @@
   </div>
 </body>
 </html>
+
