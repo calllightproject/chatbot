@@ -1205,6 +1205,7 @@ def classify_escalation_tier(note_text: str) -> str:
       0g) Lochia smells odd but explicitly no fever / no heavy bleed -> routine
       0h) Asking for stronger Tylenol / meds with no red flags -> routine
       0i) Breasts very full/uncomfortable without infection red flags -> routine
+      0j) Dressing / tape / bandage coming loose without scary infection/bleeding -> routine
       1) Existing hard-stop helpers
       2) Weighted scoring safety net
     """
@@ -1376,6 +1377,26 @@ def classify_escalation_tier(note_text: str) -> str:
         ]
         if not any(f in text for f in infection_flags):
             # e.g. "My breasts feel really full and uncomfortable"
+            return "routine"
+
+    # 0j) DRESSING / TAPE / BANDAGE ISSUES -> routine unless clear red flags
+    if any(w in text for w in ["tape", "steri strip", "steri-strip", "steri strips", "steri-strips",
+                               "bandage", "bandages", "dressing"]):
+        dressing_red_flags = [
+            "bright red blood", "gushing", "pouring",
+            "running down", "blood everywhere",
+            "soaked", "soaking", "soaks through",
+            "faint", "fainting", "about to pass out", "pass out",
+            "short of breath", "trouble breathing",
+            "chest", "heart",
+            "vision", "blurry", "spots", "stars", "sparkles",
+            "fever", "chills",
+            "pus", "oozing",
+            "smells bad", "smell bad", "bad smell", "odor", "odour",
+            "red streaks", "red lines",
+        ]
+        if not any(w in text for w in dressing_red_flags):
+            # e.g. "The tape on my C-section is curling up, can someone fix it?"
             return "routine"
 
     # 1) Existing hard-stop helpers
@@ -2805,6 +2826,7 @@ def complete_request(req_id):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
