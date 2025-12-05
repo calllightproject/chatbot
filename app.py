@@ -1198,6 +1198,10 @@ def classify_escalation_tier(note_text: str) -> str:
       0) Supply-only fast path (no clinical words) -> routine
       0a) Mild headache without red flags -> routine
       0b) Mild swelling + "feel fine/okay" without red flags -> routine
+      0c) Mild incision / stitches / wound concerns -> routine
+      0d) Simple nausea / vomiting -> routine
+      0e) Small clots (smaller than a quarter) -> routine
+      0f) BP cuff / machine error only -> routine
       1) Existing hard-stop helpers (_has_heart_breath_color_emergent, etc.)
       2) Weighted scoring safety net
     """
@@ -1221,7 +1225,7 @@ def classify_escalation_tier(note_text: str) -> str:
     ]
     clinical_markers = [
         "pain", "hurts", "cramp", "cramps",
-        "bleeding", "blood",
+        "bleeding", "blood", "clot", "clots",
         "dizzy", "dizziness", "lightheaded", "faint", "fainted",
         "short of breath", "trouble breathing", "cant breathe", "can't breathe",
         "breath", "breathing", "chest", "heart",
@@ -1235,11 +1239,9 @@ def classify_escalation_tier(note_text: str) -> str:
     ]
 
     if any(tok in text for tok in supply_tokens) and not any(tok in text for tok in clinical_markers):
-        # Example: "can I have a new blue pad and some mesh underwear"
-        # Example: "can someone bring me more formula and a clean bottle"
         return "routine"
 
-    # 0a) MILD HEADACHE WITHOUT RED FLAGS -> routine (but still clinical at routing layer)
+    # 0a) MILD HEADACHE WITHOUT RED FLAGS -> routine
     if "headache" in text and "mild" in text:
         red_flag_headache_words = [
             "worst", "severe", "really bad", "very bad", "so bad",
@@ -1250,7 +1252,6 @@ def classify_escalation_tier(note_text: str) -> str:
             "pass out", "passed out", "faint", "fainted", "about to pass out",
         ]
         if not any(w in text for w in red_flag_headache_words):
-            # We'll still route this to the nurse in route_note_intelligently
             return "routine"
 
     # 0b) MILD SWELLING + FEEL FINE/OKAY WITHOUT RED FLAGS -> routine
@@ -1266,8 +1267,67 @@ def classify_escalation_tier(note_text: str) -> str:
                     "short of breath", "trouble breathing", "chest", "heart",
                 ]
                 if not any(w in text for w in red_flag_swelling_words):
-                    # Example: "my feet are a little swollen but I feel fine otherwise"
                     return "routine"
+
+    # 0c) MILD INCISION / STITCHES / WOUND CONCERNS -> routine
+    if any(w in text for w in ["incision", "stitches", "staples", "wound"]):
+        # Only treat as emergent if there are strong red flags
+        incision_red_flags = [
+            "bright red blood", "gushing", "pouring",
+            "running down", "blood everywhere",
+            "soaked", "soaking", "soaks through",
+            "faint", "fainting", "about to pass out", "pass out",
+            "short of breath", "trouble breathing",
+            "chest", "heart",
+            "vision", "blurry", "spots", "stars", "sparkles",
+            "fever", "chills",
+            "pus", "oozing",
+            "smells bad", "smell bad", "bad smell", "odor", "odour",
+            "red streaks", "red lines",
+        ]
+        if not any(w in text for w in incision_red_flags):
+            # e.g. "my incision is a little sore and I want something for pain"
+            #      "I think my stitches look a little red but I'm not sure"
+            return "routine"
+
+    # 0d) SIMPLE NAUSEA / VOMITING -> routine
+    if any(w in text for w in ["nausea", "nauseous", "vomit", "vomiting", "throw up", "throwing up"]):
+        nausea_red_flags = [
+            "blood", "bright red", "coffee ground",
+            "can't keep anything down", "cant keep anything down",
+            "short of breath", "trouble breathing",
+            "chest", "heart",
+            "faint", "fainting", "pass out", "about to pass out",
+            "vision", "went black", "went dark", "goes black", "goes dark",
+        ]
+        if not any(w in text for w in nausea_red_flags):
+            # e.g. "I feel nauseous and think I might throw up"
+            return "routine"
+
+    # 0e) SMALL CLOTS (SMALLER THAN A QUARTER) -> routine
+    if "clot" in text or "clots" in text:
+        # Explicitly de-escalate reassuring size descriptions
+        if any(p in text for p in [
+            "small clots", "smaller than a quarter",
+            "size of a dime", "size of a nickel",
+        ]):
+            # e.g. "I'm passing small clots but they are smaller than a quarter"
+            return "routine"
+
+    # 0f) BP CUFF / MACHINE ERROR ONLY -> routine
+    if ("blood pressure cuff" in text or "bp cuff" in text or
+        "bp machine" in text or "blood pressure machine" in text or
+        ("bp" in text and "cuff" in text)):
+        bp_symptom_words = [
+            "dizzy", "dizziness", "lightheaded", "faint", "fainting",
+            "pass out", "about to pass out",
+            "chest", "heart",
+            "short of breath", "trouble breathing",
+            "headache", "vision", "blurry", "spots", "stars", "sparkles",
+        ]
+        if not any(w in text for w in bp_symptom_words):
+            # e.g. "My blood pressure cuff keeps erroring and saying error"
+            return "routine"
 
     # 1) Existing hard-stop helpers
     if _has_heart_breath_color_emergent(text):
@@ -1281,8 +1341,6 @@ def classify_escalation_tier(note_text: str) -> str:
 
     # 2) Weighted scoring safety net
     score, breakdown, hard_stop = compute_emergent_score(text)
-    # Optional: log for QA
-    # current_app.logger.info(f"Emergent score={score}, breakdown={breakdown}")
 
     if hard_stop:
         return "emergent"
@@ -2786,6 +2844,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
