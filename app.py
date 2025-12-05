@@ -1157,21 +1157,26 @@ def compute_emergent_score(raw_text: str):
     def contains_any(phrases):
         return any(p in text for p in phrases)
 
+    # -------------------------------------------------
     # BABY FLOPPY / UNRESPONSIVE
+    # -------------------------------------------------
     baby_words = ["baby", "my son", "my daughter"]
     floppy_words = ["floppy", "limp", "like a rag doll", "loose", "won't hold", "feels lifeless"]
     unresponsive_words = [
         "won't wake up", "not waking up", "hard to wake",
-        "won't respond", "not responding", "barely moving", "not really moving"
+        "won't respond", "not responding", "barely moving", "not really moving",
     ]
+
     has_baby = contains_any(baby_words)
     has_floppy = contains_any(floppy_words)
     has_unresponsive = contains_any(unresponsive_words)
 
+    # HARD-STOP: baby floppy/limp + not waking/not responding/barely moving
     if has_baby and (has_floppy or has_unresponsive):
         hard_stop = True
         add_points("baby_floppy_combo", 10)
 
+    # Graded points if only part of the pattern shows up
     if has_baby:
         add_points("baby_concern", 2)
     if has_floppy:
@@ -1179,7 +1184,9 @@ def compute_emergent_score(raw_text: str):
     if has_unresponsive:
         add_points("baby_unresponsive", 4)
 
+    # -------------------------------------------------
     # PRESYNCOPE / VISION DARK
+    # -------------------------------------------------
     presyncope_core = [
         "about to pass out",
         "might pass out",
@@ -1206,15 +1213,20 @@ def compute_emergent_score(raw_text: str):
         "seeing stars",
         "black spots in my vision",
     ]
+
     if contains_any(presyncope_core) or contains_any(vision_dark):
         hard_stop = True
         add_points("presyncope_core", 6)
+
     if contains_any(presyncope_support):
         add_points("presyncope_support", 3)
+
     if contains_any(vision_dark):
         add_points("vision_dark", 4)
 
-    # NEURO MOTOR / STROKE-LIKE
+    # -------------------------------------------------
+    # NEURO MOTOR / STROKE-LIKE (one-sided, arm/leg/face)
+    # -------------------------------------------------
     neuro_one_side_patterns = [
         "one side of my body",
         "one side of my face",
@@ -1251,13 +1263,17 @@ def compute_emergent_score(raw_text: str):
         "can't move one side of my face",
         "can't move one side of my mouth",
     ]
+
     if (contains_any(neuro_one_side_patterns) or
         contains_any(neuro_motor_patterns) or
         contains_any(face_droop_patterns)):
+        # HARD-STOP: focal neuro deficits
         hard_stop = True
         add_points("neuro_motor_or_face", 6)
 
-    # EXPRESSIVE APHASIA
+    # -------------------------------------------------
+    # EXPRESSIVE APHASIA (brain clear, words wrong)
+    # -------------------------------------------------
     clear_brain_phrases = [
         "brain is clear",
         "my brain is clear",
@@ -1280,20 +1296,26 @@ def compute_emergent_score(raw_text: str):
         "speech keeps coming out wrong",
         "what i'm saying isn't what i mean",
     ]
+
     has_clear_brain = contains_any(clear_brain_phrases)
     has_words_wrong = contains_any(words_wrong_phrases)
+
     if has_clear_brain:
         add_points("expressive_clear_brain", 3)
     if has_words_wrong:
         add_points("expressive_words_wrong", 3)
+
+    # HARD-STOP: classic expressive aphasia combo
     if has_clear_brain and has_words_wrong:
         hard_stop = True
         add_points("expressive_aphasia_combo", 4)
 
+    # -------------------------------------------------
     # BREATHING / CHEST / HEART
+    # -------------------------------------------------
     breathing_patterns = [
         "can't breathe",
-        "can t breathe",
+        "can t breathe",   # common typo without apostrophe
         "can't catch my breath",
         "hard to breathe",
         "difficult to breathe",
@@ -1320,15 +1342,46 @@ def compute_emergent_score(raw_text: str):
         "really strong heartbeat",
         "palpitations",
     ]
+
     if contains_any(breathing_patterns):
+        # Treat breathing complaints as high-risk
         add_points("breathing", 5)
         hard_stop = True
+
     if contains_any(chest_pain_patterns):
         add_points("chest_pain", 4)
+
     if contains_any(heart_patterns) and (contains_any(presyncope_core) or contains_any(breathing_patterns)):
         add_points("heart_plus_other", 3)
 
-    # PPH
+    # -------------------------------------------------
+    # INCISION — mild vs severe
+    # -------------------------------------------------
+    mild_incision_patterns = [
+        "slightly sore", "a little sore",
+        "a little pink", "slightly pink",
+        "not painful", "no pain",
+        "not warm", "no warmth", "not opening", "not opened",
+    ]
+    if any(p in text for p in mild_incision_patterns):
+        # Explicitly tracked but does NOT add severity points
+        breakdown["incision_mild"] += 0
+        # Intentionally no score change and no hard_stop here
+
+    severe_incision_patterns = [
+        "opened up", "is opening", "split open",
+        "pus", "oozing pus", "green drainage",
+        "black skin", "necrotic", "smells awful",
+        "very red and hot", "spreading redness",
+        "feels like it's tearing", "feels like its tearing",
+    ]
+    if any(p in text for p in severe_incision_patterns):
+        hard_stop = True
+        add_points("incision_severe", 5)
+
+    # -------------------------------------------------
+    # PPH / BLEEDING
+    # -------------------------------------------------
     bright_red_patterns = [
         "bright red blood",
         "lots of red blood",
@@ -1356,6 +1409,7 @@ def compute_emergent_score(raw_text: str):
         "golf-ball sized clot",
         "clot the size of a golf ball",
     ]
+
     has_bright_red = contains_any(bright_red_patterns)
     has_pad_soak = contains_any(pad_soaking_patterns)
     has_big_clot = contains_any(clot_patterns)
@@ -1367,11 +1421,16 @@ def compute_emergent_score(raw_text: str):
     if has_big_clot:
         add_points("pph_large_clot", 4)
 
+    # HARD-STOP per your rules:
+    # - bright red + pad/bed/floor
+    # - OR any large/golf-ball clot
     if (has_bright_red and has_pad_soak) or has_big_clot:
         hard_stop = True
         add_points("pph_hard_combo", 4)
 
-    # COLOR CHANGE
+    # -------------------------------------------------
+    # COLOR CHANGE (blue/purple/gray)
+    # -------------------------------------------------
     color_change_patterns = [
         "lips look blue",
         "lips are blue",
@@ -1389,7 +1448,9 @@ def compute_emergent_score(raw_text: str):
         add_points("color_change", 5)
         hard_stop = True
 
+    # -------------------------------------------------
     # HTN / PREECLAMPSIA CLUSTER
+    # -------------------------------------------------
     ruq_patterns = [
         "right upper quadrant pain",
         "ruq pain",
@@ -1428,6 +1489,7 @@ def compute_emergent_score(raw_text: str):
         "i feel like i'm dying",
         "i feel like i might die",
     ]
+
     has_ruq = contains_any(ruq_patterns)
     has_epi = contains_any(epigastric_patterns)
     has_severe_ha = contains_any(severe_headache_patterns)
@@ -1445,11 +1507,14 @@ def compute_emergent_score(raw_text: str):
     if has_something_wrong:
         add_points("htn_something_wrong", 2)
 
+    # Classic severe preeclampsia picture: RUQ/Epigastric + severe HA + vision change
     if (has_ruq or has_epi) and has_severe_ha and has_vision_change:
         hard_stop = True
         add_points("htn_classic_combo", 4)
 
-    # Generic “off” + other concerning
+    # -------------------------------------------------
+    # "SOMETHING IS WRONG" with other concerning features
+    # -------------------------------------------------
     generic_anxiety_patterns = [
         "i don't feel right",
         "this doesn't feel right",
@@ -1457,14 +1522,10 @@ def compute_emergent_score(raw_text: str):
         "i feel off",
     ]
     if contains_any(generic_anxiety_patterns) and score > 0:
+        # Only bump if already some concerning signal
         add_points("generic_wrong_plus_other", 1)
 
     return score, breakdown, hard_stop
-
-
-# =========================================================
-# 2) Integration: escalation tier + routing
-# =========================================================
 
 def classify_escalation_tier(note_text: str) -> str:
     """
@@ -1580,14 +1641,23 @@ def route_note_intelligently(note_text: str) -> str:
       - Any incision/stitches concern -> nurse (not always emergent)
       - Mild swelling + comfort/supply only -> CNA
       - Routine but clearly clinical -> nurse
+      - Equipment-only issues (IV pump, BP cuff, machine beeping) with no symptoms -> CNA
       - Pure supply/comfort -> CNA
       - Bathroom/shower + faint/dizzy/pass out -> nurse (safety rule)
     """
     text = _normalize_text(note_text)
     tier = classify_escalation_tier(text)
 
+    # 1) Any emergent tier -> nurse
     if tier == "emergent":
         return "nurse"
+
+    # 2) Equipment-only issues (no symptoms) -> CNA
+    equipment_keywords = [
+        "iv pump", "pump", "occlusion",
+        "bp cuff", "blood pressure cuff",
+        "machine", "beeping", "alarm"
+    ]
 
     # Supply-only keywords
     supply_keywords = [
@@ -1619,21 +1689,37 @@ def route_note_intelligently(note_text: str) -> str:
         "incision" in text or "stitches" in text or "staples" in text or "wound" in text
     )
 
-    # Hard rule: bathroom/shower + faint/dizzy/pass out -> nurse, not CNA
+    # 3) Hard rule: bathroom/shower + faint/dizzy/pass out -> nurse, not CNA
     if (("bathroom" in text) or ("shower" in text)) and (
         "faint" in text or "pass out" in text or "dizzy" in text
     ):
         return "nurse"
 
-    # Headache: always clinical (nurse), even if not emergent
+    # 4) Headache: always clinical (nurse), even if not emergent
     if headache_present:
         return "nurse"
 
-    # Incision/stitches: always nurse (not always emergent)
+    # 5) Incision/stitches: always nurse (not always emergent)
     if incision_present:
         return "nurse"
 
-    # Mild swelling + comfort/supply only -> CNA (per your rule),
+    # 6) Equipment-only issues (IV pump, BP cuff, machine beeping) with NO symptoms → CNA
+    equipment_only_symptom_words = [
+        "pain", "hurts", "burning",
+        "bleeding", "blood",
+        "dizzy", "faint", "lightheaded",
+        "short of breath", "trouble breathing",
+        "chest", "heart",
+        "fever", "chills",
+        "swelling", "swollen",
+        "numb", "tingling",
+    ]
+    if any(k in text for k in equipment_keywords) and not any(
+        s in text for s in equipment_only_symptom_words
+    ):
+        return "cna"
+
+    # 7) Mild swelling + comfort/supply only -> CNA (per your rule),
     # as long as tier is routine and no other serious clinical tokens.
     serious_clinical_tokens = [
         "short of breath", "trouble breathing", "chest", "heart",
@@ -1651,12 +1737,12 @@ def route_note_intelligently(note_text: str) -> str:
         # Example: "my feet are a little swollen, can I get some socks and a blanket"
         return "cna"
 
+    # 8) Pure supply/comfort -> CNA
     if is_supply and not is_clinical:
         return "cna"
 
-    # Default: clinical or unclear goes to nurse
+    # 9) Default: clinical or unclear goes to nurse
     return "nurse"
-
 
 
 
@@ -2972,6 +3058,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
