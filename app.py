@@ -470,7 +470,7 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         "short of breath", "shortness of breath",
         "can't catch my breath", "cant catch my breath",
     ]
-        breath_severity = [
+    breath_severity = [
         "hard", "harder",
         "struggling", "struggle",
         "trouble", "difficulty",
@@ -487,7 +487,6 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
         # softer language that still means “off”
         "weird", "off", "funny",
     ]
-
 
     if any(tok in t for tok in breath_tokens) and any(s in t for s in breath_severity):
         return True
@@ -637,7 +636,7 @@ def _has_heart_breath_color_emergent(text: str) -> bool:
 
 
 # =========================================================
-# NEURO + HTN EMERGENT HELPERS (unchanged from your last)
+# NEURO + HTN EMERGENT HELPERS
 # =========================================================
 
 EMERGENT_NEURO_PHRASES = [
@@ -935,211 +934,13 @@ def _has_neuro_emergent(text: str) -> bool:
 
     return False
 
-def _has_htn_emergent(text: str) -> bool:
-    """
-    Detect HTN/preeclampsia-related EMERGENT language (postpartum).
-
-    NOTE: Broken BP cuff / machine alone is NOT emergent.
-    """
-    if not text:
-        return False
-
-    t = text.lower().strip()
-    t = t.replace("’", "'").replace("“", '"').replace("”", '"')
-
-    # ---- 1) RUQ / epigastric pain (ALWAYS emergent) ----
-    ruq_phrases = [
-        "sharp pain under my right ribs",
-        "pain under my right ribs",
-        "pain under the right ribs",
-        "right upper side pain",
-        "right upper stomach pain",
-        "pain in my upper right side",
-        "pain in my right upper side",
-        "right upper quadrant pain",
-        "ruq pain",
-        "upper abdominal pain",
-        "upper abdomen pain",
-        "upper stomach pain",
-        "pain under my ribs",
-        "pain under the ribs",
-    ]
-    for p in ruq_phrases:
-        if p in t:
-            return True
-
-    # generic combo: "right" + ("upper" or "under") + (pain/hurt/hurts) + rib/side/stomach/abdomen
-    if "right" in t and ("upper" in t or "under" in t):
-        if ("pain" in t or "hurt" in t or "hurts" in t):
-            if ("rib" in t or "ribs" in t or "side" in t or "stomach" in t or "abdomen" in t):
-                return True
-
-    # ---- 2) WORSENING SWELLING / EDEMA ----
-    if "swelling got way worse really fast" in t and "face feels tight" in t:
-        return True
-
-    swelling_keywords = ["swelling", "swollen", "puffiness", "puffy"]
-    swelling_severity = [
-        "got way worse", "got worse", "getting worse",
-        "really fast", "fast",
-        "suddenly", "all of a sudden",
-        "very bad", "extremely",
-        "face feels tight", "face is tight",
-        "face getting tight", "getting really tight", "getting tight",
-        "really tight",
-        "swollen fast", "swelling fast",
-        "swollen quickly", "swelling quickly",
-        "can't bend my fingers", "cant bend my fingers",
-    ]
-    if any(w in t for w in swelling_keywords) and any(s in t for s in swelling_severity):
-        return True
-
-    # ---- 3) HEADACHE ----
-    if "headache" in t:
-        htn_headache_severity = [
-            "really bad", "very bad", "so bad",
-            "worst", "worst of my life",
-            "getting worse", "worse and worse",
-            "won't go away", "wont go away", "not going away",
-            "even after meds", "even after medicine", "meds not helping",
-            "pounding", "throbbing",
-        ]
-        if any(s in t for s in htn_headache_severity):
-            return True
-
-    # ---- 4) VISUAL CHANGES ----
-    vision_patterns = [
-        "seeing spots", "seeing spot", "seeing sparkles", "seeing sparks",
-        "seeing flashes", "seeing flashing", "flashing spots", "flashing lights",
-        "bright spots", "bright dots", "bright dots everywhere",
-        "sparkly things", "sparkly", "sparkles", "bright lil dots", "little dots",
-        "lil dots", "dots everywhere", "dots when i blink",
-        "vision is blurry", "vision feels blurry",
-        "vision is dim", "vision feels dim",
-        "vision is flickering", "vision flickering", "vision is fading",
-        "vision going dark", "vision is dark",
-        "everything went dark", "everything goes dark",
-        "everything went black", "went black", "goes black",
-        "vision went black", "vision goes black",
-        "double vision", "seeing double",
-        "room went dark", "room goes dark",
-        "sight went dark", "sight goes dark", "sight gets dark",
-        "gets dark and shadowy", "dark and shadowy",
-        "vision dimmed", "vision dims",
-        "everything dimmed", "everything dims",
-        "starts to go black", "starting to go black", "start to go black",
-        "started to go black",
-    ]
-    for p in vision_patterns:
-        if p in t:
-            return True
-
-    # 4b) HEADACHE + VISION COMBO without the exact phrases above
-    if ("spot" in t or "spark" in t or "dot" in t or "flash" in t or "flashing" in t):
-        if "head" in t and ("hurt" in t or "hurts" in t or "killing" in t or "pounding" in t or "throbbing" in t):
-            return True
-
-    # 4c) PRESYNCOPE / BLACKOUT FEELING
-    if ("went black" in t or "goes black" in t or
-        "everything went dark" in t or "everything goes dark" in t or
-        "room went dark" in t or "room goes dark" in t or
-        "almost blacked out" in t or "almost passed out" in t or
-        "almost hit the floor" in t or "almost went down" in t or
-        "felt like i might collapse" in t or "feel like i might collapse" in t or
-        "about to black out" in t or "about to pass out" in t):
-        return True
-
-    # ---- 5) CONFUSION / DISORIENTATION / FEELING OFF ----
-    confusion_phrases = [
-        "suddenly feel really confused",
-        "suddenly feel confused",
-        "i suddenly feel really confused",
-        "i suddenly feel confused",
-        "feel really confused and disoriented",
-        "feel confused and disoriented",
-        "i feel confused and disoriented",
-        "i feel really confused and disoriented",
-        "disoriented", "disorientation",
-        "i can't think straight", "i cant think straight",
-        "feel kind of out of it",
-        "feel out of it",
-        "my head feels weird",
-        "my head feels wrong", "head feels wrong",
-        "something feels wrong",
-        "feel extremely confused",
-        "i feel extremely confused",
-    ]
-    for p in confusion_phrases:
-        if p in t:
-            return True
-
-    # ---- 6) IMPENDING DOOM / "SOMETHING BAD" ----
-    doom_phrases = [
-        "like something bad is about to happen",
-        "like something bad is going to happen",
-        "like something terrible is about to happen",
-        "something terrible is about to happen",
-        "sense that something terrible is about to happen",
-        "feel like something bad is happening",
-        "feel like something bad is going to happen",
-        "feel like something is really wrong",
-        "i feel like something is wrong",
-        "i feel like something is really wrong",
-        "something bad is going to happen",
-        "something is wrong",
-        "something wrong",
-        "something just feels wrong",
-        "something really wrong",
-        "something seriously wrong",
-        "something is seriously wrong",
-        "feel extremely off",
-        "i feel extremely off",
-        "feel very off",
-    ]
-    for p in doom_phrases:
-        if p in t:
-            return True
-
-    # Any near-syncope feeling alone is emergent in this context
-    if ("about to pass out" in t or "going to pass out" in t or
-        "about to faint" in t or "going to faint" in t):
-        return True
-
-    # ---- 7) BP REPORTED HIGH vs. BROKEN CUFF ----
-    bp_keywords = [
-        "blood pressure",
-        "bp",
-        "pressure was high",
-        "reading was high",
-        "my blood pressure was high",
-        "my bp was high",
-        "my blood pressure is high",
-        "my bp is high",
-        "high blood pressure",
-        "very high blood pressure",
-        "very high bp",
-    ]
-
-    bp_equipment_words = [
-        "cuff", "machine", "monitor", "device",
-        "not working", "isn't working", "isnt working",
-        "keeps erroring", "erroring", "error code", "error message",
-        "broken", "malfunction", "malfunctioning",
-    ]
-
-    if any(k in t for k in bp_keywords):
-        # If it's clearly about the cuff/machine being broken, don't mark emergent
-        if not any(w in t for w in bp_equipment_words):
-            return True
-
-    return False
-
 
 # =========================================================
 # 1) Weighted emergent scoring safety net
 # =========================================================
 
 EMERGENT_SCORE_THRESHOLD = 6  # balanced
+
 
 def compute_emergent_score(raw_text: str):
     """
@@ -1321,6 +1122,7 @@ def compute_emergent_score(raw_text: str):
 
     return score, breakdown, hard_stop
 
+
 def classify_escalation_tier(note_text: str) -> str:
     """
     Returns 'emergent' or 'routine'.
@@ -1424,7 +1226,6 @@ def classify_escalation_tier(note_text: str) -> str:
     return "routine"
 
 
-
 def route_note_intelligently(note_text: str) -> str:
     """
     Returns: 'nurse' or 'cna'
@@ -1463,7 +1264,7 @@ def route_note_intelligently(note_text: str) -> str:
         "iv pump", "pump", "occlusion",
         "bp cuff", "blood pressure cuff",
         "machine", "monitor", "device",
-        "beeping", "alarm"
+        "beeping", "alarm",
     ]
 
     # Supply-only keywords
@@ -1551,6 +1352,7 @@ def route_note_intelligently(note_text: str) -> str:
 
     # 🔟 Default: clinical or unclear goes to nurse
     return "nurse"
+
 
 
 
@@ -2866,6 +2668,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
