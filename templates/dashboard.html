@@ -64,7 +64,7 @@
     #requests-list { list-style:none; padding:0; margin:16px 0 0 0; }
     .request-item {
       display:flex; align-items:center; border:1px solid #ddd; padding:15px; margin-bottom:10px;
-      border-radius:8px; background-color:#fff; gap:15px; transition: background-color .5s ease, opacity .3s ease;
+      border-radius:8px; background-color:#fff; gap:15px; transition: background-color .5s ease, opacity .3s.ease;
     }
     .request-item.cna   { border-left: 6px solid var(--accent-blue); }
     .request-item.nurse { border-left: 6px solid #d43f27; }
@@ -435,6 +435,7 @@
       if (item) {
         item.classList.remove('cna');
         item.classList.add('nurse');
+        item.dataset.role = 'nurse';  // keep dataset in sync
         const roleSpan = item.querySelector('.role-span');
         if (roleSpan) roleSpan.textContent = 'For: NURSE';
         const deferBtn = item.querySelector('.defer-btn');
@@ -659,7 +660,7 @@
     }
 
     /* -----------------------
-       NEW: VISIBILITY REFRESH
+       VISIBILITY REFRESH
        ----------------------- */
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") {
