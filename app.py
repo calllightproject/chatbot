@@ -2768,7 +2768,7 @@ def handle_complete_request(data):
                 raise
 
         # 2) Remove from dashboards
-        socketio.emit("remove_request", {"id": request_id}, broadcast=True)
+        socketio.emit("remove_request", {"id": request_id})
 
         # 3) Notify patient only when we have a valid room
         room_number = data.get("room_number") or _get_room_for_request(request_id)
@@ -2793,11 +2793,10 @@ def handle_complete_request(data):
         print(f"ERROR updating completion timestamp: {e}")
 
 
-
-
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
