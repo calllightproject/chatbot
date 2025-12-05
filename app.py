@@ -1471,8 +1471,10 @@ def classify_escalation_tier(note_text: str) -> str:
     Returns 'emergent' or 'routine'.
 
     Order:
-      0) Supply-only safety bypass (blue pad, mesh underwear, shower, etc.)
-      1) Hard-stop helpers
+      0) Supply-only fast path (no clinical words) -> routine
+      0a) Mild headache without red flags -> routine
+      0b) Mild swelling + "feel fine/okay" without red flags -> routine
+      1) Existing hard-stop helpers (_has_heart_breath_color_emergent, etc.)
       2) Weighted scoring safety net
     """
     text = _normalize_text(note_text)
@@ -1480,51 +1482,92 @@ def classify_escalation_tier(note_text: str) -> str:
     if not text:
         return "routine"
 
-    # 0) SUPPLY-ONLY BYPASS: if this looks like pure supplies/ADL and
-    #    has NO clinical words, force 'routine' so it cannot be emergent.
-    supply_hints = [
+    # 0) SUPPLY-ONLY FAST PATH (never emergent)
+    supply_tokens = [
         "mesh underwear", "underwear", "peri bottle", "peribottle",
-        "pads", "pad", "blue pad", "white pad", "chucks",
-        "ice pack", "cold pack", "snacks", "water", "ice chips",
-        "blanket", "blankets", "pillow", "pillows", "towel",
-        "extra gown", "gown", "diaper", "diapers",
-        "wipe", "wipes",
-        "shower", "bathroom", "bath", "toilet", "commode",
-        "help me get up", "help me up", "help me walk",
+        "pads", "pad", "blue pad", "chucks",
+        "diaper", "diapers", "wipes", "wipe",
+        "blanket", "blankets", "pillow", "pillows",
+        "towel", "towels",
+        "snacks", "water", "ice", "ice chips",
+        "formula", "bottle", "bottles",
+        "extra gown", "gown",
+        "help into the shower", "help me into the shower",
+        "help me shower", "help getting into the shower", "shower",
     ]
-    clinical_hints = [
-        "pain", "bleeding", "blood", "dizzy", "faint", "lightheaded",
-        "short of breath", "trouble breathing", "headache", "vision",
-        "chest", "heart", "numb", "tingling", "swelling", "swollen",
-        "baby", "newborn", "infant",  # baby mention always clinical enough
+    clinical_markers = [
+        "pain", "hurts", "cramp", "cramps",
+        "bleeding", "blood",
+        "dizzy", "dizziness", "lightheaded", "faint", "fainted",
+        "short of breath", "trouble breathing", "cant breathe", "can't breathe",
+        "breath", "breathing", "chest", "heart",
+        "headache", "migraine",
+        "vision", "blurry", "spots", "stars", "sparkles",
+        "numb", "tingling",
+        "swelling", "swollen", "puffy",
+        "incision", "stitches", "staples", "wound",
+        "fever", "chills",
+        "seizure", "stroke",
     ]
 
-    has_supply_hint = any(h in text for h in supply_hints)
-    has_clinical_hint = any(h in text for h in clinical_hints)
-
-    if has_supply_hint and not has_clinical_hint:
-        # Explicitly routine; emergent helpers and scoring will not run.
+    if any(tok in text for tok in supply_tokens) and not any(tok in text for tok in clinical_markers):
+        # Example: "can I have a new blue pad and some mesh underwear"
+        # Example: "can someone bring me more formula and a clean bottle"
         return "routine"
+
+    # 0a) MILD HEADACHE WITHOUT RED FLAGS -> routine (but still clinical at routing layer)
+    if "headache" in text and "mild" in text:
+        red_flag_headache_words = [
+            "worst", "severe", "really bad", "very bad", "so bad",
+            "pounding", "throbbing",
+            "blurry vision", "vision", "seeing spots", "seeing stars",
+            "sparkles", "flashing lights",
+            "went black", "went dark", "goes black", "goes dark",
+            "pass out", "passed out", "faint", "fainted", "about to pass out",
+        ]
+        if not any(w in text for w in red_flag_headache_words):
+            # We'll still route this to the nurse in route_note_intelligently
+            return "routine"
+
+    # 0b) MILD SWELLING + FEEL FINE/OKAY WITHOUT RED FLAGS -> routine
+    if any(w in text for w in ["swollen", "swelling", "puffy"]):
+        if ("a little" in text or "little" in text or "mild" in text):
+            if ("feel fine" in text or "feel okay" in text or "feel ok" in text):
+                red_flag_swelling_words = [
+                    "got worse", "getting worse", "way worse",
+                    "suddenly", "all of a sudden",
+                    "really bad", "very bad",
+                    "headache", "vision", "blurry", "spots", "stars",
+                    "dizzy", "dizziness", "lightheaded", "faint", "pass out",
+                    "short of breath", "trouble breathing", "chest", "heart",
+                ]
+                if not any(w in text for w in red_flag_swelling_words):
+                    # Example: "my feet are a little swollen but I feel fine otherwise"
+                    return "routine"
 
     # 1) Existing hard-stop helpers
     if _has_heart_breath_color_emergent(text):
         return "emergent"
+
     if _has_neuro_emergent(text):
         return "emergent"
+
     if _has_htn_emergent(text):
         return "emergent"
 
-    # 2) Scoring safety net
+    # 2) Weighted scoring safety net
     score, breakdown, hard_stop = compute_emergent_score(text)
-    # (optional logging)
+    # Optional: log for QA
     # current_app.logger.info(f"Emergent score={score}, breakdown={breakdown}")
 
     if hard_stop:
         return "emergent"
+
     if score >= EMERGENT_SCORE_THRESHOLD:
         return "emergent"
 
     return "routine"
+
 
 
 def route_note_intelligently(note_text: str) -> str:
@@ -1538,7 +1581,7 @@ def route_note_intelligently(note_text: str) -> str:
       - Mild swelling + comfort/supply only -> CNA
       - Routine but clearly clinical -> nurse
       - Pure supply/comfort -> CNA
-      - Bathroom + faint/dizzy/pass out -> nurse (safety rule)
+      - Bathroom/shower + faint/dizzy/pass out -> nurse (safety rule)
     """
     text = _normalize_text(note_text)
     tier = classify_escalation_tier(text)
@@ -1552,6 +1595,9 @@ def route_note_intelligently(note_text: str) -> str:
         "pads", "pad", "ice pack", "snacks", "water", "blanket",
         "pillows", "towel", "blue pad", "chucks", "diaper",
         "wipe", "wipes", "extra gown",
+        "formula", "bottle", "bottles",
+        "help into the shower", "help me into the shower",
+        "help me shower", "help getting into the shower", "shower",
     ]
 
     # Clinical-ish keywords: symptoms / meds
@@ -1573,8 +1619,10 @@ def route_note_intelligently(note_text: str) -> str:
         "incision" in text or "stitches" in text or "staples" in text or "wound" in text
     )
 
-    # Hard rule: help to bathroom + faint/dizzy/pass out -> nurse, not CNA
-    if "bathroom" in text and ("faint" in text or "pass out" in text or "dizzy" in text):
+    # Hard rule: bathroom/shower + faint/dizzy/pass out -> nurse, not CNA
+    if (("bathroom" in text) or ("shower" in text)) and (
+        "faint" in text or "pass out" in text or "dizzy" in text
+    ):
         return "nurse"
 
     # Headache: always clinical (nurse), even if not emergent
@@ -1603,7 +1651,6 @@ def route_note_intelligently(note_text: str) -> str:
         # Example: "my feet are a little swollen, can I get some socks and a blanket"
         return "cna"
 
-    # Now fall back to general logic
     if is_supply and not is_clinical:
         return "cna"
 
@@ -2925,6 +2972,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
