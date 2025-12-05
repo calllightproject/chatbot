@@ -16,27 +16,34 @@ button_data = {
     "ai_no": "No, estoy bien",
     "unknown_input": "Perdón, no entendí. Por favor use los botones.",
 
-   # --- Main Menu Options ---
-"main_buttons": [
-    "Tengo una emergencia",
-    "Mi bomba de IV está sonando",
-    "Necesito medicamentos",
-    "Necesito suministros",
-    "Baño / Ducha",
-    "Hielo / Agua",
-    "Azúcar en la sangre",
-    "Necesito ayuda para amamantar",
-    "Tengo preguntas",
-    "Quiero saber sobre el alta"
-],
-
+    # --- Main Menu Options ---
+    "main_buttons": [
+        "Tengo una emergencia",
+        "Mi bomba de IV está sonando",
+        "Necesito medicamentos",
+        "Necesito suministros",
+        "Baño / Ducha",
+        "Hielo / Agua",
+        "Azúcar en la sangre",
+        "Necesito ayuda para amamantar",
+        "Tengo preguntas",
+        "Quiero saber sobre el alta"
+    ],
 
     # --- Direct Actions & Simple Sub-menus ---
-    "Tengo una emergencia": {"action": "Notificar a la enfermera"},
-    "Mi bomba de IV está sonando": {"action": "Notificar a la enfermera"},
+    "Tengo una emergencia": {
+        "action": "Notificar a la enfermera",
+        "escalation_tier": "emergent",
+    },
+
+    "Mi bomba de IV está sonando": {
+        "action": "Notificar a la enfermera",
+        "escalation_tier": "routine",
+    },
 
     "Necesito ayuda para amamantar": {
         "action": "Notificar a la enfermera",
+        "escalation_tier": "routine",
         "note": "✅ Se ha notificado a su enfermera. Mientras tanto, puede prepararse asegurándose de que su bebé tenga un pañal limpio y esté desvestido para el contacto piel con piel."
     },
 
@@ -44,8 +51,14 @@ button_data = {
         "question": "¿Es para la mamá o para el/la bebé?",
         "options": ["Mamá (azúcar en la sangre)", "Bebé (azúcar en la sangre)"]
     },
-    "Mamá (azúcar en la sangre)": {"action": "Notificar al asistente de enfermería"},
-    "Bebé (azúcar en la sangre)": {"action": "Notificar a la enfermera"},
+    "Mamá (azúcar en la sangre)": {
+        "action": "Notificar al asistente de enfermería",
+        "escalation_tier": "routine",
+    },
+    "Bebé (azúcar en la sangre)": {
+        "action": "Notificar a la enfermera",
+        "escalation_tier": "routine",
+    },
 
     "Hielo / Agua": {
         "question": "Si tiene una persona de apoyo con usted, puede ir a nuestra sala de nutrición, que tiene agua, hielo picado, jugo y pequeños bocadillos. El personal puede mostrarle dónde se encuentra. ¿Qué le gustaría?",
@@ -56,10 +69,22 @@ button_data = {
             "Necesito agua caliente"
         ]
     },
-    "Necesito agua con hielo": {"action": "Notificar al asistente de enfermería"},
-    "Necesito hielo picado": {"action": "Notificar al asistente de enfermería"},
-    "Necesito agua, sin hielo": {"action": "Notificar al asistente de enfermería"},
-    "Necesito agua caliente": {"action": "Notificar al asistente de enfermería"},
+    "Necesito agua con hielo": {
+        "action": "Notificar al asistente de enfermería",
+        "escalation_tier": "routine",
+    },
+    "Necesito hielo picado": {
+        "action": "Notificar al asistente de enfermería",
+        "escalation_tier": "routine",
+    },
+    "Necesito agua, sin hielo": {
+        "action": "Notificar al asistente de enfermería",
+        "escalation_tier": "routine",
+    },
+    "Necesito agua caliente": {
+        "action": "Notificar al asistente de enfermería",
+        "escalation_tier": "routine",
+    },
 
     "Baño / Ducha": {
         "question": "Si ya ha ido al baño una vez con un miembro del personal y se siente estable, puede usar el baño por su cuenta. Por favor, avísenos si todavía necesita ayuda. ¿Qué necesita?",
@@ -69,8 +94,14 @@ button_data = {
             "¿Puedo tomar una ducha?"
         ]
     },
-    "Necesito ayuda para ir al baño": {"action": "Notificar al asistente de enfermería"},
-    "Necesito cubrir mi vía IV para bañarme": {"action": "Notificar al asistente de enfermería"},
+    "Necesito ayuda para ir al baño": {
+        "action": "Notificar al asistente de enfermería",
+        "escalation_tier": "routine",
+    },
+    "Necesito cubrir mi vía IV para bañarme": {
+        "action": "Notificar al asistente de enfermería",
+        "escalation_tier": "routine",
+    },
     "¿Puedo tomar una ducha?": {
         "note": "Normalmente sí, pero consulte con su enfermera si tiene una vía intravenosa u otras restricciones.",
         "follow_up": True
@@ -89,10 +120,23 @@ button_data = {
         "question": "¿Qué necesita?",
         "options": ["Toallas sanitarias", "Ropa interior de malla", "Compresa de hielo", "Almohadas"]
     },
-    "Almohadas": {"action": "Notificar al asistente de enfermería"},
-    "Pañales": {"action": "Notificar al asistente de enfermería"},
-    "Manta para envolver": {"action": "Notificar al asistente de enfermería"},
-    "Toallitas húmedas": {"action": "Notificar al asistente de enfermería"},
+
+    "Almohadas": {
+        "action": "Notificar al asistente de enfermería",
+        "escalation_tier": "routine",
+    },
+    "Pañales": {
+        "action": "Notificar al asistente de enfermería",
+        "escalation_tier": "routine",
+    },
+    "Manta para envolver": {
+        "action": "Notificar al asistente de enfermería",
+        "escalation_tier": "routine",
+    },
+    "Toallitas húmedas": {
+        "action": "Notificar al asistente de enfermería",
+        "escalation_tier": "routine",
+    },
 
     "Fórmula": {
         "question": "¿Qué fórmula necesita?",
@@ -104,37 +148,90 @@ button_data = {
             "Enfamil Gentlease (etiqueta morada)"
         ]
     },
-    "Similac Total Comfort (etiqueta morada)": {"action": "Notificar al asistente de enfermería"},
-    "Similac 360 (etiqueta azul)": {"action": "Notificar al asistente de enfermería"},
-    "Similac Neosure (etiqueta amarilla)": {"action": "Notificar al asistente de enfermería"},
-    "Enfamil Newborn (etiqueta amarilla)": {"action": "Notificar al asistente de enfermería"},
-    "Enfamil Gentlease (etiqueta morada)": {"action": "Notificar al asistente de enfermería"},
+    "Similac Total Comfort (etiqueta morada)": {
+        "action": "Notificar al asistente de enfermería",
+        "escalation_tier": "routine",
+    },
+    "Similac 360 (etiqueta azul)": {
+        "action": "Notificar al asistente de enfermería",
+        "escalation_tier": "routine",
+    },
+    "Similac Neosure (etiqueta amarilla)": {
+        "action": "Notificar al asistente de enfermería",
+        "escalation_tier": "routine",
+    },
+    "Enfamil Newborn (etiqueta amarilla)": {
+        "action": "Notificar al asistente de enfermería",
+        "escalation_tier": "routine",
+    },
+    "Enfamil Gentlease (etiqueta morada)": {
+        "action": "Notificar al asistente de enfermería",
+        "escalation_tier": "routine",
+    },
 
-    "Ropa interior de malla": {"action": "Notificar al asistente de enfermería"},
+    "Ropa interior de malla": {
+        "action": "Notificar al asistente de enfermería",
+        "escalation_tier": "routine",
+    },
     "Toallas sanitarias": {
         "question": "¿Qué tipo de toalla sanitaria necesita?",
         "options": ["Toallas azules", "Toallas blancas"]
     },
-    "Toallas azules": {"action": "Notificar al asistente de enfermería"},
-    "Toallas blancas": {"action": "Notificar al asistente de enfermería"},
+    "Toallas azules": {
+        "action": "Notificar al asistente de enfermería",
+        "escalation_tier": "routine",
+    },
+    "Toallas blancas": {
+        "action": "Notificar al asistente de enfermería",
+        "escalation_tier": "routine",
+    },
+
     "Compresa de hielo": {
         "question": "¿Dónde necesita la compresa de hielo?",
-        "options": ["Compresa de hielo para el perineo", "Compresa de hielo para la incisión de la cesárea", "Compresa de hielo para los senos"]
+        "options": [
+            "Compresa de hielo para el perineo",
+            "Compresa de hielo para la incisión de la cesárea",
+            "Compresa de hielo para los senos"
+        ]
     },
-    "Compresa de hielo para el perineo": {"action": "Notificar al asistente de enfermería"},
-    "Compresa de hielo para la incisión de la cesárea": {"action": "Notificar al asistente de enfermería"},
-    "Compresa de hielo para los senos": {"action": "Notificar al asistente de enfermería"},
+    "Compresa de hielo para el perineo": {
+        "action": "Notificar al asistente de enfermería",
+        "escalation_tier": "routine",
+    },
+    "Compresa de hielo para la incisión de la cesárea": {
+        "action": "Notificar al asistente de enfermería",
+        "escalation_tier": "routine",
+    },
+    "Compresa de hielo para los senos": {
+        "action": "Notificar al asistente de enfermería",
+        "escalation_tier": "routine",
+    },
 
     # --- Medication Category ---
     "Necesito medicamentos": {
         "question": "¿Cuál es su síntoma principal?",
         "options": ["Dolor", "Náuseas/Vómitos", "Picazón", "Dolor por gases", "Estreñimiento"]
     },
-    "Dolor": {"action": "Notificar a la enfermera"},
-    "Náuseas/Vómitos": {"action": "Notificar a la enfermera"},
-    "Picazón": {"action": "Notificar a la enfermera"},
-    "Dolor por gases": {"action": "Notificar a la enfermera"},
-    "Estreñimiento": {"action": "Notificar a la enfermera"},
+    "Dolor": {
+        "action": "Notificar a la enfermera",
+        "escalation_tier": "routine",
+    },
+    "Náuseas/Vómitos": {
+        "action": "Notificar a la enfermera",
+        "escalation_tier": "routine",
+    },
+    "Picazón": {
+        "action": "Notificar a la enfermera",
+        "escalation_tier": "routine",
+    },
+    "Dolor por gases": {
+        "action": "Notificar a la enfermera",
+        "escalation_tier": "routine",
+    },
+    "Estreñimiento": {
+        "action": "Notificar a la enfermera",
+        "escalation_tier": "routine",
+    },
 
     # --- Questions Category ---
     "Tengo preguntas": {
@@ -161,27 +258,62 @@ button_data = {
             "¿Puedo vestir a mi bebé con su propia ropa?"
         ]
     },
-    "¿Puedo ponerme mi propia ropa?": {"note": "Sí, siempre que se sienta cómoda y su enfermera le haya dado el visto bueno."},
-    "¿Cada cuánto debo cambiar mi toalla sanitaria?": {"note": "Cambie su toalla cada 2–4 horas o cuando esté saturada. Avise a su enfermera si empapa una toalla en menos de 1 hora o si tiene coágulos más grandes que una pelota de golf."},
-    "¿Cada cuánto debo usar el sacaleches?": {"note": "Cada 2–3 horas si desea establecer o mantener la producción. Su enfermera o asesora de lactancia puede guiarla."},
-    "No consigo sacar leche cuando uso el sacaleches. ¿Es normal?": {"note": "Sí, es común al principio. Puede tardar unos días en bajar la leche. Continúe cada 2–3 horas y avise si tiene dudas."},
-    "¿Cada cuánto debo alimentar a mi bebé?": {"note": "Al menos cada 2–3 horas y a demanda. Señales: buscar el pecho, chuparse las manos, inquietud."},
-    "Me preocupa que mi bebé no esté recibiendo suficiente leche materna.": {"note": "Avise a su enfermera. Señales de buena alimentación: sonidos de deglución y pañales mojados regulares."},
-    "Mi bebé tiene hipo.": {"note": "El hipo es normal y suele desaparecer solo. Sostenga a su bebé en posición erguida."},
-    "Mi bebé suena congestionado o ha estado estornudando. ¿Es normal?": {"note": "Sí, es común en recién nacidos. Si hay dificultad para alimentarse o respirar, avise a su enfermera."},
-    "¿Le harán a mi bebé un examen de la vista?": {"note": "No, pero el pediatra revisará los ojos con una luz."},
-    "¿Puedo vestir a mi bebé con su propia ropa?": {"note": "Sí, incluso si aún no se ha bañado. Se fomenta el contacto piel con piel, especialmente al inicio."},
+
+    "¿Puedo ponerme mi propia ropa?": {
+        "note": "Sí, siempre que se sienta cómoda y su enfermera le haya dado el visto bueno."
+    },
+    "¿Cada cuánto debo cambiar mi toalla sanitaria?": {
+        "note": "Cambie su toalla cada 2–4 horas o cuando esté saturada. Avise a su enfermera si empapa una toalla en menos de 1 hora o si tiene coágulos más grandes que una pelota de golf."
+    },
+    "¿Cada cuánto debo usar el sacaleches?": {
+        "note": "Cada 2–3 horas si desea establecer o mantener la producción. Su enfermera o asesora de lactancia puede guiarla."
+    },
+    "No consigo sacar leche cuando uso el sacaleches. ¿Es normal?": {
+        "note": "Sí, es común al principio. Puede tardar unos días en bajar la leche. Continúe cada 2–3 horas y avise si tiene dudas."
+    },
+    "¿Cada cuánto debo alimentar a mi bebé?": {
+        "note": "Al menos cada 2–3 horas y a demanda. Señales: buscar el pecho, chuparse las manos, inquietud."
+    },
+    "Me preocupa que mi bebé no esté recibiendo suficiente leche materna.": {
+        "note": "Avise a su enfermera. Señales de buena alimentación: sonidos de deglución y pañales mojados regulares."
+    },
+    "Mi bebé tiene hipo.": {
+        "note": "El hipo es normal y suele desaparecer solo. Sostenga a su bebé en posición erguida."
+    },
+    "Mi bebé suena congestionado o ha estado estornudando. ¿Es normal?": {
+        "note": "Sí, es común en recién nacidos. Si hay dificultad para alimentarse o respirar, avise a su enfermera."
+    },
+    "¿Le harán a mi bebé un examen de la vista?": {
+        "note": "No, pero el pediatra revisará los ojos con una luz."
+    },
+    "¿Puedo vestir a mi bebé con su propia ropa?": {
+        "note": "Sí, incluso si aún no se ha bañado. Se fomenta el contacto piel con piel, especialmente al inicio."
+    },
 
     # --- Going Home Category ---
     "Quiero saber sobre el alta": {
         "question": "¿Qué le gustaría saber?",
-        "options": ["Parto vaginal", "Parto por cesárea", "Bebé", "¿Cuándo recibiré mis papeles de alta?", "¿Tengo que usar una silla de ruedas?"]
+        "options": [
+            "Parto vaginal",
+            "Parto por cesárea",
+            "Bebé",
+            "¿Cuándo recibiré mis papeles de alta?",
+            "¿Tengo que usar una silla de ruedas?"
+        ]
     },
-    "Parto vaginal": {"note": "Si fue parto vaginal, la estancia mínima es de 24 horas. El ginecólogo debe autorizar el alta. Si el sangrado, la presión y el dolor están controlados, normalmente podrá irse; la decisión final es del ginecólogo."},
-    "Parto por cesárea": {"note": "Si fue cesárea, estancia mínima de 48 horas. Si el dolor, la presión y el sangrado están normales, probablemente será dada de alta cuando el ginecólogo lo indique."},
-    "Bebé": {"note": "El pediatra evalúa al bebé diariamente. Estancia mínima 24 h. Debe alimentarse bien, tener pérdida de peso adecuada, pasar pruebas de 24 h, prueba de audición y orinar/defecar. Si <37 semanas o GBS sin antibióticos adecuados, quizá 48 h."},
-    "¿Cuándo recibiré mis papeles de alta?": {"note": "Una vez que el ginecólogo y el pediatra ingresen notas y órdenes de alta, su enfermera imprimirá la documentación."},
-    "¿Tengo que usar una silla de ruedas?": {"note": "No es obligatorio, pero alguien del personal debe acompañarle. Si enfermería está ocupada, le llevará personal de traslado."}
+    "Parto vaginal": {
+        "note": "Si fue parto vaginal, la estancia mínima es de 24 horas. El ginecólogo debe autorizar el alta. Si el sangrado, la presión y el dolor están controlados, normalmente podrá irse; la decisión final es del ginecólogo."
+    },
+    "Parto por cesárea": {
+        "note": "Si fue cesárea, estancia mínima de 48 horas. Si el dolor, la presión y el sangrado están normales, probablemente será dada de alta cuando el ginecólogo lo indique."
+    },
+    "Bebé": {
+        "note": "El pediatra evalúa al bebé diariamente. Estancia mínima 24 h. Debe alimentarse bien, tener pérdida de peso adecuada, pasar pruebas de 24 h, prueba de audición y orinar/defecar. Si <37 semanas o GBS sin antibióticos adecuados, quizá 48 h."
+    },
+    "¿Cuándo recibiré mis papeles de alta?": {
+        "note": "Una vez que el ginecólogo y el pediatra ingresen notas y órdenes de alta, su enfermera imprimirá la documentación."
+    },
+    "¿Tengo que usar una silla de ruedas?": {
+        "note": "No es obligatorio, pero alguien del personal debe acompañarle. Si enfermería está ocupada, le llevará personal de traslado."
+    }
 }
-
-
