@@ -934,6 +934,73 @@ def _has_neuro_emergent(text: str) -> bool:
 
     return False
 
+def _has_htn_emergent(text: str) -> bool:
+    """
+    Only detect true preeclampsia red flags:
+      - RUQ pain OR epigastric pain
+    AND at least ONE of:
+      - severe headache
+      - vision changes
+      - strong “something is wrong” feeling
+
+    Do NOT escalate:
+      - generic pain
+      - nausea/vomiting
+      - itching
+      - gas
+      - constipation
+      - breastfeeding issues
+      - blood sugar checks
+    """
+    if not text:
+        return False
+
+    t = text.lower()
+
+    # RUQ / Epigastric
+    has_ruq = any(p in t for p in [
+        "right upper quadrant pain",
+        "ruq pain",
+        "pain under my right ribs",
+        "upper right abdominal pain",
+    ])
+
+    has_epi = any(p in t for p in [
+        "epigastric pain",
+        "pain in the top of my stomach",
+        "pain under my ribs in the middle",
+    ])
+
+    # Severe headache ONLY (not just “headache”)
+    has_severe_headache = any(p in t for p in [
+        "worst headache", "severe headache", "pounding headache",
+        "throbbing headache", "headache that won't go away",
+    ])
+
+    # Vision changes
+    has_vision_change = any(p in t for p in [
+        "blurry vision", "double vision",
+        "seeing spots", "seeing stars",
+        "flashing lights", "sparkles",
+        "vision said dark", "vision went dark"
+    ])
+
+    # Something clearly very wrong
+    has_something_wrong = any(p in t for p in [
+        "something is very wrong",
+        "something feels really wrong",
+        "i feel like i'm dying", "i feel like i might die",
+    ])
+
+    # Core rule: RUQ or Epigastric must be present
+    if not (has_ruq or has_epi):
+        return False
+
+    # At least one additional red flag
+    if has_severe_headache or has_vision_change or has_something_wrong:
+        return True
+
+    return False
 
 # =========================================================
 # 1) Weighted emergent scoring safety net
@@ -2668,6 +2735,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
