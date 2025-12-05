@@ -2765,36 +2765,46 @@ def handle_complete_request(data):
                 room_number = room_lookup
 
         # 1) Mark complete in DB (handles: request_id, numeric id, OR room+text legacy)
-        with engine.begin() as connection:
-            result = connection.execute(
-                text("""
-                    UPDATE requests
-                    SET completion_timestamp = :now,
-                        completed_by = :nurse_name
-                    WHERE
-                        -- Normal path: explicit request_id column
-                        (request_id = :rid)
-                        OR
-                        -- Legacy path: numeric id only, but dashboard is sending that as a string
-                        (CAST(id AS VARCHAR) = :rid)
-                        OR
-                        -- Extra safety for old rows where the dashboard invented a key
-                        (
-                            :room IS NOT NULL
-                            AND :txt  IS NOT NULL
-                            AND room = :room
-                            AND user_input = :txt
-                            AND completion_timestamp IS NULL
-                        )
-                """),
-                {
-                    "now": now_utc,
-                    "nurse_name": nurse_name,
-                    "rid": request_id,
-                    "room": room_number or None,
-                    "txt": request_text or None,
-                },
-            )
+        try:
+            with engine.connect() as connection:
+                trans = connection.begin()
+                try:
+                    result = connection.execute(
+                        text("""
+                            UPDATE requests
+                            SET completion_timestamp = :now,
+                                completed_by = :nurse_name
+                            WHERE
+                                -- Normal path: explicit request_id column
+                                (request_id = :rid)
+                                OR
+                                -- Legacy path: numeric id only, but dashboard is sending that as a string
+                                (CAST(id AS VARCHAR) = :rid)
+                                OR
+                                -- Extra safety for old rows where the dashboard invented a key
+                                (
+                                    :room IS NOT NULL
+                                    AND :txt  IS NOT NULL
+                                    AND room = :room
+                                    AND user_input = :txt
+                                    AND completion_timestamp IS NULL
+                                )
+                        """),
+                        {
+                            "now": now_utc,
+                            "nurse_name": nurse_name,
+                            "rid": request_id,
+                            "room": room_number or None,
+                            "txt": request_text or None,
+                        },
+                    )
+                    trans.commit()
+                except Exception:
+                    trans.rollback()
+                    raise
+        except Exception as e:
+            print(f"[complete_request] DB error: {e}")
+            return
 
         print(f"[complete_request] request_id={request_id!r} rows_updated={result.rowcount}")
 
@@ -2840,6 +2850,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
