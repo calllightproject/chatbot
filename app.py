@@ -1533,30 +1533,28 @@ def route_note_intelligently(note_text: str) -> str:
 
     Logic:
       - Any 'emergent' tier request -> nurse
+      - Any headache (postpartum) -> nurse (clinical, not necessarily emergent)
+      - Any incision/stitches concern -> nurse (not always emergent)
+      - Mild swelling + comfort/supply only -> CNA
       - Routine but clearly clinical -> nurse
-      - Pure supply/comfort/ADL -> CNA
-      - Bathroom/shower + faint/dizzy/pass out -> nurse (safety rule)
+      - Pure supply/comfort -> CNA
+      - Bathroom + faint/dizzy/pass out -> nurse (safety rule)
     """
     text = _normalize_text(note_text)
     tier = classify_escalation_tier(text)
 
-    # 1) Emergent -> always nurse
     if tier == "emergent":
         return "nurse"
 
-    # 2) Supply / comfort / ADL keywords
+    # Supply-only keywords
     supply_keywords = [
         "mesh underwear", "underwear", "peri bottle", "peribottle",
-        "pads", "pad", "blue pad", "white pad", "chucks",
-        "ice pack", "cold pack", "snacks", "water", "ice chips",
-        "blanket", "blankets", "pillow", "pillows", "towel",
-        "extra gown", "gown", "diaper", "diapers",
-        "wipe", "wipes",
-        "shower", "bathroom", "bath", "toilet", "commode",
-        "help me get up", "help me up", "help me walk",
+        "pads", "pad", "ice pack", "snacks", "water", "blanket",
+        "pillows", "towel", "blue pad", "chucks", "diaper",
+        "wipe", "wipes", "extra gown",
     ]
 
-    # 3) Clinical-ish keywords: symptoms / meds
+    # Clinical-ish keywords: symptoms / meds
     clinical_keywords = [
         "pain", "medication", "medicine", "nausea", "vomit", "vomiting",
         "fever", "chills", "bleeding", "blood",
@@ -1568,18 +1566,50 @@ def route_note_intelligently(note_text: str) -> str:
     is_supply = any(k in text for k in supply_keywords)
     is_clinical = any(k in text for k in clinical_keywords)
 
-    # 4) Bathroom/shower + presyncope -> nurse
-    if (("bathroom" in text) or ("shower" in text) or ("bath" in text)) and (
-        "faint" in text or "pass out" in text or "dizzy" in text or "lightheaded" in text
-    ):
+    # Specific feature flags
+    headache_present = "headache" in text or "migraine" in text
+    swelling_present = ("swelling" in text) or ("swollen" in text) or ("puffy" in text)
+    incision_present = (
+        "incision" in text or "stitches" in text or "staples" in text or "wound" in text
+    )
+
+    # Hard rule: help to bathroom + faint/dizzy/pass out -> nurse, not CNA
+    if "bathroom" in text and ("faint" in text or "pass out" in text or "dizzy" in text):
         return "nurse"
 
-    # 5) Pure supply / ADL only -> CNA
+    # Headache: always clinical (nurse), even if not emergent
+    if headache_present:
+        return "nurse"
+
+    # Incision/stitches: always nurse (not always emergent)
+    if incision_present:
+        return "nurse"
+
+    # Mild swelling + comfort/supply only -> CNA (per your rule),
+    # as long as tier is routine and no other serious clinical tokens.
+    serious_clinical_tokens = [
+        "short of breath", "trouble breathing", "chest", "heart",
+        "vision", "blurry vision", "double vision",
+        "bleeding", "blood",
+        "severe pain", "really bad pain", "worst pain",
+        "dizzy", "faint", "lightheaded",
+        "numb", "tingling",
+        "fever", "chills",
+        "incision", "stitches", "wound", "staples",
+    ]
+    has_serious_clinical = any(tok in text for tok in serious_clinical_tokens)
+
+    if tier == "routine" and swelling_present and is_supply and not has_serious_clinical:
+        # Example: "my feet are a little swollen, can I get some socks and a blanket"
+        return "cna"
+
+    # Now fall back to general logic
     if is_supply and not is_clinical:
         return "cna"
 
-    # 6) Default: clinical or unclear → nurse
+    # Default: clinical or unclear goes to nurse
     return "nurse"
+
 
 
 
@@ -2895,6 +2925,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
