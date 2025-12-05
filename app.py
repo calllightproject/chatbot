@@ -11,6 +11,7 @@ import difflib
 from datetime import datetime, date, time, timezone
 from collections import defaultdict
 from email.message import EmailMessage
+from flask import jsonify
 
 from flask import Flask, render_template, request, session, redirect, url_for, flash, jsonify, abort
 from flask_socketio import SocketIO, join_room
@@ -2799,33 +2800,40 @@ def handle_defer_request(data):
     except Exception as e:
         print(f"ERROR deferring request {request_id}: {e}")
 
-# Nurse/CNA marks "Complete" — cleaned single version
-@app.route("/complete/<req_id>", methods=["POST"])
-def complete_request(req_id):
+
+
+@app.route("/complete_request/<request_id>", methods=["POST"])
+def complete_request(request_id):
     """
-    Mark a request as completed and notify dashboards to remove it.
-    req_id is the same string we emit as 'id' in socketio.emit('new_request', ...)
+    Mark a request as completed and notify dashboards.
+    Works whether the row only has `id` or has a `request_id` column.
     """
     try:
         with engine.begin() as conn:
-            conn.execute(text("""
-                UPDATE requests
-                SET completion_timestamp = NOW()
-                WHERE request_id = :rid
-                   OR CAST(id AS VARCHAR) = :rid
-            """), {"rid": req_id})
+            # Set completion_timestamp for either matching request_id OR numeric id
+            conn.execute(
+                text("""
+                    UPDATE requests
+                    SET completion_timestamp = NOW()
+                    WHERE request_id = :rid
+                       OR CAST(id AS VARCHAR) = :rid
+                """),
+                {"rid": request_id},
+            )
 
-        # Tell all dashboards to drop this card in real time
-        socketio.emit("request_completed", {"id": req_id})
-        return ("", 204)
+        # Let live dashboards know so they can drop the card immediately
+        socketio.emit("request_completed", {"id": request_id})
+
+        return jsonify({"status": "ok"})
     except Exception as e:
-        print(f"ERROR completing request {req_id}: {e}")
-        return ("Error completing request", 500)
+        print(f"ERROR completing request {request_id}: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
