@@ -1,4 +1,3 @@
-
 import eventlet
 eventlet.monkey_patch()
 
@@ -1884,18 +1883,31 @@ def dashboard():
                 WHERE completion_timestamp IS NULL
                 ORDER BY timestamp DESC;
             """))
+
             for row in result:
+                # Decide escalation tier for dashboard
+                text_for_tier = (row.user_input or "").strip().lower()
+
+                if "patient pressed emergency button" in text_for_tier:
+                    tier = "emergent"
+                else:
+                    tier = classify_escalation_tier(text_for_tier)
+
                 active_requests.append({
                     "id": row.request_id,
                     "room": row.room,
                     "request": row.user_input,
                     "role": row.role,
+                    "tier": tier,
                     "timestamp": row.timestamp.isoformat() if row.timestamp else None,
                 })
+
     except Exception as e:
         print(f"ERROR fetching active requests: {e}")
 
-    return render_template("dashboard.html", active_requests=active_requests)
+    return render_template("dashboard.html",
+                           active_requests=active_requests,
+                           nurse_context=False)
 
 
 # --- Analytics ---
@@ -2828,6 +2840,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
