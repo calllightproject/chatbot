@@ -1,3 +1,4 @@
+
 import eventlet
 eventlet.monkey_patch()
 
@@ -11,7 +12,6 @@ import difflib
 from datetime import datetime, date, time, timezone
 from collections import defaultdict
 from email.message import EmailMessage
-from flask import jsonify
 
 from flask import Flask, render_template, request, session, redirect, url_for, flash, jsonify, abort
 from flask_socketio import SocketIO, join_room
@@ -1199,15 +1199,7 @@ def classify_escalation_tier(note_text: str) -> str:
       0) Supply-only fast path (no clinical words) -> routine
       0a) Mild headache without red flags -> routine
       0b) Mild swelling + "feel fine/okay" without red flags -> routine
-      0c) Mild incision / stitches / wound concerns -> routine
-      0d) Simple nausea / vomiting -> routine
-      0e) Small clots (smaller than a quarter) -> routine
-      0f) BP cuff / machine error only -> routine
-      0g) Lochia smells odd but explicitly no fever / no heavy bleed -> routine
-      0h) Asking for stronger Tylenol / meds with no red flags -> routine
-      0i) Breasts very full/uncomfortable without infection red flags -> routine
-      0j) Dressing / tape / bandage coming loose without scary infection/bleeding -> routine
-      1) Existing hard-stop helpers
+      1) Existing hard-stop helpers (_has_heart_breath_color_emergent, etc.)
       2) Weighted scoring safety net
     """
     text = _normalize_text(note_text)
@@ -1226,15 +1218,11 @@ def classify_escalation_tier(note_text: str) -> str:
         "formula", "bottle", "bottles",
         "extra gown", "gown",
         "help into the shower", "help me into the shower",
-        "help getting into the shower", "help me shower", "shower",
-        # bathroom help as a supply-style / CNA request
-        "bathroom", "toilet", "help to the bathroom",
-        "help going to the bathroom", "help me to the bathroom",
-        "help to the toilet", "help going to the toilet",
+        "help me shower", "help getting into the shower", "shower",
     ]
     clinical_markers = [
         "pain", "hurts", "cramp", "cramps",
-        "bleeding", "blood", "clot", "clots",
+        "bleeding", "blood",
         "dizzy", "dizziness", "lightheaded", "faint", "fainted",
         "short of breath", "trouble breathing", "cant breathe", "can't breathe",
         "breath", "breathing", "chest", "heart",
@@ -1248,9 +1236,11 @@ def classify_escalation_tier(note_text: str) -> str:
     ]
 
     if any(tok in text for tok in supply_tokens) and not any(tok in text for tok in clinical_markers):
+        # Example: "can I have a new blue pad and some mesh underwear"
+        # Example: "can someone bring me more formula and a clean bottle"
         return "routine"
 
-    # 0a) MILD HEADACHE WITHOUT RED FLAGS -> routine
+    # 0a) MILD HEADACHE WITHOUT RED FLAGS -> routine (but still clinical at routing layer)
     if "headache" in text and "mild" in text:
         red_flag_headache_words = [
             "worst", "severe", "really bad", "very bad", "so bad",
@@ -1261,6 +1251,7 @@ def classify_escalation_tier(note_text: str) -> str:
             "pass out", "passed out", "faint", "fainted", "about to pass out",
         ]
         if not any(w in text for w in red_flag_headache_words):
+            # We'll still route this to the nurse in route_note_intelligently
             return "routine"
 
     # 0b) MILD SWELLING + FEEL FINE/OKAY WITHOUT RED FLAGS -> routine
@@ -1276,129 +1267,8 @@ def classify_escalation_tier(note_text: str) -> str:
                     "short of breath", "trouble breathing", "chest", "heart",
                 ]
                 if not any(w in text for w in red_flag_swelling_words):
+                    # Example: "my feet are a little swollen but I feel fine otherwise"
                     return "routine"
-
-    # 0c) MILD INCISION / STITCHES / WOUND CONCERNS -> routine
-    if any(w in text for w in ["incision", "stitches", "staples", "wound"]):
-        incision_red_flags = [
-            "bright red blood", "gushing", "pouring",
-            "running down", "blood everywhere",
-            "soaked", "soaking", "soaks through",
-            "faint", "fainting", "about to pass out", "pass out",
-            "short of breath", "trouble breathing",
-            "chest", "heart",
-            "vision", "blurry", "spots", "stars", "sparkles",
-            "fever", "chills",
-            "pus", "oozing",
-            "smells bad", "smell bad", "bad smell", "odor", "odour",
-            "red streaks", "red lines",
-        ]
-        if not any(w in text for w in incision_red_flags):
-            # e.g. "my incision is a little sore and I want something for pain"
-            #      "I think my stitches look a little red but I'm not sure"
-            return "routine"
-
-    # 0d) SIMPLE NAUSEA / VOMITING -> routine
-    if any(w in text for w in ["nausea", "nauseous", "vomit", "vomiting", "throw up", "throwing up"]):
-        nausea_red_flags = [
-            "blood", "bright red", "coffee ground",
-            "can't keep anything down", "cant keep anything down",
-            "short of breath", "trouble breathing",
-            "chest", "heart",
-            "faint", "fainting", "pass out", "about to pass out",
-            "vision", "went black", "went dark", "goes black", "goes dark",
-        ]
-        if not any(w in text for w in nausea_red_flags):
-            # e.g. "I feel nauseous and think I might throw up"
-            return "routine"
-
-    # 0e) SMALL CLOTS (SMALLER THAN A QUARTER) -> routine
-    if "clot" in text or "clots" in text:
-        if any(p in text for p in [
-            "small clots", "smaller than a quarter",
-            "size of a dime", "size of a nickel",
-        ]):
-            # e.g. "I'm passing small clots but they are smaller than a quarter"
-            return "routine"
-
-    # 0f) BP CUFF / MACHINE ERROR ONLY -> routine
-    if ("blood pressure cuff" in text or "bp cuff" in text or
-        "bp machine" in text or "blood pressure machine" in text or
-        ("bp" in text and "cuff" in text)):
-        bp_symptom_words = [
-            "dizzy", "dizziness", "lightheaded", "faint", "fainting",
-            "pass out", "about to pass out",
-            "chest", "heart",
-            "short of breath", "trouble breathing",
-            "headache", "vision", "blurry", "spots", "stars", "sparkles",
-        ]
-        if not any(w in text for w in bp_symptom_words):
-            # e.g. "My blood pressure cuff keeps erroring and saying error"
-            return "routine"
-
-    # 0g) LOCHIA SMELLS ODD BUT NO FEVER / NO HEAVY BLEEDING -> routine
-    if "lochia" in text and any(w in text for w in ["smell", "smells", "smelly", "odor", "odour", "weird"]):
-        reassuring_bits = [
-            "no fever", "dont have a fever", "don't have a fever",
-            "no temperature", "no temp",
-        ]
-        heavy_bleed_flags = [
-            "gushing", "pouring", "running down", "blood everywhere",
-            "soaked", "soaking", "soaks through",
-            "pad is full in", "filled my pad in",
-            "bright red all over the pad",
-        ]
-        if any(r in text for r in reassuring_bits) and not any(h in text for h in heavy_bleed_flags):
-            # e.g. "My lochia smells kind of weird but I don’t have a fever"
-            return "routine"
-
-    # 0h) ASKING FOR STRONGER TYLENOL / MEDS WITH NO RED FLAGS -> routine
-    pain_meds = ["tylenol", "acetaminophen", "ibuprofen", "motrin", "advil"]
-    if any(m in text for m in pain_meds):
-        if any(p in text for p in ["stronger", "isn't working", "isnt working", "not working", "doesn't work", "doesnt work"]):
-            big_red_flags = [
-                "chest", "heart",
-                "can't breathe", "cant breathe", "short of breath", "trouble breathing",
-                "faint", "fainting", "about to pass out", "pass out",
-                "vision", "blurry", "spots", "stars", "sparkles",
-                "gushing", "pouring", "bright red blood",
-            ]
-            if not any(b in text for b in big_red_flags):
-                # e.g. "I feel like I need stronger Tylenol, this isn’t working"
-                return "routine"
-
-    # 0i) BREASTS VERY FULL / UNCOMFORTABLE WITHOUT INFECTION RED FLAGS -> routine
-    if "breast" in text or "breasts" in text:
-        infection_flags = [
-            "fever", "chills", "rigors",
-            "red and hot", "red and warm",
-            "very red", "bright red",
-            "streak", "streaks", "red line", "red lines",
-            "lump that is rock hard", "rock hard lump",
-        ]
-        if not any(f in text for f in infection_flags):
-            # e.g. "My breasts feel really full and uncomfortable"
-            return "routine"
-
-    # 0j) DRESSING / TAPE / BANDAGE ISSUES -> routine unless clear red flags
-    if any(w in text for w in ["tape", "steri strip", "steri-strip", "steri strips", "steri-strips",
-                               "bandage", "bandages", "dressing"]):
-        dressing_red_flags = [
-            "bright red blood", "gushing", "pouring",
-            "running down", "blood everywhere",
-            "soaked", "soaking", "soaks through",
-            "faint", "fainting", "about to pass out", "pass out",
-            "short of breath", "trouble breathing",
-            "chest", "heart",
-            "vision", "blurry", "spots", "stars", "sparkles",
-            "fever", "chills",
-            "pus", "oozing",
-            "smells bad", "smell bad", "bad smell", "odor", "odour",
-            "red streaks", "red lines",
-        ]
-        if not any(w in text for w in dressing_red_flags):
-            # e.g. "The tape on my C-section is curling up, can someone fix it?"
-            return "routine"
 
     # 1) Existing hard-stop helpers
     if _has_heart_breath_color_emergent(text):
@@ -1412,6 +1282,8 @@ def classify_escalation_tier(note_text: str) -> str:
 
     # 2) Weighted scoring safety net
     score, breakdown, hard_stop = compute_emergent_score(text)
+    # Optional: log for QA
+    # current_app.logger.info(f"Emergent score={score}, breakdown={breakdown}")
 
     if hard_stop:
         return "emergent"
@@ -1421,74 +1293,135 @@ def classify_escalation_tier(note_text: str) -> str:
 
     return "routine"
 
+
 def route_note_intelligently(note_text: str) -> str:
     """
-    Decide whether a free-text note should go to 'nurse' or 'cna'.
+    Returns: 'nurse' or 'cna'
 
-    Rules:
-      - If classifier says EMERGENT -> nurse
-      - Clear bathroom / shower / supply help (no scary words) -> cna
-      - Medications / pain control -> nurse
-      - Everything else -> nurse
+    Logic:
+      - Any 'emergent' tier request -> nurse
+      - Any headache (postpartum) -> nurse (clinical, not necessarily emergent)
+      - Any incision/stitches concern -> nurse (not always emergent)
+      - IV pump beeping / occlusion -> nurse (equipment, not emergent)
+      - Broken BP cuff / simple machine error with no symptoms -> CNA
+      - Mild swelling + comfort/supply only -> CNA
+      - Routine but clearly clinical -> nurse
+      - Pure supply/comfort -> CNA
+      - Bathroom/shower + faint/dizzy/pass out -> nurse (safety rule)
     """
-    if not note_text:
+    text = _normalize_text(note_text)
+    tier = classify_escalation_tier(text)
+
+    # 1) Any emergent tier -> nurse
+    if tier == "emergent":
         return "nurse"
 
-    t = _normalize_text(note_text)
-
-    # 1) If emergent by our classifier, always send to NURSE
-    if classify_escalation_tier(t) == "emergent":
+    # 2) IV pump / pump / occlusion / alarm -> nurse (equipment issue, not emergent)
+    if any(k in text for k in ["iv pump", "pump", "occlusion", "alarm", "keeps beeping", "beeping"]):
         return "nurse"
 
-    # 2) Bathroom / toilet / shower help -> CNA (unless mixed with scary stuff)
-    bathroom_words = [
-        "bathroom", "toilet", "restroom", "washroom",
-        "help me to the bathroom", "help going to the bathroom",
-        "help to the bathroom", "help me to the toilet",
-        "help going to the toilet",
-        "pee", "peeing", "poop", "pooping",
-    ]
-    scary_with_bathroom = [
-        "fell", "fall", "fell down", "almost fell",
-        "dizzy", "lightheaded", "faint", "fainted",
-        "legs gave out", "leg gave out", "can't feel my legs", "cant feel my legs",
-        "chest", "heart", "can't breathe", "cant breathe",
-    ]
-    if any(w in t for w in bathroom_words):
-        if not any(w in t for w in scary_with_bathroom):
-            return "cna"
-
-    # 3) Supply-ish language (pads, mesh underwear, water, ice, pillows, etc.) -> CNA
-    supply_keywords = [
-        "mesh underwear", "underwear", "peri bottle", "peribottle",
-        "pads", "pad", "blue pad", "chucks",
-        "diaper", "diapers", "wipes", "wipe",
-        "blanket", "blankets", "pillow", "pillows",
-        "towel", "towels",
-        "snacks", "water", "ice", "ice chips",
-        "formula", "bottle", "bottles",
-        "extra gown", "gown",
-        "help into the shower", "help me into the shower",
-        "help getting into the shower", "help me shower", "shower",
-    ]
-    if any(w in t for w in supply_keywords) and not any(
-        w in t for w in ["bleeding", "blood", "clots", "faint", "chest", "heart", "can't breathe", "cant breathe"]
+    # 3) Broken blood pressure cuff ALONE -> CNA (non-emergent, non-clinical)
+    if ("blood pressure cuff" in text or "bp cuff" in text) and not any(
+        k in text for k in ["dizzy", "faint", "chest", "heart",
+                           "short of breath", "trouble breathing", "vision"]
     ):
         return "cna"
 
-    # 4) Medication / pain control -> NURSE
-    med_keywords = [
-        "tylenol", "acetaminophen", "ibuprofen", "motrin", "advil",
-        "oxycodone", "percocet", "pain medicine", "pain med",
-        "nausea medicine", "zofran", "colace", "stool softener",
-        "laxative", "gas medicine",
-        "can i have my pain meds", "need my pain meds",
+    # Equipment keywords (for generic machine-only CNA rule later)
+    equipment_keywords = [
+        "iv pump", "pump", "occlusion",
+        "bp cuff", "blood pressure cuff",
+        "machine", "monitor", "device",
+        "beeping", "alarm",
     ]
-    if any(w in t for w in med_keywords):
+
+    # Supply-only keywords
+    supply_keywords = [
+        "mesh underwear", "underwear", "peri bottle", "peribottle",
+        "pads", "pad", "ice pack", "snacks", "water", "blanket",
+        "pillows", "towel", "blue pad", "chucks", "diaper",
+        "wipe", "wipes", "extra gown",
+        "formula", "bottle", "bottles",
+        "help into the shower", "help me into the shower",
+        "help me shower", "help getting into the shower", "shower",
+    ]
+
+    # Clinical-ish keywords: symptoms / meds
+    clinical_keywords = [
+        "pain", "medication", "medicine", "nausea", "vomit", "vomiting",
+        "fever", "chills", "bleeding", "blood",
+        "dizzy", "faint", "lightheaded", "short of breath", "trouble breathing",
+        "heart", "chest", "headache", "vision", "numb", "tingling",
+        "swelling", "swollen",
+    ]
+
+    is_supply = any(k in text for k in supply_keywords)
+    is_clinical = any(k in text for k in clinical_keywords)
+
+    # Specific feature flags
+    headache_present = "headache" in text or "migraine" in text
+    swelling_present = ("swelling" in text) or ("swollen" in text) or ("puffy" in text)
+    incision_present = (
+        "incision" in text or "stitches" in text or "staples" in text or "wound" in text
+    )
+
+    # 4) Hard rule: bathroom/shower + faint/dizzy/pass out -> nurse, not CNA
+    if (("bathroom" in text) or ("shower" in text)) and (
+        "faint" in text or "pass out" in text or "dizzy" in text
+    ):
         return "nurse"
 
-    # 5) Default: nurse
+    # 5) Headache: always clinical (nurse), even if not emergent
+    if headache_present:
+        return "nurse"
+
+    # 6) Incision/stitches: always nurse (not always emergent)
+    if incision_present:
+        return "nurse"
+
+    # 7) Equipment-only issues (other machines) with NO symptoms → CNA
+    equipment_only_symptom_words = [
+        "pain", "hurts", "burning",
+        "bleeding", "blood",
+        "dizzy", "faint", "lightheaded",
+        "short of breath", "trouble breathing",
+        "chest", "heart",
+        "fever", "chills",
+        "swelling", "swollen",
+        "numb", "tingling",
+        "headache",
+    ]
+    if any(k in text for k in equipment_keywords) and not any(
+        s in text for s in equipment_only_symptom_words
+    ):
+        # At this point, IV pump already returned 'nurse'; this mostly hits other machines.
+        return "cna"
+
+    # 8) Mild swelling + comfort/supply only -> CNA (per your rule)
+    serious_clinical_tokens = [
+        "short of breath", "trouble breathing", "chest", "heart",
+        "vision", "blurry vision", "double vision",
+        "bleeding", "blood",
+        "severe pain", "really bad pain", "worst pain",
+        "dizzy", "faint", "lightheaded",
+        "numb", "tingling",
+        "fever", "chills",
+        "incision", "stitches", "wound", "staples",
+    ]
+    has_serious_clinical = any(tok in text for tok in serious_clinical_tokens)
+
+    if tier == "routine" and swelling_present and is_supply and not has_serious_clinical:
+        # Example: "my feet are a little swollen, can I get some socks and a blanket"
+        return "cna"
+
+    # 9) Pure supply/comfort -> CNA
+    if is_supply and not is_clinical:
+        return "cna"
+
+    # 🔟 Default: clinical or unclear goes to nurse
     return "nurse"
+
+
 
 
 # --- Core Helper Functions ---
@@ -1951,33 +1884,18 @@ def dashboard():
                 WHERE completion_timestamp IS NULL
                 ORDER BY timestamp DESC;
             """))
-
             for row in result:
-                # This is the text we stored in the DB for routing/analytics.
-                text_for_tier = (row.user_input or "").strip().lower()
-
-                # Special case: the hard-coded emergency button
-                # We ALWAYS want that to show as emergent.
-                if "patient pressed emergency button" in text_for_tier:
-                    tier = "emergent"
-                else:
-                    # Use your existing classifier for everything else
-                    tier = classify_escalation_tier(text_for_tier)
-
                 active_requests.append({
                     "id": row.request_id,
                     "room": row.room,
                     "request": row.user_input,
                     "role": row.role,
-                    "tier": tier,  # <--- IMPORTANT: pass tier into the template
                     "timestamp": row.timestamp.isoformat() if row.timestamp else None,
                 })
     except Exception as e:
         print(f"ERROR fetching active requests: {e}")
 
     return render_template("dashboard.html", active_requests=active_requests)
-
-
 
 
 # --- Analytics ---
@@ -2800,44 +2718,75 @@ def handle_defer_request(data):
     except Exception as e:
         print(f"ERROR deferring request {request_id}: {e}")
 
-
-
-@app.route("/complete_request/<request_id>", methods=["POST"])
-def complete_request(request_id):
+# Nurse/CNA marks "Complete" — cleaned single version
+@socketio.on("complete_request")
+def handle_complete_request(data):
     """
-    Mark a request as completed and notify dashboards.
-    Works whether the row only has `id` or has a `request_id` column.
+    Expected data:
+      - request_id (required)
+      - nurse_name (optional)
+      - room_number (optional; if missing, we'll look it up)
+      - role (optional; 'nurse' | 'cna')
     """
+    request_id = data.get("request_id")
+    if not request_id:
+        return  # nothing to do
+
+    now_utc = datetime.now(timezone.utc)
     try:
-        with engine.begin() as conn:
-            # Set completion_timestamp for either matching request_id OR numeric id
-            conn.execute(
-                text("""
-                    UPDATE requests
-                    SET completion_timestamp = NOW()
-                    WHERE request_id = :rid
-                       OR CAST(id AS VARCHAR) = :rid
-                """),
-                {"rid": request_id},
+        # 1) Mark complete in DB
+        with engine.connect() as connection:
+            trans = connection.begin()
+            try:
+                connection.execute(
+                    text("""
+                        UPDATE requests
+                        SET completion_timestamp = :now
+                        WHERE request_id = :request_id;
+                    """),
+                    {"now": now_utc, "request_id": request_id},
+                )
+                trans.commit()
+                log_to_audit_trail("Request Completed", f"Request ID: {request_id} marked as complete.")
+            except Exception:
+                trans.rollback()
+                raise
+
+        # 2) Remove from dashboards (always do this, even if room is unknown)
+        socketio.emit("remove_request", {"id": request_id})
+
+        # 3) Notify patient only when we have a valid room
+        room_number = data.get("room_number") or _get_room_for_request(request_id)
+        role = (data.get("role") or "nurse").lower().strip()
+        if role not in ("nurse", "cna"):
+            role = "nurse"
+
+        if room_number and _valid_room(str(room_number)):
+            emit_patient_event(
+                "request:done",
+                room_number,
+                {
+                    "request_id": request_id,
+                    "status": "completed",
+                    "nurse": data.get("nurse_name"),
+                    "role": role,
+                    "ts": now_utc.isoformat(),
+                },
             )
+        # If room is missing/invalid, we simply skip the patient emit
+        # (dashboard already removed above).
 
-        # Let live dashboards know so they can drop the card immediately
-        socketio.emit("request_completed", {"id": request_id})
-
-        return jsonify({"status": "ok"})
     except Exception as e:
-        print(f"ERROR completing request {request_id}: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+        print(f"ERROR updating completion timestamp: {e}")
+
+@app.get("/healthz")
+def healthz():
+    return {"status": "ok"}, 200
 
 
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
-
-
-
-
-
 
 
 
