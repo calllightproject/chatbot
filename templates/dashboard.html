@@ -446,24 +446,48 @@
     });
 
     socket.on('remove_request', function(data) {
-      let el = null;
-      if (data.id) el = document.getElementById(data.id);
-      if (!el && (data.request || data.room)) {
-        const items = document.querySelectorAll('#requests-list .request-item');
-        el = Array.from(items).find(li => {
-          const sameText = data.request ? (li.dataset.request || '') === normalizeText(data.request) : true;
-          const sameRoom = data.room ? (li.dataset.room || '') === data.room : true;
-          return sameText && sameRoom;
-        });
-      }
-      if (el) {
-        clearStatusFor(el.dataset.id, el.dataset.room, el.dataset.request);
-        el.style.opacity = '0';
-        setTimeout(() => { el.remove(); toggleEmptyState(); }, 300);
-      } else {
-        toggleEmptyState();
-      }
+  let el = null;
+
+  // 1) Try to find by id
+  if (data.id) el = document.getElementById(data.id);
+
+  // 2) Fallback: match by room + normalized request text
+  if (!el && (data.request || data.room)) {
+    const items = document.querySelectorAll('#requests-list .request-item');
+    el = Array.from(items).find(li => {
+      const sameText = data.request
+        ? (li.dataset.request || '') === normalizeText(data.request)
+        : true;
+      const sameRoom = data.room
+        ? (li.dataset.room || '') === data.room
+        : true;
+      return sameText && sameRoom;
     });
+  }
+
+  if (el) {
+    // Clear local status caches
+    clearStatusFor(el.dataset.id, el.dataset.room, el.dataset.request);
+
+    el.style.opacity = '0';
+    setTimeout(() => {
+      el.remove();
+
+      // 🔹 NEW: also drop the composite-key cache entry so it
+      // doesn't “ghost” back in on a later refresh.
+      if (data.room && data.request) {
+        LocalStatusByKey.delete(
+          makeCompositeKey(data.room, data.request || "")
+        );
+      }
+
+      toggleEmptyState();
+    }, 300);
+  } else {
+    toggleEmptyState();
+  }
+});
+
 
     socket.on('request_status', function(data) {
       const id = data?.id;
@@ -671,3 +695,4 @@
   </script>
 </body>
 </html>
+
