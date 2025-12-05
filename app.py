@@ -1486,58 +1486,79 @@ def log_request_to_db(request_id, category, user_input, reply, room, is_first_ba
     except Exception as e:
         print(f"ERROR logging to database: {e}")
 
-def process_request(role, subject, user_input, reply_message):
+def process_request(
+    role,
+    subject,
+    user_input,
+    reply_message,
+    tier_override: str | None = None,
+    classify_from_text: bool = True,
+    from_button: bool = False,
+):
     """
     Persist the request, emit dashboard updates, and (optionally) email.
-    Uses _current_room() to honor ?room=... and validates against 231–260.
-    Also classifies each request into an escalation tier:
-      'emergent' | 'clinical' | 'routine'
+
+    Escalation tier:
+      - If tier_override is given, use that ('emergent' or 'routine').
+      - Else if classify_from_text is True, use classify_escalation_tier(user_input).
+      - Else default to 'routine'.
+
+    from_button is currently just for future logging/analytics; it does not
+    change behavior inside this function.
     """
     # Language-normalize the user_input for analytics/dashboards
-    lang = session.get('language', 'en')
+    lang = session.get("language", "en")
     english_user_input = to_english_label(user_input, lang)
 
     # Unique request id
-    request_id = 'req_' + str(datetime.now(timezone.utc).timestamp()).replace('.', '')
+    request_id = "req_" + str(datetime.now(timezone.utc).timestamp()).replace(".", "")
 
-    # ✅ Prefer URL ?room=... (and keep session in sync), then fall back to session
-    room_number = _current_room() or session.get('room_number')
+    # Prefer URL ?room=... then fall back to session
+    room_number = _current_room() or session.get("room_number")
     if not room_number or not _valid_room(room_number):
         room_number = None  # store as NULL/None instead of "N/A"
 
-    is_first_baby = session.get('is_first_baby')
+    is_first_baby = session.get("is_first_baby")
 
-    # --- NEW: classify escalation tier based on the English text ---
-    tier = classify_escalation_tier(english_user_input)  # 'emergent' | 'clinical' | 'routine'
+    # --- Decide escalation tier ---
+    if tier_override is not None:
+        tier = tier_override
+    elif classify_from_text:
+        tier = classify_escalation_tier(english_user_input)  # 'emergent' | 'routine'
+    else:
+        tier = "routine"
 
     # Write to DB in background (non-blocking)
     socketio.start_background_task(
         log_request_to_db,
         request_id,
-        role,                  # 'nurse' or 'cna'
-        english_user_input,    # normalized text for analytics
+        role,               # 'nurse' or 'cna'
+        english_user_input, # normalized text for analytics
         reply_message,
-        room_number,           # None if unknown/invalid
-        is_first_baby
+        room_number,        # None if unknown/invalid
+        is_first_baby,
     )
 
-    # (Optional) email alert — keep commented unless you’ve set creds
+    # (Optional) email alert
     # socketio.start_background_task(
     #     send_email_alert,
     #     subject,
     #     english_user_input,
-    #     room_number or "Unknown"
+    #     room_number or "Unknown",
     # )
 
     # Live update to dashboards
-    socketio.emit('new_request', {
-        'id': request_id,
-        'room': room_number,                   # None if unknown
-        'request': english_user_input,
-        'role': role,                          # 'nurse' | 'cna'
-        'tier': tier,                          # 'emergent' | 'clinical' | 'routine'
-        'timestamp': datetime.now(timezone.utc).isoformat()
-    })
+    socketio.emit(
+        "new_request",
+        {
+            "id": request_id,
+            "room": room_number,
+            "request": english_user_input,
+            "role": role,  # 'nurse' | 'cna'
+            "tier": tier,  # 'emergent' | 'routine'
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        },
+    )
 
     return reply_message
 
@@ -1637,7 +1658,6 @@ def handle_chat():
         session["pathway"] = qp
 
     pathway = session.get("pathway", "standard")
-
     lang = session.get("language", "en")
 
     # Load the correct button config module based on pathway + language
@@ -1656,9 +1676,6 @@ def handle_chat():
             "Please contact support."
         )
 
-   
-
-
     # Resolve room number from ?room=, session, or POST
     room_number = _current_room()
 
@@ -1673,19 +1690,26 @@ def handle_chat():
         session["room_number"] = room_number
 
     if request.method == "POST":
-        # Free-text note path
+        # ===========================================
+        # 1) Free-text note path  (CUSTOM NOTE BOX)
+        #    -> emergent scoring is ALLOWED here
+        # ===========================================
         if request.form.get("action") == "send_note":
             note_text = (request.form.get("custom_note") or "").strip()
             if note_text:
+                # Decide nurse vs CNA based on the text (uses emergent logic)
                 role = route_note_intelligently(note_text)  # "nurse" or "cna"
                 reply_message = button_data.get(f"{role}_notification", "Your request has been sent.")
 
-                # Persist + notify
+                # Persist + notify (free-text: allow classifier)
                 session["reply"] = process_request(
                     role=role,
                     subject="Custom Patient Note",
                     user_input=note_text,
                     reply_message=reply_message,
+                    tier_override=None,          # let classifier decide emergent vs routine
+                    classify_from_text=True,     # ✅ FREE TEXT gets scored
+                    from_button=False,
                 )
                 session["options"] = button_data["main_buttons"]
 
@@ -1696,16 +1720,39 @@ def handle_chat():
                 session["reply"] = button_data.get("empty_custom_note", "Please type a message in the box.")
                 session["options"] = button_data["main_buttons"]
 
-        # Button click path
+        # ===========================================
+        # 2) Button click path
+        #    -> NO emergent scoring, except explicit emergency button
+        # ===========================================
         else:
             user_input = (request.form.get("user_input") or "").strip()
             back_text = button_data.get("back_text", "⬅ Back")
 
             # ----------------------------
-            # SPECIAL FLOW: Shower follow-up
-            # Triggered when user taps "Can I take a shower?"
+            # HARD-CODED EMERGENCY BUTTON
+            # "I'm having an emergency" should ALWAYS:
+            #   - route to nurse
+            #   - be tier='emergent'
             # ----------------------------
-            if user_input == "Can I take a shower?":
+            if user_input == "I'm having an emergency":
+                request_text = "Patient pressed EMERGENCY button: 'I'm having an emergency'."
+                session["reply"] = process_request(
+                    role="nurse",
+                    subject="EMERGENCY – patient pressed emergency button",
+                    user_input=request_text,
+                    reply_message=button_data.get("nurse_notification", "Your nurse has been notified."),
+                    tier_override="emergent",   # ✅ FORCE emergent
+                    classify_from_text=False,   # don't re-score text
+                    from_button=True,
+                )
+                session["options"] = button_data["main_buttons"]
+                if room_number:
+                    _emit_received_for(room_number, request_text, kind="option")
+
+            # ----------------------------
+            # SPECIAL FLOW: Shower follow-up
+            # ----------------------------
+            elif user_input == "Can I take a shower?":
                 session["reply"] = (
                     "Usually yes — but please check with your nurse if you have an IV, "
                     "had a C-section, or have special instructions."
@@ -1717,7 +1764,6 @@ def handle_chat():
                 if back_text not in session["options"]:
                     session["options"].append(back_text)
 
-            # Patient wants us to notify nurse about shower
             elif user_input == "Ask my nurse about taking a shower":
                 request_text = "Patient would like to ask about taking a shower."
                 session["reply"] = process_request(
@@ -1725,12 +1771,14 @@ def handle_chat():
                     subject="Shower permission request",
                     user_input=request_text,
                     reply_message=button_data.get("nurse_notification", "Your request has been sent."),
+                    tier_override=None,        # nurse, but not emergent
+                    classify_from_text=False,  # ✅ BUTTON: no emergent scoring
+                    from_button=True,
                 )
                 session["options"] = button_data["main_buttons"]
                 if room_number:
                     _emit_received_for(room_number, request_text, kind="option")
 
-            # Patient declines; go back to main
             elif user_input == "Got it, I'll wait for now":
                 session["reply"] = "Okay — if you change your mind, just let me know anytime."
                 session["options"] = button_data["main_buttons"]
@@ -1745,6 +1793,7 @@ def handle_chat():
 
             # ----------------------------
             # Standard known-button handling via button_data
+            # ALL of these should be NON-emergent
             # ----------------------------
             elif user_input in button_data:
                 button_info = button_data[user_input]
@@ -1766,11 +1815,15 @@ def handle_chat():
                         button_data.get(f"{role}_notification", "Your request has been sent.")
                     )
 
+                    # BUTTON request: NEVER emergent via classifier
                     session["reply"] = process_request(
                         role=role,
                         subject=subject,
                         user_input=user_input,
                         reply_message=notification_message,
+                        tier_override=None,        # no forced emergent
+                        classify_from_text=False,  # ✅ BUTTON: no emergent scoring
+                        from_button=True,
                     )
                     session["options"] = button_data["main_buttons"]
 
@@ -1800,7 +1853,6 @@ def handle_chat():
         button_data=button_data,
         room_number=room_number,  # used by chat.html Socket.IO connect
     )
-
 
 @app.route("/reset-language")
 def reset_language():
@@ -1843,7 +1895,6 @@ def dashboard():
         print(f"ERROR fetching active requests: {e}")
 
     return render_template("dashboard.html", active_requests=active_requests)
-
 
 
 # --- Analytics ---
@@ -2735,6 +2786,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
