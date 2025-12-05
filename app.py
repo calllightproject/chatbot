@@ -2718,75 +2718,117 @@ def handle_defer_request(data):
     except Exception as e:
         print(f"ERROR deferring request {request_id}: {e}")
 
-# Nurse/CNA marks "Complete" — cleaned single version
 @socketio.on("complete_request")
 def handle_complete_request(data):
     """
     Expected data:
-      - request_id (required)
-      - nurse_name (optional)
-      - room_number (optional; if missing, we'll look it up)
-      - role (optional; 'nurse' | 'cna')
+      - request_id   (required for new rows; for old rows we also use room+request_text)
+      - nurse_name   (optional)
+      - room_number  (optional; if missing, we'll look it up)
+      - role         (optional; 'nurse' | 'cna')
+      - request_text (optional, but helps match legacy rows)
     """
-    request_id = data.get("request_id")
-    if not request_id:
-        return  # nothing to do
-
-    now_utc = datetime.now(timezone.utc)
     try:
-        # 1) Mark complete in DB
-        with engine.connect() as connection:
-            trans = connection.begin()
-            try:
-                connection.execute(
-                    text("""
-                        UPDATE requests
-                        SET completion_timestamp = :now
-                        WHERE request_id = :request_id;
-                    """),
-                    {"now": now_utc, "request_id": request_id},
-                )
-                trans.commit()
-                log_to_audit_trail("Request Completed", f"Request ID: {request_id} marked as complete.")
-            except Exception:
-                trans.rollback()
-                raise
+        data = data or {}
+        request_id   = (data.get("request_id") or "").strip()
+        room_number  = (data.get("room_number") or "").strip()
+        nurse_name   = (data.get("nurse_name") or "").strip() or "Unknown"
+        request_text = (data.get("request_text") or "").strip()
 
-        # 2) Remove from dashboards (always do this, even if room is unknown)
-        socketio.emit("remove_request", {"id": request_id})
+        if not request_id and not (room_number and request_text):
+            print("[complete_request] Missing id AND (room+text); nothing to do. Payload:", data)
+            return
 
-        # 3) Notify patient only when we have a valid room
-        room_number = data.get("room_number") or _get_room_for_request(request_id)
+        now_utc = datetime.now(timezone.utc)
+
+        # Normalize role
         role = (data.get("role") or "nurse").lower().strip()
         if role not in ("nurse", "cna"):
             role = "nurse"
 
+        # If we weren't given room_number, try to look it up by request_id
+        if not room_number and request_id:
+            room_lookup = _get_room_for_request(request_id)
+            if room_lookup:
+                room_number = room_lookup
+
+        # 1) Mark complete in DB (handles: request_id, numeric id, OR room+text legacy)
+        with engine.begin() as connection:
+            result = connection.execute(
+                text("""
+                    UPDATE requests
+                    SET completion_timestamp = :now,
+                        completed_by = :nurse_name
+                    WHERE
+                        -- Normal path: explicit request_id column
+                        (request_id = :rid)
+                        OR
+                        -- Legacy path: numeric id only, but dashboard is sending that as a string
+                        (CAST(id AS VARCHAR) = :rid)
+                        OR
+                        -- Extra safety for old rows where the dashboard invented a key
+                        (
+                            :room IS NOT NULL
+                            AND :txt  IS NOT NULL
+                            AND room = :room
+                            AND user_input = :txt
+                            AND completion_timestamp IS NULL
+                        )
+                """),
+                {
+                    "now": now_utc,
+                    "nurse_name": nurse_name,
+                    "rid": request_id,
+                    "room": room_number or None,
+                    "txt": request_text or None,
+                },
+            )
+
+        print(f"[complete_request] request_id={request_id!r} rows_updated={result.rowcount}")
+
+        # 2) Remove from dashboards (send both id AND room/request so JS can match either way)
+        socketio.emit(
+            "remove_request",
+            {
+                "id": request_id,
+                "room": room_number,
+                "request": request_text,
+            },
+            broadcast=True,
+        )
+
+        # 3) Notify patient only when we have a valid room
         if room_number and _valid_room(str(room_number)):
             emit_patient_event(
                 "request:done",
                 room_number,
                 {
-                    "request_id": request_id,
+                    "request_id": request_id or None,
                     "status": "completed",
-                    "nurse": data.get("nurse_name"),
+                    "nurse": nurse_name,
                     "role": role,
                     "ts": now_utc.isoformat(),
                 },
             )
-        # If room is missing/invalid, we simply skip the patient emit
-        # (dashboard already removed above).
+
+        # 4) Audit trail
+        try:
+            log_to_audit_trail(
+                "Request Completed",
+                f"Request ID: {request_id or 'n/a'}, Room: {room_number or 'N/A'}, Completed by: {nurse_name}",
+            )
+        except Exception as e:
+            print(f"[complete_request] audit log error: {e}")
 
     except Exception as e:
-        print(f"ERROR updating completion timestamp: {e}")
+        print(f"ERROR updating completion timestamp in handle_complete_request: {e}")
 
-@app.get("/healthz")
-def healthz():
-    return {"status": "ok"}, 200
 
 
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
