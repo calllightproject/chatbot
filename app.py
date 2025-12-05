@@ -1203,7 +1203,7 @@ def classify_escalation_tier(note_text: str) -> str:
       0e) Small clots (smaller than a quarter) -> routine
       0f) BP cuff / machine error only -> routine
       1) Existing hard-stop helpers (_has_heart_breath_color_emergent, etc.)
-      2) Weighted scoring safety net
+      2) Everything else -> routine
     """
     text = _normalize_text(note_text)
 
@@ -1271,7 +1271,6 @@ def classify_escalation_tier(note_text: str) -> str:
 
     # 0c) MILD INCISION / STITCHES / WOUND CONCERNS -> routine
     if any(w in text for w in ["incision", "stitches", "staples", "wound"]):
-        # Only treat as emergent if there are strong red flags
         incision_red_flags = [
             "bright red blood", "gushing", "pouring",
             "running down", "blood everywhere",
@@ -1286,8 +1285,6 @@ def classify_escalation_tier(note_text: str) -> str:
             "red streaks", "red lines",
         ]
         if not any(w in text for w in incision_red_flags):
-            # e.g. "my incision is a little sore and I want something for pain"
-            #      "I think my stitches look a little red but I'm not sure"
             return "routine"
 
     # 0d) SIMPLE NAUSEA / VOMITING -> routine
@@ -1301,23 +1298,22 @@ def classify_escalation_tier(note_text: str) -> str:
             "vision", "went black", "went dark", "goes black", "goes dark",
         ]
         if not any(w in text for w in nausea_red_flags):
-            # e.g. "I feel nauseous and think I might throw up"
             return "routine"
 
     # 0e) SMALL CLOTS (SMALLER THAN A QUARTER) -> routine
     if "clot" in text or "clots" in text:
-        # Explicitly de-escalate reassuring size descriptions
         if any(p in text for p in [
             "small clots", "smaller than a quarter",
             "size of a dime", "size of a nickel",
         ]):
-            # e.g. "I'm passing small clots but they are smaller than a quarter"
             return "routine"
 
     # 0f) BP CUFF / MACHINE ERROR ONLY -> routine
-    if ("blood pressure cuff" in text or "bp cuff" in text or
+    if (
+        "blood pressure cuff" in text or "bp cuff" in text or
         "bp machine" in text or "blood pressure machine" in text or
-        ("bp" in text and "cuff" in text)):
+        ("bp" in text and "cuff" in text)
+    ):
         bp_symptom_words = [
             "dizzy", "dizziness", "lightheaded", "faint", "fainting",
             "pass out", "about to pass out",
@@ -1326,7 +1322,6 @@ def classify_escalation_tier(note_text: str) -> str:
             "headache", "vision", "blurry", "spots", "stars", "sparkles",
         ]
         if not any(w in text for w in bp_symptom_words):
-            # e.g. "My blood pressure cuff keeps erroring and saying error"
             return "routine"
 
     # 1) Existing hard-stop helpers
@@ -1339,15 +1334,7 @@ def classify_escalation_tier(note_text: str) -> str:
     if _has_htn_emergent(text):
         return "emergent"
 
-    # 2) Weighted scoring safety net
-    score, breakdown, hard_stop = compute_emergent_score(text)
-
-    if hard_stop:
-        return "emergent"
-
-    if score >= EMERGENT_SCORE_THRESHOLD:
-        return "emergent"
-
+    # 2) Everything else -> routine
     return "routine"
 
 
@@ -1941,18 +1928,33 @@ def dashboard():
                 WHERE completion_timestamp IS NULL
                 ORDER BY timestamp DESC;
             """))
+
             for row in result:
+                # This is the text we stored in the DB for routing/analytics.
+                text_for_tier = (row.user_input or "").strip().lower()
+
+                # Special case: the hard-coded emergency button
+                # We ALWAYS want that to show as emergent.
+                if "patient pressed emergency button" in text_for_tier:
+                    tier = "emergent"
+                else:
+                    # Use your existing classifier for everything else
+                    tier = classify_escalation_tier(text_for_tier)
+
                 active_requests.append({
                     "id": row.request_id,
                     "room": row.room,
                     "request": row.user_input,
                     "role": row.role,
+                    "tier": tier,  # <--- IMPORTANT: pass tier into the template
                     "timestamp": row.timestamp.isoformat() if row.timestamp else None,
                 })
     except Exception as e:
         print(f"ERROR fetching active requests: {e}")
 
     return render_template("dashboard.html", active_requests=active_requests)
+
+
 
 
 # --- Analytics ---
@@ -2844,6 +2846,7 @@ def healthz():
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
