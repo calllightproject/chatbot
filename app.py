@@ -1198,7 +1198,14 @@ def classify_escalation_tier(note_text: str) -> str:
       0) Supply-only fast path (no clinical words) -> routine
       0a) Mild headache without red flags -> routine
       0b) Mild swelling + "feel fine/okay" without red flags -> routine
-      1) Existing hard-stop helpers (_has_heart_breath_color_emergent, etc.)
+      0c) Mild incision / stitches / wound concerns -> routine
+      0d) Simple nausea / vomiting -> routine
+      0e) Small clots (smaller than a quarter) -> routine
+      0f) BP cuff / machine error only -> routine
+      0g) Lochia smells odd but explicitly no fever / no heavy bleed -> routine
+      0h) Asking for stronger Tylenol / meds with no red flags -> routine
+      0i) Breasts very full/uncomfortable without infection red flags -> routine
+      1) Existing hard-stop helpers
       2) Weighted scoring safety net
     """
     text = _normalize_text(note_text)
@@ -1217,11 +1224,15 @@ def classify_escalation_tier(note_text: str) -> str:
         "formula", "bottle", "bottles",
         "extra gown", "gown",
         "help into the shower", "help me into the shower",
-        "help me shower", "help getting into the shower", "shower",
+        "help getting into the shower", "help me shower", "shower",
+        # bathroom help as a supply-style / CNA request
+        "bathroom", "toilet", "help to the bathroom",
+        "help going to the bathroom", "help me to the bathroom",
+        "help to the toilet", "help going to the toilet",
     ]
     clinical_markers = [
         "pain", "hurts", "cramp", "cramps",
-        "bleeding", "blood",
+        "bleeding", "blood", "clot", "clots",
         "dizzy", "dizziness", "lightheaded", "faint", "fainted",
         "short of breath", "trouble breathing", "cant breathe", "can't breathe",
         "breath", "breathing", "chest", "heart",
@@ -1235,11 +1246,10 @@ def classify_escalation_tier(note_text: str) -> str:
     ]
 
     if any(tok in text for tok in supply_tokens) and not any(tok in text for tok in clinical_markers):
-        # Example: "can I have a new blue pad and some mesh underwear"
-        # Example: "can someone bring me more formula and a clean bottle"
+        # e.g. "I think I need help going to the bathroom again"
         return "routine"
 
-    # 0a) MILD HEADACHE WITHOUT RED FLAGS -> routine (but still clinical at routing layer)
+    # 0a) MILD HEADACHE WITHOUT RED FLAGS -> routine
     if "headache" in text and "mild" in text:
         red_flag_headache_words = [
             "worst", "severe", "really bad", "very bad", "so bad",
@@ -1250,7 +1260,6 @@ def classify_escalation_tier(note_text: str) -> str:
             "pass out", "passed out", "faint", "fainted", "about to pass out",
         ]
         if not any(w in text for w in red_flag_headache_words):
-            # We'll still route this to the nurse in route_note_intelligently
             return "routine"
 
     # 0b) MILD SWELLING + FEEL FINE/OKAY WITHOUT RED FLAGS -> routine
@@ -1266,8 +1275,104 @@ def classify_escalation_tier(note_text: str) -> str:
                     "short of breath", "trouble breathing", "chest", "heart",
                 ]
                 if not any(w in text for w in red_flag_swelling_words):
-                    # Example: "my feet are a little swollen but I feel fine otherwise"
                     return "routine"
+
+    # 0c) MILD INCISION / STITCHES / WOUND CONCERNS -> routine
+    if any(w in text for w in ["incision", "stitches", "staples", "wound"]):
+        incision_red_flags = [
+            "bright red blood", "gushing", "pouring",
+            "running down", "blood everywhere",
+            "soaked", "soaking", "soaks through",
+            "faint", "fainting", "about to pass out", "pass out",
+            "short of breath", "trouble breathing",
+            "chest", "heart",
+            "vision", "blurry", "spots", "stars", "sparkles",
+            "fever", "chills",
+            "pus", "oozing",
+            "smells bad", "smell bad", "bad smell", "odor", "odour",
+            "red streaks", "red lines",
+        ]
+        if not any(w in text for w in incision_red_flags):
+            # e.g. "The tape on my C section incision is curling up and I want someone to check it"
+            return "routine"
+
+    # 0d) SIMPLE NAUSEA / VOMITING -> routine
+    if any(w in text for w in ["nausea", "nauseous", "vomit", "vomiting", "throw up", "throwing up"]):
+        nausea_red_flags = [
+            "blood", "bright red", "coffee ground",
+            "can't keep anything down", "cant keep anything down",
+            "short of breath", "trouble breathing",
+            "chest", "heart",
+            "faint", "fainting", "pass out", "about to pass out",
+            "vision", "went black", "went dark", "goes black", "goes dark",
+        ]
+        if not any(w in text for w in nausea_red_flags):
+            return "routine"
+
+    # 0e) SMALL CLOTS (SMALLER THAN A QUARTER) -> routine
+    if "clot" in text or "clots" in text:
+        if any(p in text for p in [
+            "small clots", "smaller than a quarter",
+            "size of a dime", "size of a nickel",
+        ]):
+            return "routine"
+
+    # 0f) BP CUFF / MACHINE ERROR ONLY -> routine
+    if ("blood pressure cuff" in text or "bp cuff" in text or
+        "bp machine" in text or "blood pressure machine" in text or
+        ("bp" in text and "cuff" in text)):
+        bp_symptom_words = [
+            "dizzy", "dizziness", "lightheaded", "faint", "fainting",
+            "pass out", "about to pass out",
+            "chest", "heart",
+            "short of breath", "trouble breathing",
+            "headache", "vision", "blurry", "spots", "stars", "sparkles",
+        ]
+        if not any(w in text for w in bp_symptom_words):
+            return "routine"
+
+    # 0g) LOCHIA SMELLS ODD BUT NO FEVER / NO HEAVY BLEEDING -> routine
+    if "lochia" in text and any(w in text for w in ["smell", "smells", "smelly", "odor", "odour", "weird"]):
+        reassuring_bits = [
+            "no fever", "dont have a fever", "don't have a fever",
+            "no temperature", "no temp",
+        ]
+        heavy_bleed_flags = [
+            "gushing", "pouring", "running down", "blood everywhere",
+            "soaked", "soaking", "soaks through",
+            "pad is full in", "filled my pad in",
+            "bright red all over the pad",
+        ]
+        if any(r in text for r in reassuring_bits) and not any(h in text for h in heavy_bleed_flags):
+            # e.g. "My lochia smells kind of weird but I dont have a fever or heavy bleeding"
+            return "routine"
+
+    # 0h) ASKING FOR STRONGER TYLENOL / MEDS WITH NO RED FLAGS -> routine
+    pain_meds = ["tylenol", "acetaminophen", "ibuprofen", "motrin", "advil"]
+    if any(m in text for m in pain_meds):
+        if any(p in text for p in ["stronger", "isn't working", "isnt working", "not working", "doesn't work", "doesnt work"]):
+            big_red_flags = [
+                "chest", "heart",
+                "can't breathe", "cant breathe", "short of breath", "trouble breathing",
+                "faint", "fainting", "about to pass out", "pass out",
+                "vision", "blurry", "spots", "stars", "sparkles",
+                "gushing", "pouring", "bright red blood",
+            ]
+            if not any(b in text for b in big_red_flags):
+                # e.g. "I feel like I need stronger Tylenol for my pain because this dose isnt working"
+                return "routine"
+
+    # 0i) BREASTS VERY FULL / UNCOMFORTABLE WITHOUT INFECTION RED FLAGS -> routine
+    if "breast" in text or "breasts" in text:
+        infection_flags = [
+            "fever", "chills", "rigors",
+            "red and hot", "red and warm",
+            "very red", "bright red",
+            "streak", "streaks", "red line", "red lines",
+            "lump that is rock hard", "rock hard lump",
+        ]
+        if not any(f in text for f in infection_flags):
+            return "routine"
 
     # 1) Existing hard-stop helpers
     if _has_heart_breath_color_emergent(text):
@@ -1281,8 +1386,6 @@ def classify_escalation_tier(note_text: str) -> str:
 
     # 2) Weighted scoring safety net
     score, breakdown, hard_stop = compute_emergent_score(text)
-    # Optional: log for QA
-    # current_app.logger.info(f"Emergent score={score}, breakdown={breakdown}")
 
     if hard_stop:
         return "emergent"
@@ -1291,6 +1394,7 @@ def classify_escalation_tier(note_text: str) -> str:
         return "emergent"
 
     return "routine"
+
 
 
 def route_note_intelligently(note_text: str) -> str:
@@ -2796,6 +2900,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
