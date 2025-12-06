@@ -1414,6 +1414,18 @@ def route_note_intelligently(note_text: str) -> str:
     """
     text = _normalize_text(note_text)
     tier = classify_escalation_tier(text)
+    # ----- NEW: Supply-only override (force CNA routine) -----
+    supply_keywords = [
+        "ice water", "pillow", "pads", "sheet", "blanket",
+        "lotion", "charger", "snacks", "underwear",
+        "cold pack", "ice bag"
+    ]
+
+normalized = " " + note_text + " "
+
+if any(f" {kw} " in normalized for kw in supply_keywords):
+    return "cna"
+
 
     # 1) Any emergent tier -> nurse
     if tier == "emergent":
@@ -2900,6 +2912,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
