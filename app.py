@@ -1013,13 +1013,16 @@ def compute_emergent_score(note_text: str):
     """
     Return (score, breakdown, hard_stop).
 
-    - Caller already normalized to lowercase & stripped.
-    - We will:
-        * Short-circuit pure CNA/logistics requests to score=0.
-        * Give big weight to true emergencies (breathing, chest, neuro, heavy bleed, etc.).
-        * Keep generic "pain / hurts / cramping" very low weight.
+    Caller usually already lowercases/strips, but we normalize again here.
+
+    - Logistics-only stuff (bathroom, shower, remote, charger, IV pole, etc.)
+      with *no big red-flag phrases* → score 0, non-emergent.
+      This keeps those safely ROUTINE even if they mention mild pain.
+    - Strong red-flag phrases (breathing, chest, neuro, heavy bleeding, etc.)
+      add big points and often set hard_stop=True.
+    - Generic pain / "hurts" / cramping stays low weight.
     """
-    text = (note_text or "").strip()
+    text = (note_text or "").strip().lower()
 
     score = 0
     breakdown: dict[str, int] = {}
@@ -1032,238 +1035,223 @@ def compute_emergent_score(note_text: str):
         score += points
         breakdown[label] = breakdown.get(label, 0) + points
 
-    # ------------------------------------------------------------------
-    # 0) CNA-LOGISTICS OVERRIDE
-    #    If this looks like a pure "help me with stuff" request and
-    #    there are NO scary red-flag words, force score=0.
-    # ------------------------------------------------------------------
-    logistics_tokens = [
-        "bathroom", "toilet", "commode",
+    if not text:
+        return 0, breakdown, False
+
+    # --------------------------
+    # Tokenization helper (simple)
+    # --------------------------
+    simple = (
+        text.replace(",", " ")
+            .replace(".", " ")
+            .replace(";", " ")
+            .replace(":", " ")
+            .replace("\n", " ")
+    )
+    tokens = set(t for t in simple.split() if t)
+
+    # --------------------------
+    # 0) LOGISTICS-ONLY FAST PATH
+    #    (CNA-style requests with no red flags)
+    # --------------------------
+    logistics_phrases = [
+        "bathroom", "toilet", "commode", "bedpan",
         "help me to the bathroom", "help going to the bathroom",
-        "help me to the toilet", "help going to the toilet",
-        "help to the bathroom", "help to the toilet",
-
-        "shower", "help me shower", "help into the shower",
-        "help getting into the shower", "help getting to the shower",
-        "help getting to the shower and back to bed",
-        "help getting to the shower and back",
-
-        "iv pole", "pole is stuck",
-        "remote", "tv remote", "tv isnt working", "tv isn't working",
+        "help me go to the bathroom", "help getting to the bathroom",
+        "shower", "help into the shower", "help getting into the shower",
+        "help getting to the shower", "help getting to the chair",
+        "help me to the chair", "help back to bed",
+        "recliner", "chair", "wheelchair",
+        "remote", "tv remote", "television", "tv",
         "charger", "phone charger", "charge my phone",
-
-        "fan", "blanket", "blankets", "pillow", "pillows",
-        "extra gown", "gown",
-        "snack", "snacks", "water", "ice", "ice chips",
-        "mesh underwear", "underwear", "peri bottle", "peribottle",
-        "pads", "pad", "blue pad", "chucks", "diaper", "diapers",
-        "wipes", "wipe",
+        "iv pole", "my iv pole", "pole is stuck",
+        "blanket", "pillow", "extra blanket", "extra pillow",
+        "mesh underwear", "underwear", "diaper", "diapers", "wipes",
     ]
 
-    # Anything here means "do NOT treat this as a pure logistics ask."
-    red_flag_tokens = [
-        # Breathing / color
-        "cant breathe", "can't breathe", "short of breath",
-        "trouble breathing", "hard to breathe", "hard time breathing",
-        "wheezing", "gasping", "breathing fast",
-        "blue", "purple", "grey", "gray", "ashen",
+    # Things that SHOULD BLOCK the logistics fast-path
+    logistics_block_red_flags = [
+        # breathing / chest
+        "can't breathe", "cant breathe", "short of breath",
+        "trouble breathing", "hard to breathe",
+        "chest pain", "pain in my chest", "pressure in my chest",
+        "heart is racing", "heart racing",
 
-        # Chest / heart
-        "chest pain", "chest hurts", "tightness in my chest",
-        "heart is racing", "heart racing", "pounding in my chest",
+        # neuro / passing out / legs not working
+        "faint", "fainting", "about to pass out", "pass out", "passed out",
+        "blacked out", "black out",
+        "can't feel", "cant feel", "numb", "numbness",
+        "can't move", "cant move", "weak", "weakness",
+        "legs gave out", "gave out", "won't move", "wont move",
 
-        # Neuro
-        "cant move", "can't move",
-        "weakness", "weak on one side", "one side feels weak",
-        "face drooping", "mouth drooping",
-        "slurred speech", "words coming out wrong",
-        "not making sense", "confused",
-        "seizure", "seizing", "shaking i cant control", "shaking i can't control",
-        "my legs keep giving out", "legs keep giving out",
-
-        # Vision
-        "vision went black", "vision went dark",
-        "everything went black", "everything went dark",
-        "sudden vision loss",
-
-        # Bleeding
-        "gushing", "pouring", "blood running down",
-        "blood everywhere", "soaked through", "soaking through",
-        "soaks through", "pad is full in", "filled my pad in",
+        # obviously heavy bleeding
+        "gushing", "pouring", "running down my legs", "blood everywhere",
+        "soaked through", "soaks through", "soaking through",
         "bright red blood",
 
-        # Faint / dizzy
-        "about to pass out", "going to pass out", "pass out",
-        "passed out", "fainted", "fainting",
-        "very dizzy", "so dizzy", "dizziness", "lightheaded",
-
-        # Really sick / infectionish
-        "high fever", "really high fever",
-        "shaking with chills", "rigors",
-
-        # Strong preeclampsia type combos often caught elsewhere,
-        # but keep them as red flags so we don't override.
-        "worst headache of my life",
-        "sudden severe headache",
+        # very strong severity language
+        "severe", "really bad", "so bad", "worst pain", "worst headache",
     ]
 
-    if any(tok in text for tok in logistics_tokens) and not any(tok in text for tok in red_flag_tokens):
-        # Pure CNA / logistics style request => let the score be 0.
-        return 0, {"cna_logistics": 0}, False
+    has_logistics_word = any(p in text for p in logistics_phrases)
+    has_blocking_red_flag = any(p in text for p in logistics_block_red_flags)
 
-    # ------------------------------------------------------------------
-    # 1) TRUE EMERGENCY BUCKETS (add weight, some also set hard_stop)
-    # ------------------------------------------------------------------
+    if has_logistics_word and not has_blocking_red_flag:
+        # Treat as *non-emergent logistics*, even if they mention "pain" or "hurts".
+        # CNA vs nurse routing happens elsewhere; this only says "not emergent".
+        breakdown["logistics_only"] = 0
+        return 0, breakdown, False
 
-    # Breathing / very scary SOB
-    if any(phrase in text for phrase in [
-        "cant breathe", "can't breathe",
-        "cannot breathe", "can't catch my breath",
-        "short of breath", "shortness of breath",
-        "trouble breathing", "hard to breathe", "hard time breathing",
-        "gasping", "wheezing",
+    # --------------------------
+    # 1) BIG RED FLAGS (hard-stop candidates)
+    # --------------------------
+
+    # Breathing / airway
+    if any(p in text for p in [
+        "can't breathe", "cant breathe",
+        "short of breath", "trouble breathing", "hard to breathe",
+        "gasping", "wheezing", "breathing is really hard",
     ]):
-        bump("breathing", 10)
-        hard_stop = True  # breathing is always treated as emergency
+        bump("breathing_distress", 8)
+        hard_stop = True
 
-    # Chest pain / chest tightness
-    if "chest pain" in text or "chest hurts" in text or "tightness in my chest" in text:
+    # Chest pain / heart
+    if "chest" in tokens or "chest pain" in text or "pain in my chest" in text:
         bump("chest_pain", 8)
-        # If also SOB, treat as hard stop
-        if "short of breath" in text or "cant breathe" in text or "can't breathe" in text:
-            hard_stop = True
+        hard_stop = True
+    if "heart is racing" in text or "heart racing" in text or "palpitations" in text:
+        bump("heart_racing", 5)
 
-    # Color change
-    if any(phrase in text for phrase in [
-        "turning blue", "turned blue",
-        "turning purple", "turned purple",
-        "grey", "gray", "ashen",
-        "lips are blue", "face is blue",
+    # Neuro red flags
+    if any(p in text for p in [
+        "face drooping", "one side of my face",
+        "can't move my arm", "cant move my arm",
+        "can't move my leg", "cant move my leg",
+        "arm feels weak", "leg feels weak",
+        "both legs feel weak", "legs feel weak",
+        "can't feel my", "cant feel my",
+        "numb on one side", "numbness on one side",
+        "words won't come out right", "words wont come out right",
+        "hard to get my words out", "slurred speech",
+        "talking weird", "talking funny",
+        "vision went black", "went black", "went dark",
+        "passed out", "pass out", "about to pass out", "fainting spell",
     ]):
-        bump("color_change", 9)
+        bump("neuro_red_flag", 8)
         hard_stop = True
 
-    # Neuro / stroke-ish
-    if any(phrase in text for phrase in [
-        "cant move my arm", "can't move my arm",
-        "cant move my leg", "can't move my leg",
-        "legs keep giving out", "my legs keep giving out",
-        "suddenly weak", "weak on one side", "one side feels weak",
-        "face drooping", "one side of my face is drooping",
-        "slurred speech", "words coming out wrong",
-        "i know what i want to say but", "not making sense",
-    ]):
-        bump("neuro_weakness_speech", 9)
-        hard_stop = True
-
-    # Seizure-like
-    if any(phrase in text for phrase in [
-        "seizure", "seizing",
-        "shaking i cant control", "shaking i can't control",
-        "jerking i cant stop", "jerking i can't stop",
-    ]):
-        bump("seizure_like", 10)
-        hard_stop = True
-
-    # Heavy bleeding / PPH-ish
-    if any(phrase in text for phrase in [
+    # Heavy bleeding
+    if any(p in text for p in [
         "gushing", "pouring",
-        "blood running down", "blood is running down",
+        "blood running down", "running down my legs",
         "blood everywhere",
-        "soaked through", "soaking through", "soaks through",
-        "pad is full in", "filled my pad in",
+        "soaked through", "soaks through", "soaking through",
     ]):
-        bump("heavy_bleeding", 10)
-        hard_stop = True
+        bump("heavy_bleeding", 7)
+    if "bright red blood" in text:
+        bump("bright_red_blood", 6)
 
-    # Big clots
-    if "clot" in text or "clots" in text:
-        # rough size parsing
-        if any(p in text for p in ["golf ball", "golf-ball", "bigger than a golf ball"]):
-            bump("large_clots", 8)
-        elif any(p in text for p in ["bigger than a quarter", "larger than a quarter"]):
-            bump("large_clots", 6)
-        elif any(p in text for p in ["quarter sized", "size of a quarter"]):
-            bump("borderline_clots", 4)
-        # small clots (dime/nickel) – basically no extra weight; classify_escalation_tier
-        # already de-escalates them, so we keep it at 0 here.
+    # --------------------------
+    # 2) MODERATE RED FLAGS
+    # --------------------------
 
-    # Vision changes
-    if any(phrase in text for phrase in [
-        "vision went black", "vision went dark",
-        "everything went black", "everything went dark",
-        "sudden vision loss",
+    # High BP descriptions
+    if any(p in text for p in [
+        "160/", "170/", "180/",
+        "over 160", "over 170", "over 180",
     ]):
-        bump("vision_blackout", 9)
-        hard_stop = True
+        bump("very_high_bp", 5)
 
-    if any(phrase in text for phrase in [
-        "seeing spots", "seeing stars", "seeing sparkles",
-        "sparkles in my vision", "flashing lights",
-        "very blurry vision", "really blurry vision",
-    ]):
-        bump("vision_spots", 5)
-
-    # Very concerning headache cluster
-    if "worst headache of my life" in text or "worst headache i've ever had" in text:
-        bump("worst_headache", 8)
-        hard_stop = True
-    elif "headache" in text:
-        if any(w in text for w in ["really bad", "very bad", "severe", "pounding", "throbbing"]):
-            bump("severe_headache", 4)
-
-    # Faint / dizzy
-    if any(phrase in text for phrase in [
-        "about to pass out", "going to pass out",
-        "feel like i'm going to pass out", "feel like im going to pass out",
-        "passed out", "fainted",
-    ]):
-        bump("near_syncope", 6)
-
-    if any(phrase in text for phrase in [
-        "very dizzy", "so dizzy", "extremely dizzy",
-        "dizziness", "lightheaded", "light headed",
-    ]):
-        bump("dizzy", 4)
-
-    # Fever + feeling very sick
-    if "fever" in text or "chills" in text:
-        bump("fever_chills", 3)
-        if any(p in text for p in ["shaking with chills", "rigors"]):
-            bump("rigors", 3)
-
-    # BP-ish cluster (we keep this modest because you also have htn helper)
-    if "blood pressure" in text or "bp " in text or text.startswith("bp"):
-        if "really high" in text or "very high" in text or "so high" in text:
-            bump("bp_concern", 3)
-        if "headache" in text and "vision" in text:
-            bump("bp_headache_vision_combo", 4)
-
-    # Incision / wound infectionish flags (on top of what classify_escalation_tier already does)
-    if any(w in text for w in ["incision", "stitches", "staples", "wound"]):
+    # Headache patterns
+    if "headache" in tokens or "migraine" in tokens:
         if any(p in text for p in [
-            "smells really bad", "smells bad", "foul smell", "bad smell", "odor",
-            "red streaks", "red lines", "streaking up", "spreading redness",
-            "pus", "oozing",
+            "worst", "severe", "really bad", "so bad",
+            "pounding", "throbbing",
+        ]) or any(p in text for p in [
+            "blurry vision", "vision is blurry", "seeing spots", "seeing stars",
+            "sparkles", "flashing lights",
         ]):
-            bump("wound_infectionish", 4)
+            bump("severe_headache", 5)
+        else:
+            bump("mild_headache", 1)
 
-    # Lochia infectionish flags (again, classifier already handles "no fever" reassurance)
-    if "lochia" in text:
-        if any(p in text for p in ["smells really bad", "smells bad", "foul smell", "bad smell"]):
-            bump("lochia_odor", 4)
-        if "fever" in text or "chills" in text:
-            bump("lochia_fever", 4)
+    # Vision changes even without explicit "headache"
+    if any(p in text for p in [
+        "blurry vision", "vision is blurry",
+        "seeing spots", "seeing stars", "sparkles", "flashing lights",
+        "double vision",
+    ]):
+        bump("vision_change", 4)
 
-    # ------------------------------------------------------------------
-    # 2) GENERIC PAIN / CRAMPING (KEPT LOW WEIGHT)
-    # ------------------------------------------------------------------
-    # We still give a *tiny* bump so a truly ugly story with lots of
-    # "pain" words can push a borderline score over the line, but these
-    # should NEVER make something emergent by themselves.
-    if any(w in text for w in ["pain", "hurts", "hurting", "sore", "cramping", "cramps"]):
+    # Dizziness / near-syncope
+    if any(p in text for p in [
+        "dizzy", "dizziness", "lightheaded", "light-headed",
+        "about to pass out", "almost passed out",
+    ]):
+        bump("dizzy_lightheaded", 4)
+
+    # Swelling / preeclampsia-ish
+    if any(p in tokens for p in ["swelling", "swollen", "puffy"]):
+        if any(p in text for p in [
+            "suddenly", "all of a sudden", "got worse", "getting worse",
+        ]) or any(p in text for p in [
+            "headache", "vision", "blurry", "spots", "stars", "sparkles",
+            "dizzy", "dizziness", "lightheaded",
+            "short of breath", "trouble breathing",
+            "chest", "heart",
+        ]):
+            bump("swelling_red_flags", 4)
+        else:
+            bump("mild_swelling", 1)
+
+    # Fever / chills / infection-y
+    if "fever" in tokens or "chills" in tokens or "rigors" in tokens:
+        bump("fever_or_chills", 3)
+
+    # Incision / wound with concerning signs
+    if any(p in text for p in ["incision", "stitches", "staples", "wound"]):
+        if any(p in text for p in [
+            "pus", "oozing", "smells bad", "bad smell", "odor", "odour",
+            "red streaks", "red lines", "very red", "hot to touch", "hot to the touch",
+            "fever", "chills",
+        ]):
+            bump("wound_infection_flags", 3)
+        else:
+            bump("mild_wound_concern", 1)
+
+    # Lochia / discharge concerns
+    if "lochia" in tokens or "discharge" in tokens:
+        if any(p in text for p in [
+            "smells really bad", "smells awful", "really bad smell",
+            "green", "yellow", "chunky", "thick clots",
+        ]):
+            bump("lochia_infection_flags", 3)
+        else:
+            bump("mild_lochia_question", 1)
+
+    # Clots (size not clearly reassuring)
+    if "clot" in tokens or "clots" in tokens:
+        if any(p in text for p in [
+            "size of a dime", "size of a nickel",
+            "smaller than a quarter", "small clots",
+        ]):
+            bump("small_clots_reassuring", 0)
+        else:
+            bump("clots_unspecified", 2)
+
+    # --------------------------
+    # 3) LOW-LEVEL SYMPTOMS (always small weight)
+    # --------------------------
+    if any(p in text for p in ["pain", "hurts", "sore", "tender", "cramp", "cramps", "cramping"]):
         bump("generic_pain", 1)
 
+    if any(p in text for p in ["nausea", "nauseous", "vomit", "vomiting", "throwing up", "throw up"]):
+        # Not counting "blood" etc here (those are handled above)
+        bump("nausea_vomiting", 1)
+
+    # --------------------------
+    # Return the score package
+    # --------------------------
     return score, breakdown, hard_stop
 
 
@@ -3074,6 +3062,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
