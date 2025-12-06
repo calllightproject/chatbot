@@ -33,8 +33,6 @@ class TriageEngine:
         
         # 1. HEART & CHEST
         self.matcher.add("EMERGENT_CHEST", [
-            # "Chest" + (optional words) + "Pain/Tight/Heavy"
-            # Fixes: "My chest FEELS tight"
             [{"LOWER": "chest"}, {"OP": "*"}, {"LEMMA": {"in": ["pain", "hurt", "pressure", "tight", "heavy", "crush", "discomfort"]}}],
             [{"LOWER": "heart"}, {"OP": "*"}, {"LEMMA": {"in": ["race", "pound", "palpitation", "skip", "stop"]}}],
             [{"LOWER": "heart"}, {"LOWER": "attack"}],
@@ -49,19 +47,19 @@ class TriageEngine:
 
         # 3. HEAVY BLEEDING
         self.matcher.add("EMERGENT_BLEED", [
-            [{"LEMMA": {"in": ["gush", "pour"]}}], # Added "POUR"
+            [{"LEMMA": {"in": ["gush", "pour"]}}], 
             [{"LOWER": "running"}, {"LOWER": "down"}, {"LOWER": "leg"}],
             [{"LEMMA": "soak"}, {"OP": "*"}, {"LEMMA": "pad"}], 
             [{"LEMMA": "clot"}, {"OP": "*"}, {"LEMMA": {"in": ["golf", "baseball", "fist", "huge", "large"]}}]
         ])
 
-        # 4. NEURO / STROKE / VISION / DIZZY
+        # 4. NEURO / STROKE / VISION / DIZZY / SEIZURE
         self.matcher.add("EMERGENT_NEURO", [
             [{"LEMMA": "slur"}], 
             [{"LEMMA": "droop"}], 
-            [{"LEMMA": "seizure"}], 
-            [{"LEMMA": "faint"}], # Fainting/Passing out
-            [{"LEMMA": {"in": ["dizzy", "lightheaded", "woozy"]}}], # Added DIZZY
+            [{"LEMMA": {"in": ["seizure", "seize", "seizing", "convulse", "twitch"]}}], # Added "SEIZE/SEIZING"
+            [{"LEMMA": "faint"}],
+            [{"LEMMA": {"in": ["dizzy", "lightheaded", "woozy"]}}], 
             
             # Vision
             [{"LEMMA": "vision"}, {"OP": "*"}, {"LEMMA": {"in": ["blur", "black", "double", "spot", "star", "flash"]}}],
@@ -71,12 +69,11 @@ class TriageEngine:
 
         # 5. BABY SAFETY
         self.matcher.add("EMERGENT_BABY", [
-            [{"LEMMA": "baby"}, {"OP": "*"}, {"LOWER": {"in": ["blue", "purple", "gray", "limp", "floppy", "pale"]}}],
+            # Color (Added GREY)
+            [{"LEMMA": "baby"}, {"OP": "*"}, {"LOWER": {"in": ["blue", "purple", "gray", "grey", "limp", "floppy", "pale"]}}],
             [{"LEMMA": "baby"}, {"OP": "*"}, {"LOWER": "unresponsive"}],
-            # Baby won't wake (Standard)
-            [{"LEMMA": "baby"}, {"OP": "*"}, {"LOWER": "wo"}, {"LOWER": "n't"}, {"LEMMA": "wake"}],
-            # Baby wont wake (Typo fix)
-            [{"LEMMA": "baby"}, {"OP": "*"}, {"LOWER": "wont"}, {"LEMMA": "wake"}],
+            # Baby won't wake (Smart Pattern)
+            [{"LEMMA": "baby"}, {"OP": "*"}, {"LEMMA": "wake"}], # Catches "won't wake", "not waking", "wont wake"
         ])
 
         # --- B. LOGISTICS (The "Firewall") ---
@@ -116,9 +113,14 @@ class TriageEngine:
         # SAFETY OVERRIDE: "Dumb" String Matches (Bypasses AI)
         # ------------------------------------------------------------
         force_emergent_phrases = [
+            # Breathing
             "cant breathe", "can't breathe", "cannot breathe", "can not breathe",
             "cant breath", "can't breath", "cannot breath", "can not breath",
-            "dropped my baby", "dropped the baby", "baby fell", "baby dropped"
+            # Baby Drop
+            "dropped my baby", "dropped the baby", "baby fell", "baby dropped",
+            # Baby Wake/Lethargy (FIXED HERE)
+            "wont wake", "won't wake", "not waking", "unresponsive",
+            "baby wont wake", "baby won't wake"
         ]
         
         if any(phrase in t for phrase in force_emergent_phrases):
