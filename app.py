@@ -1009,185 +1009,263 @@ def _has_htn_emergent(text: str) -> bool:
 EMERGENT_SCORE_THRESHOLD = 6  # balanced
 
 
-def compute_emergent_score(raw_text: str):
+def compute_emergent_score(note_text: str):
     """
-    Weighted emergent scoring safety net.
+    Return (score, breakdown, hard_stop).
 
-    NOW LIMITED TO:
-      - Baby floppy / unresponsive
-      - Presyncope / vision going dark
-      - One-sided weakness / face droop (stroke-like)
-      - Expressive aphasia (brain clear, words wrong)
-
-    ALL bleeding / chest / heart / HTN / incision logic stays in the
-    dedicated helpers (_has_heart_breath_color_emergent, _has_htn_emergent, etc.)
-    so routine clinical (IV pump, pain meds, nausea meds) are NOT scored as emergent.
+    - Caller already normalized to lowercase & stripped.
+    - We will:
+        * Short-circuit pure CNA/logistics requests to score=0.
+        * Give big weight to true emergencies (breathing, chest, neuro, heavy bleed, etc.).
+        * Keep generic "pain / hurts / cramping" very low weight.
     """
-    text = _normalize_text(raw_text)
+    text = (note_text or "").strip()
+
     score = 0
-    breakdown = Counter()
+    breakdown: dict[str, int] = {}
     hard_stop = False
 
-    def add_points(category: str, pts: int):
+    def bump(label: str, points: int, condition: bool = True):
         nonlocal score
-        score += pts
-        breakdown[category] += pts
+        if not condition or points == 0:
+            return
+        score += points
+        breakdown[label] = breakdown.get(label, 0) + points
 
-    def contains_any(phrases):
-        return any(p in text for p in phrases)
+    # ------------------------------------------------------------------
+    # 0) CNA-LOGISTICS OVERRIDE
+    #    If this looks like a pure "help me with stuff" request and
+    #    there are NO scary red-flag words, force score=0.
+    # ------------------------------------------------------------------
+    logistics_tokens = [
+        "bathroom", "toilet", "commode",
+        "help me to the bathroom", "help going to the bathroom",
+        "help me to the toilet", "help going to the toilet",
+        "help to the bathroom", "help to the toilet",
 
-    # -------------------------------------------------
-    # BABY FLOPPY / UNRESPONSIVE
-    # -------------------------------------------------
-    baby_words = ["baby", "my son", "my daughter"]
-    floppy_words = [
-        "floppy", "limp", "like a rag doll", "loose", "won't hold", "feels lifeless"
+        "shower", "help me shower", "help into the shower",
+        "help getting into the shower", "help getting to the shower",
+        "help getting to the shower and back to bed",
+        "help getting to the shower and back",
+
+        "iv pole", "pole is stuck",
+        "remote", "tv remote", "tv isnt working", "tv isn't working",
+        "charger", "phone charger", "charge my phone",
+
+        "fan", "blanket", "blankets", "pillow", "pillows",
+        "extra gown", "gown",
+        "snack", "snacks", "water", "ice", "ice chips",
+        "mesh underwear", "underwear", "peri bottle", "peribottle",
+        "pads", "pad", "blue pad", "chucks", "diaper", "diapers",
+        "wipes", "wipe",
     ]
-    unresponsive_words = [
-        "won't wake up", "not waking up", "hard to wake",
-        "won't respond", "not responding", "barely moving", "not really moving"
+
+    # Anything here means "do NOT treat this as a pure logistics ask."
+    red_flag_tokens = [
+        # Breathing / color
+        "cant breathe", "can't breathe", "short of breath",
+        "trouble breathing", "hard to breathe", "hard time breathing",
+        "wheezing", "gasping", "breathing fast",
+        "blue", "purple", "grey", "gray", "ashen",
+
+        # Chest / heart
+        "chest pain", "chest hurts", "tightness in my chest",
+        "heart is racing", "heart racing", "pounding in my chest",
+
+        # Neuro
+        "cant move", "can't move",
+        "weakness", "weak on one side", "one side feels weak",
+        "face drooping", "mouth drooping",
+        "slurred speech", "words coming out wrong",
+        "not making sense", "confused",
+        "seizure", "seizing", "shaking i cant control", "shaking i can't control",
+        "my legs keep giving out", "legs keep giving out",
+
+        # Vision
+        "vision went black", "vision went dark",
+        "everything went black", "everything went dark",
+        "sudden vision loss",
+
+        # Bleeding
+        "gushing", "pouring", "blood running down",
+        "blood everywhere", "soaked through", "soaking through",
+        "soaks through", "pad is full in", "filled my pad in",
+        "bright red blood",
+
+        # Faint / dizzy
+        "about to pass out", "going to pass out", "pass out",
+        "passed out", "fainted", "fainting",
+        "very dizzy", "so dizzy", "dizziness", "lightheaded",
+
+        # Really sick / infectionish
+        "high fever", "really high fever",
+        "shaking with chills", "rigors",
+
+        # Strong preeclampsia type combos often caught elsewhere,
+        # but keep them as red flags so we don't override.
+        "worst headache of my life",
+        "sudden severe headache",
     ]
 
-    has_baby = contains_any(baby_words)
-    has_floppy = contains_any(floppy_words)
-    has_unresponsive = contains_any(unresponsive_words)
+    if any(tok in text for tok in logistics_tokens) and not any(tok in text for tok in red_flag_tokens):
+        # Pure CNA / logistics style request => let the score be 0.
+        return 0, {"cna_logistics": 0}, False
 
-    if has_baby and (has_floppy or has_unresponsive):
+    # ------------------------------------------------------------------
+    # 1) TRUE EMERGENCY BUCKETS (add weight, some also set hard_stop)
+    # ------------------------------------------------------------------
+
+    # Breathing / very scary SOB
+    if any(phrase in text for phrase in [
+        "cant breathe", "can't breathe",
+        "cannot breathe", "can't catch my breath",
+        "short of breath", "shortness of breath",
+        "trouble breathing", "hard to breathe", "hard time breathing",
+        "gasping", "wheezing",
+    ]):
+        bump("breathing", 10)
+        hard_stop = True  # breathing is always treated as emergency
+
+    # Chest pain / chest tightness
+    if "chest pain" in text or "chest hurts" in text or "tightness in my chest" in text:
+        bump("chest_pain", 8)
+        # If also SOB, treat as hard stop
+        if "short of breath" in text or "cant breathe" in text or "can't breathe" in text:
+            hard_stop = True
+
+    # Color change
+    if any(phrase in text for phrase in [
+        "turning blue", "turned blue",
+        "turning purple", "turned purple",
+        "grey", "gray", "ashen",
+        "lips are blue", "face is blue",
+    ]):
+        bump("color_change", 9)
         hard_stop = True
-        add_points("baby_floppy_combo", 10)
 
-    if has_baby:
-        add_points("baby_concern", 2)
-    if has_floppy:
-        add_points("baby_floppy", 4)
-    if has_unresponsive:
-        add_points("baby_unresponsive", 4)
-
-    # -------------------------------------------------
-    # PRESYNCOPE / BLACKING OUT / VISION DARK
-    # -------------------------------------------------
-    presyncope_core = [
-        "about to pass out",
-        "might pass out",
-        "feel like i'm going to pass out",
-        "almost passed out",
-        "almost fainted",
-    ]
-    presyncope_support = [
-        "really faint",
-        "so faint",
-        "so dizzy",
-        "very dizzy",
-        "room is spinning",
-        "lightheaded when i stand",
-        "dizzy when i stand",
-    ]
-    vision_dark = [
-        "vision went black",
-        "vision went dark",
-        "everything went black",
-        "everything went dark",
-        "tunnel vision",
-        "seeing spots",
-        "seeing stars",
-        "black spots in my vision",
-    ]
-
-    if contains_any(presyncope_core) or contains_any(vision_dark):
+    # Neuro / stroke-ish
+    if any(phrase in text for phrase in [
+        "cant move my arm", "can't move my arm",
+        "cant move my leg", "can't move my leg",
+        "legs keep giving out", "my legs keep giving out",
+        "suddenly weak", "weak on one side", "one side feels weak",
+        "face drooping", "one side of my face is drooping",
+        "slurred speech", "words coming out wrong",
+        "i know what i want to say but", "not making sense",
+    ]):
+        bump("neuro_weakness_speech", 9)
         hard_stop = True
-        add_points("presyncope_core", 6)
 
-    if contains_any(presyncope_support):
-        add_points("presyncope_support", 3)
-
-    if contains_any(vision_dark):
-        add_points("vision_dark", 4)
-
-    # -------------------------------------------------
-    # NEURO MOTOR / STROKE-LIKE (one-sided, arm/leg/face)
-    # -------------------------------------------------
-    neuro_one_side_patterns = [
-        "one side of my body",
-        "one side of my face",
-        "one side feels weak",
-        "one side is weak",
-        "one side won't move",
-    ]
-    neuro_motor_patterns = [
-        "arm won't move",
-        "arm won't do what i tell it",
-        "arm not doing what i tell it",
-        "arm won't listen",
-        "leg won't move",
-        "leg won't do what i tell it",
-        "leg not doing what i tell it",
-        "leg won't listen",
-        "my arm keeps giving out",
-        "my leg keeps giving out",
-        "can't move my arm",
-        "can't move my leg",
-        "lost control of my arm",
-        "lost control of my leg",
-        "heaviness in my arm",
-        "heaviness in my leg",
-        "sudden weakness",
-        "suddenly weak",
-    ]
-    face_droop_patterns = [
-        "face drooping",
-        "face is drooping",
-        "mouth drooping",
-        "crooked smile",
-        "one side of my mouth",
-        "can't move one side of my face",
-        "can't move one side of my mouth",
-    ]
-
-    if (contains_any(neuro_one_side_patterns) or
-        contains_any(neuro_motor_patterns) or
-        contains_any(face_droop_patterns)):
+    # Seizure-like
+    if any(phrase in text for phrase in [
+        "seizure", "seizing",
+        "shaking i cant control", "shaking i can't control",
+        "jerking i cant stop", "jerking i can't stop",
+    ]):
+        bump("seizure_like", 10)
         hard_stop = True
-        add_points("neuro_motor_or_face", 6)
 
-    # -------------------------------------------------
-    # EXPRESSIVE APHASIA (brain clear, words wrong)
-    # -------------------------------------------------
-    clear_brain_phrases = [
-        "brain is clear",
-        "my brain is clear",
-        "my brain feels clear",
-        "i know what i want to say",
-        "i know exactly what i want to say",
-        "i know what i'm trying to say",
-        "my thoughts are clear",
-    ]
-    words_wrong_phrases = [
-        "words keep coming out wrong",
-        "words coming out wrong",
-        "words come out wrong",
-        "words keep getting mixed up",
-        "words keep mixing up",
-        "mouth won't cooperate",
-        "mouth won't do what i want",
-        "i can't get the words out right",
-        "the words come out jumbled",
-        "speech keeps coming out wrong",
-        "what i'm saying isn't what i mean",
-    ]
-
-    has_clear_brain = contains_any(clear_brain_phrases)
-    has_words_wrong = contains_any(words_wrong_phrases)
-
-    if has_clear_brain:
-        add_points("expressive_clear_brain", 3)
-    if has_words_wrong:
-        add_points("expressive_words_wrong", 3)
-
-    if has_clear_brain and has_words_wrong:
+    # Heavy bleeding / PPH-ish
+    if any(phrase in text for phrase in [
+        "gushing", "pouring",
+        "blood running down", "blood is running down",
+        "blood everywhere",
+        "soaked through", "soaking through", "soaks through",
+        "pad is full in", "filled my pad in",
+    ]):
+        bump("heavy_bleeding", 10)
         hard_stop = True
-        add_points("expressive_aphasia_combo", 4)
+
+    # Big clots
+    if "clot" in text or "clots" in text:
+        # rough size parsing
+        if any(p in text for p in ["golf ball", "golf-ball", "bigger than a golf ball"]):
+            bump("large_clots", 8)
+        elif any(p in text for p in ["bigger than a quarter", "larger than a quarter"]):
+            bump("large_clots", 6)
+        elif any(p in text for p in ["quarter sized", "size of a quarter"]):
+            bump("borderline_clots", 4)
+        # small clots (dime/nickel) – basically no extra weight; classify_escalation_tier
+        # already de-escalates them, so we keep it at 0 here.
+
+    # Vision changes
+    if any(phrase in text for phrase in [
+        "vision went black", "vision went dark",
+        "everything went black", "everything went dark",
+        "sudden vision loss",
+    ]):
+        bump("vision_blackout", 9)
+        hard_stop = True
+
+    if any(phrase in text for phrase in [
+        "seeing spots", "seeing stars", "seeing sparkles",
+        "sparkles in my vision", "flashing lights",
+        "very blurry vision", "really blurry vision",
+    ]):
+        bump("vision_spots", 5)
+
+    # Very concerning headache cluster
+    if "worst headache of my life" in text or "worst headache i've ever had" in text:
+        bump("worst_headache", 8)
+        hard_stop = True
+    elif "headache" in text:
+        if any(w in text for w in ["really bad", "very bad", "severe", "pounding", "throbbing"]):
+            bump("severe_headache", 4)
+
+    # Faint / dizzy
+    if any(phrase in text for phrase in [
+        "about to pass out", "going to pass out",
+        "feel like i'm going to pass out", "feel like im going to pass out",
+        "passed out", "fainted",
+    ]):
+        bump("near_syncope", 6)
+
+    if any(phrase in text for phrase in [
+        "very dizzy", "so dizzy", "extremely dizzy",
+        "dizziness", "lightheaded", "light headed",
+    ]):
+        bump("dizzy", 4)
+
+    # Fever + feeling very sick
+    if "fever" in text or "chills" in text:
+        bump("fever_chills", 3)
+        if any(p in text for p in ["shaking with chills", "rigors"]):
+            bump("rigors", 3)
+
+    # BP-ish cluster (we keep this modest because you also have htn helper)
+    if "blood pressure" in text or "bp " in text or text.startswith("bp"):
+        if "really high" in text or "very high" in text or "so high" in text:
+            bump("bp_concern", 3)
+        if "headache" in text and "vision" in text:
+            bump("bp_headache_vision_combo", 4)
+
+    # Incision / wound infectionish flags (on top of what classify_escalation_tier already does)
+    if any(w in text for w in ["incision", "stitches", "staples", "wound"]):
+        if any(p in text for p in [
+            "smells really bad", "smells bad", "foul smell", "bad smell", "odor",
+            "red streaks", "red lines", "streaking up", "spreading redness",
+            "pus", "oozing",
+        ]):
+            bump("wound_infectionish", 4)
+
+    # Lochia infectionish flags (again, classifier already handles "no fever" reassurance)
+    if "lochia" in text:
+        if any(p in text for p in ["smells really bad", "smells bad", "foul smell", "bad smell"]):
+            bump("lochia_odor", 4)
+        if "fever" in text or "chills" in text:
+            bump("lochia_fever", 4)
+
+    # ------------------------------------------------------------------
+    # 2) GENERIC PAIN / CRAMPING (KEPT LOW WEIGHT)
+    # ------------------------------------------------------------------
+    # We still give a *tiny* bump so a truly ugly story with lots of
+    # "pain" words can push a borderline score over the line, but these
+    # should NEVER make something emergent by themselves.
+    if any(w in text for w in ["pain", "hurts", "hurting", "sore", "cramping", "cramps"]):
+        bump("generic_pain", 1)
 
     return score, breakdown, hard_stop
+
 
 
 def classify_escalation_tier(note_text: str) -> str:
@@ -2996,6 +3074,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
