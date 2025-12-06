@@ -1421,10 +1421,11 @@ def route_note_intelligently(note_text: str) -> str:
         "cold pack", "ice bag"
     ]
 
-normalized = " " + note_text + " "
+    normalized = " " + text + " "
 
-if any(f" {kw} " in normalized for kw in supply_keywords):
-    return "cna"
+
+    if any(f" {kw} " in normalized for kw in supply_keywords):
+        return "cna"
 
 
     # 1) Any emergent tier -> nurse
@@ -2912,6 +2913,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
