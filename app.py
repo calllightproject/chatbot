@@ -1420,6 +1420,120 @@ def classify_escalation_tier(note_text: str) -> str:
 
     return "routine"
 
+def _is_pure_cna_supply_env(text: str) -> bool:
+    """
+    Return True if this sounds like a CNA / supply / environment / mobility request
+    with NO major red-flag clinical markers.
+
+    Mild pain is OK to stay CNA here (e.g. “hurts when I walk to the bathroom”).
+    We ONLY block CNA if there are serious red flags.
+    """
+    normalized = " " + (text or "").lower().strip() + " "
+    if not normalized.strip():
+        return False
+
+    # Things CNAs can handle (supplies, environment, mobility)
+    supply_tokens = [
+        # Supplies / comfort
+        " mesh underwear ", " underwear ",
+        " peri bottle ", " peribottle ",
+        " pads ", " pad ", " blue pad ", " chucks ",
+        " diaper ", " diapers ", " wipes ", " wipe ",
+        " blanket ", " blankets ", " pillow ", " pillows ",
+        " towel ", " towels ",
+        " snacks ", " snack ", " water ", " ice ", " ice chips ",
+        " formula ", " bottle ", " bottles ",
+        " extra gown ", " gown ",
+
+        # Bathroom / mobility
+        " bathroom ", " toilet ", " restroom ",
+        " help going to the bathroom ",
+        " help to the bathroom ",
+        " help me to the bathroom ",
+        " help me to the toilet ",
+        " help getting to the bathroom ",
+        " help getting to the toilet ",
+        " help going to the toilet ",
+        " help me to the restroom ",
+        " walk me to the bathroom ",
+        " help me walk to the bathroom ",
+
+        # Shower help
+        " shower ",
+        " help into the shower ",
+        " help me into the shower ",
+        " help getting into the shower ",
+        " help me shower ",
+        " help getting to the shower ",
+        " help to the shower ",
+        " help in the shower ",
+        " getting to the shower and back to bed ",
+        " help getting to the shower and back to bed ",
+
+        # Equipment / environment
+        " iv pole ", " iv stand ",
+        " tray table ",
+        " bed control ", " bed controls ",
+        " tv remote ", " remote ",
+        " tv isn’t working ", " tv isnt working ", " tv is not working ",
+        " remote isn’t working ", " remote isnt working ", " remote is not working ",
+        " charger ", " phone charger ",
+
+        # Room comfort
+        " room is cold ", " room is hot ",
+        " turn the heat up ", " turn the heat down ",
+        " turn the light off ", " turn the light on ",
+        " lights off ", " lights on ",
+        " curtain ", " curtains ",
+    ]
+
+    # TRUE RED FLAGS that should NOT be pure CNA
+    red_flag_markers = [
+        # Breathing / chest / heart
+        " short of breath ", " trouble breathing ",
+        " cant breathe ", " can't breathe ",
+        " chest pain ", " chest hurts ",
+        " heart is racing ", " heart is pounding ",
+
+        # Fainting / severe dizziness
+        " faint ", " fainted ", " about to pass out ", " passed out ",
+        " so dizzy ", " very dizzy ",
+
+        # Neuro / stroke-like
+        " face drooping ", " drooping on one side ",
+        " can’t move my arm ", " cant move my arm ",
+        " can’t move my leg ", " cant move my leg ",
+        " weakness on one side ", " weak on one side ",
+        " slurred speech ", " can’t get my words out ", " cant get my words out ",
+
+        # Vision changes
+        " blurry vision ", " vision is blurry ", " seeing spots ",
+        " seeing stars ", " sparkles in my vision ",
+        " vision went black ", " vision went dark ",
+
+        # Heavy bleeding
+        " gushing blood ", " blood is gushing ",
+        " pouring blood ", " bleeding a lot ",
+        " blood everywhere ",
+        " soaking through my pad ",
+        " soaked through my pad ",
+        " filling a pad ",
+        " bright red blood all over ",
+
+        # Seizure / stroke words
+        " seizure ", " shaking all over ",
+        " stroke ",
+    ]
+
+    # If any true red flag is present → NOT a pure CNA request
+    if any(flag in normalized for flag in red_flag_markers):
+        return False
+
+    # If it contains any supply/mobility token and NO red flags → CNA is OK
+    if any(tok in normalized for tok in supply_tokens):
+        return True
+
+    return False
 
 
 def route_note_intelligently(note_text: str) -> str:
@@ -2882,6 +2996,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
