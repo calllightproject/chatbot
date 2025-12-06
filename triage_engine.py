@@ -8,11 +8,9 @@ from typing import List
 # 1. SETUP & CONFIGURATION
 # =========================================================
 
-# Load the small English model we added to requirements.txt
 try:
     nlp = spacy.load("en_core_web_sm", disable=["ner", "parser"])
 except OSError:
-    # Fallback if model isn't found locally yet (prevents crash on first run)
     nlp = spacy.blank("en")
 
 class Routing(str, Enum):
@@ -41,21 +39,30 @@ class TriageEngine:
     def _register_patterns(self):
         """
         Define rules using Token Patterns.
-        LEMMA handles word variations (run, running, runs).
-        LOWER handles case (Bleeding, bleeding).
         """
         
         # --- A. EMERGENCIES (The "Iron Dome") ---
         
-        # Breathing: "cant breathe", "short of breath", "gasping"
+        # Breathing Logic
         self.matcher.add("EMERGENT_BREATH", [
-            [{"LOWER": {"in": ["cant", "can't", "cannot"]}}, {"LEMMA": "breathe"}],
+            # 1. The Contraction Split: "ca" + "n't" + "breathe" (Fixes "I can't breathe")
+            [{"LOWER": "ca"}, {"LOWER": "n't"}, {"LEMMA": "breathe"}],
+            
+            # 2. The Typos: "cant breathe" (No apostrophe)
+            [{"LOWER": "cant"}, {"LEMMA": "breathe"}],
+            
+            # 3. The Full Words: "cannot breathe" or "can not breathe"
+            [{"LOWER": "cannot"}, {"LEMMA": "breathe"}],
+            [{"LOWER": "can"}, {"LOWER": "not"}, {"LEMMA": "breathe"}],
+
+            # 4. Other distress
             [{"LEMMA": "short"}, {"LOWER": "of"}, {"LEMMA": "breath"}],
             [{"LEMMA": "gasp"}],
             [{"LEMMA": "suffocate"}],
+            [{"LEMMA": "choke"}],
         ])
 
-        # Heavy Bleeding: "gushing", "soaked pad", "clots"
+        # Heavy Bleeding
         self.matcher.add("EMERGENT_BLEED", [
             [{"LEMMA": "gush"}], 
             [{"LOWER": "running"}, {"LOWER": "down"}, {"LOWER": "leg"}],
@@ -63,7 +70,7 @@ class TriageEngine:
             [{"LEMMA": "clot"}, {"OP": "*"}, {"LEMMA": {"in": ["golf", "baseball", "fist", "huge", "large"]}}]
         ])
 
-        # Neuro/Stroke: "slurred speech", "drooping", "seizure"
+        # Neuro/Stroke
         self.matcher.add("EMERGENT_NEURO", [
             [{"LEMMA": "slur"}], 
             [{"LEMMA": "droop"}], 
@@ -71,9 +78,14 @@ class TriageEngine:
             [{"LEMMA": "vision"}, {"OP": "*"}, {"LEMMA": {"in": ["blur", "black", "double", "spot"]}}]
         ])
 
+        # Baby Emergencies (Blue/Limp)
+        self.matcher.add("EMERGENT_BABY", [
+            [{"LEMMA": "baby"}, {"OP": "*"}, {"LOWER": {"in": ["blue", "purple", "gray", "limp", "floppy"]}}],
+            [{"LEMMA": "baby"}, {"OP": "*"}, {"LOWER": "wo"}, {"LOWER": "n't"}, {"LEMMA": "wake"}] # "wo" + "n't" split
+        ])
+
         # --- B. LOGISTICS (The "Firewall") ---
         
-        # Supplies: "water", "blanket", "charger", "remote"
         self.matcher.add("LOGISTICS_ITEM", [
             [{"LEMMA": {"in": ["water", "ice", "snack", "cracker", "juice"]}}],
             [{"LEMMA": {"in": ["blanket", "pillow", "sheet", "gown", "sock", "slipper", "towel"]}}],
@@ -81,7 +93,6 @@ class TriageEngine:
             [{"LOWER": {"in": ["tv", "remote", "charger", "phone", "wifi"]}}],
         ])
 
-        # Actions: "bathroom", "shower", "walk"
         self.matcher.add("LOGISTICS_ACT", [
             [{"LEMMA": "bathroom"}], 
             [{"LEMMA": "toilet"}],
@@ -105,7 +116,6 @@ class TriageEngine:
         doc = nlp(text)
         matches = self.matcher(doc)
         
-        # Get list of matched labels (e.g., "LOGISTICS_ITEM", "EMERGENT_BREATH")
         detected_labels = set([nlp.vocab.strings[match_id] for match_id, start, end in matches])
         
         # 1. CHECK EMERGENCIES FIRST
@@ -117,7 +127,6 @@ class TriageEngine:
         logistics_flags = [l for l in detected_labels if l.startswith("LOGISTICS")]
         clinical_flags = [l for l in detected_labels if l.startswith("CLINICAL")]
         
-        # If it is Logistics AND NOT Clinical -> CNA
         if logistics_flags and not clinical_flags:
             return TriageResult(Routing.CNA, Tier.ROUTINE, list(detected_labels))
 
