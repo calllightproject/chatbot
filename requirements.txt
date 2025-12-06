@@ -3,6 +3,8 @@ Flask-SocketIO==5.3.6
 SQLAlchemy==2.0.23
 psycopg2-binary==2.9.9
 gunicorn==21.2.0
-eventlet==0.35.2      # <-- UPDATED to a newer version
+eventlet==0.35.2
 requests==2.31.0
-setuptools==69.0.3    # <-- ADDED for compatibility
+setuptools==69.0.3
+spacy==3.7.2
+https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
