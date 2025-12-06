@@ -4,10 +4,6 @@ from enum import Enum
 from dataclasses import dataclass
 from typing import List
 
-# =========================================================
-# 1. SETUP & CONFIGURATION
-# =========================================================
-
 try:
     nlp = spacy.load("en_core_web_sm", disable=["ner", "parser"])
 except OSError:
@@ -27,30 +23,24 @@ class TriageResult:
     tier: Tier
     detected_patterns: List[str]
 
-# =========================================================
-# 2. THE TRIAGE ENGINE
-# =========================================================
-
 class TriageEngine:
     def __init__(self):
         self.matcher = Matcher(nlp.vocab)
         self._register_patterns()
 
     def _register_patterns(self):
-        """
-        Define rules using Token Patterns.
-        """
-        
         # --- A. EMERGENCIES (The "Iron Dome") ---
         
         # 1. HEART & CHEST
         self.matcher.add("EMERGENT_CHEST", [
-            [{"LOWER": "chest"}, {"LEMMA": {"in": ["pain", "hurt", "pressure", "tight", "heavy", "crush"]}}],
-            [{"LOWER": "heart"}, {"LEMMA": {"in": ["race", "pound", "palpitation", "skip", "stop"]}}],
+            # "Chest" + (optional words) + "Pain/Tight/Heavy"
+            # Fixes: "My chest FEELS tight"
+            [{"LOWER": "chest"}, {"OP": "*"}, {"LEMMA": {"in": ["pain", "hurt", "pressure", "tight", "heavy", "crush", "discomfort"]}}],
+            [{"LOWER": "heart"}, {"OP": "*"}, {"LEMMA": {"in": ["race", "pound", "palpitation", "skip", "stop"]}}],
             [{"LOWER": "heart"}, {"LOWER": "attack"}],
         ])
 
-        # 2. BREATHING (Smart Patterns)
+        # 2. BREATHING
         self.matcher.add("EMERGENT_BREATH", [
             [{"LEMMA": "short"}, {"LOWER": "of"}, {"LEMMA": "breath"}],
             [{"LEMMA": {"in": ["hard", "trouble", "struggle", "difficult"]}}, {"OP": "*"}, {"LEMMA": {"in": ["breath", "breathe"]}}],
@@ -59,22 +49,22 @@ class TriageEngine:
 
         # 3. HEAVY BLEEDING
         self.matcher.add("EMERGENT_BLEED", [
-            [{"LEMMA": "gush"}], 
+            [{"LEMMA": {"in": ["gush", "pour"]}}], # Added "POUR"
             [{"LOWER": "running"}, {"LOWER": "down"}, {"LOWER": "leg"}],
             [{"LEMMA": "soak"}, {"OP": "*"}, {"LEMMA": "pad"}], 
             [{"LEMMA": "clot"}, {"OP": "*"}, {"LEMMA": {"in": ["golf", "baseball", "fist", "huge", "large"]}}]
         ])
 
-        # 4. NEURO / STROKE / SEIZURE / VISION
+        # 4. NEURO / STROKE / VISION / DIZZY
         self.matcher.add("EMERGENT_NEURO", [
             [{"LEMMA": "slur"}], 
             [{"LEMMA": "droop"}], 
             [{"LEMMA": "seizure"}], 
+            [{"LEMMA": "faint"}], # Fainting/Passing out
+            [{"LEMMA": {"in": ["dizzy", "lightheaded", "woozy"]}}], # Added DIZZY
             
-            # Explicit "Vision" phrases
+            # Vision
             [{"LEMMA": "vision"}, {"OP": "*"}, {"LEMMA": {"in": ["blur", "black", "double", "spot", "star", "flash"]}}],
-            
-            # "Seeing" phrases (Fixes "seeing spots")
             [{"LEMMA": "see"}, {"OP": "*"}, {"LEMMA": {"in": ["spot", "star", "flash", "sparkle"]}}],
             [{"LEMMA": "see"}, {"OP": "*"}, {"LOWER": "double"}]
         ])
@@ -82,7 +72,11 @@ class TriageEngine:
         # 5. BABY SAFETY
         self.matcher.add("EMERGENT_BABY", [
             [{"LEMMA": "baby"}, {"OP": "*"}, {"LOWER": {"in": ["blue", "purple", "gray", "limp", "floppy", "pale"]}}],
-            [{"LEMMA": "baby"}, {"OP": "*"}, {"LOWER": "unresponsive"}]
+            [{"LEMMA": "baby"}, {"OP": "*"}, {"LOWER": "unresponsive"}],
+            # Baby won't wake (Standard)
+            [{"LEMMA": "baby"}, {"OP": "*"}, {"LOWER": "wo"}, {"LOWER": "n't"}, {"LEMMA": "wake"}],
+            # Baby wont wake (Typo fix)
+            [{"LEMMA": "baby"}, {"OP": "*"}, {"LOWER": "wont"}, {"LEMMA": "wake"}],
         ])
 
         # --- B. LOGISTICS (The "Firewall") ---
@@ -105,8 +99,9 @@ class TriageEngine:
         
         # --- C. CLINICAL SYMPTOMS (Routine Nurse) ---
         self.matcher.add("CLINICAL_SYMPTOM", [
-            [{"LEMMA": {"in": ["pain", "hurt", "ache", "sore", "cramp"]}}],
+            [{"LEMMA": {"in": ["pain", "hurt", "ache", "sore", "cramp", "scar"]}}],
             [{"LEMMA": "medication"}],
+            [{"LEMMA": "ibuprofen"}],
             [{"LEMMA": "tylenol"}],
             [{"LEMMA": "motrin"}],
             [{"LEMMA": "incision"}],
