@@ -9,10 +9,8 @@ from typing import List
 # =========================================================
 
 try:
-    # Load the small English model
     nlp = spacy.load("en_core_web_sm", disable=["ner", "parser"])
 except OSError:
-    # Fallback if model isn't found locally yet
     nlp = spacy.blank("en")
 
 class Routing(str, Enum):
@@ -45,7 +43,7 @@ class TriageEngine:
         
         # --- A. EMERGENCIES (The "Iron Dome") ---
         
-        # 1. HEART & CHEST (The Missing Piece)
+        # 1. HEART & CHEST
         self.matcher.add("EMERGENT_CHEST", [
             [{"LOWER": "chest"}, {"LEMMA": {"in": ["pain", "hurt", "pressure", "tight", "heavy", "crush"]}}],
             [{"LOWER": "heart"}, {"LEMMA": {"in": ["race", "pound", "palpitation", "skip", "stop"]}}],
@@ -54,11 +52,8 @@ class TriageEngine:
 
         # 2. BREATHING (Smart Patterns)
         self.matcher.add("EMERGENT_BREATH", [
-            # "Short of breath"
             [{"LEMMA": "short"}, {"LOWER": "of"}, {"LEMMA": "breath"}],
-            # "Hard to breathe"
             [{"LEMMA": {"in": ["hard", "trouble", "struggle", "difficult"]}}, {"OP": "*"}, {"LEMMA": {"in": ["breath", "breathe"]}}],
-            # Keywords
             [{"LEMMA": {"in": ["gasp", "suffocate", "choke", "wheeze"]}}]
         ])
 
@@ -70,12 +65,18 @@ class TriageEngine:
             [{"LEMMA": "clot"}, {"OP": "*"}, {"LEMMA": {"in": ["golf", "baseball", "fist", "huge", "large"]}}]
         ])
 
-        # 4. NEURO / STROKE / SEIZURE
+        # 4. NEURO / STROKE / SEIZURE / VISION
         self.matcher.add("EMERGENT_NEURO", [
             [{"LEMMA": "slur"}], 
             [{"LEMMA": "droop"}], 
             [{"LEMMA": "seizure"}], 
-            [{"LEMMA": "vision"}, {"OP": "*"}, {"LEMMA": {"in": ["blur", "black", "double", "spot", "star"]}}]
+            
+            # Explicit "Vision" phrases
+            [{"LEMMA": "vision"}, {"OP": "*"}, {"LEMMA": {"in": ["blur", "black", "double", "spot", "star", "flash"]}}],
+            
+            # "Seeing" phrases (Fixes "seeing spots")
+            [{"LEMMA": "see"}, {"OP": "*"}, {"LEMMA": {"in": ["spot", "star", "flash", "sparkle"]}}],
+            [{"LEMMA": "see"}, {"OP": "*"}, {"LOWER": "double"}]
         ])
 
         # 5. BABY SAFETY
@@ -113,16 +114,12 @@ class TriageEngine:
         ])
 
     def classify(self, text: str) -> TriageResult:
-        # 1. Clean the text
         t = (text or "").lower().strip()
-        t = t.replace("’", "'") # Normalize curly quotes
+        t = t.replace("’", "'") 
         
         # ------------------------------------------------------------
         # SAFETY OVERRIDE: "Dumb" String Matches (Bypasses AI)
         # ------------------------------------------------------------
-        # If any of these strings exist, we trigger EMERGENT immediately.
-        # This fixes "cant breathe", "can not breathe", "dropped baby", etc.
-        
         force_emergent_phrases = [
             "cant breathe", "can't breathe", "cannot breathe", "can not breathe",
             "cant breath", "can't breath", "cannot breath", "can not breath",
@@ -130,7 +127,6 @@ class TriageEngine:
         ]
         
         if any(phrase in t for phrase in force_emergent_phrases):
-             # Log this so you see it in Render logs
              print(f"DEBUG_OVERRIDE: Found '{t}' -> FORCE EMERGENT")
              return TriageResult(Routing.NURSE, Tier.EMERGENT, ["SAFETY_OVERRIDE"])
         
