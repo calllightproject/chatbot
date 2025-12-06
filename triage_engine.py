@@ -40,56 +40,27 @@ class TriageEngine:
         """
         Define rules using Token Patterns.
         """
-        
         # --- A. EMERGENCIES (The "Iron Dome") ---
         
-        # 1. BREATHING (BRUTE FORCE PATTERNS)
-        # We use LOWER checks to catch exact spellings/typos, bypassing grammar logic.
-        # ------------------------------------------------------
+        # 1. BREATHING
         self.matcher.add("EMERGENT_BREATH", [
-            # "I can't breathe" (Standard English splits into "ca" + "n't")
-            [{"LOWER": "ca"}, {"LOWER": "n't"}, {"LOWER": {"in": ["breathe", "breath", "breathing"]}}],
-            
-            # "cant breathe" (Typo: one word)
-            [{"LOWER": "cant"}, {"LOWER": {"in": ["breathe", "breath", "breathing"]}}],
-            
-            # "cannot breathe"
-            [{"LOWER": "cannot"}, {"LOWER": {"in": ["breathe", "breath", "breathing"]}}],
-            
-            # "can not breathe" (Three words)
-            [{"LOWER": "can"}, {"LOWER": "not"}, {"LOWER": {"in": ["breathe", "breath", "breathing"]}}],
-
-            # "Hard to breathe" / "Short of breath"
-            [{"LEMMA": {"in": ["hard", "trouble", "struggle", "difficult"]}}, {"OP": "*"}, {"LEMMA": {"in": ["breath", "breathe"]}}],
+            [{"LOWER": "ca"}, {"LOWER": "n't"}, {"LOWER": {"in": ["breathe", "breath"]}}],
+            [{"LOWER": "cant"}, {"LOWER": {"in": ["breathe", "breath"]}}],
+            [{"LOWER": "cannot"}, {"LOWER": {"in": ["breathe", "breath"]}}],
             [{"LEMMA": "short"}, {"LOWER": "of"}, {"LEMMA": "breath"}],
-            
-            # "No air"
-            [{"LOWER": "no"}, {"LOWER": "air"}],
-            
-            # Keywords
             [{"LEMMA": "gasp"}],
             [{"LEMMA": "suffocate"}],
-            [{"LEMMA": "choke"}],
         ])
 
-        # 2. BABY SAFETY (Dropped, Blue, Limp)
-        # ------------------------------------------------------
+        # 2. BABY SAFETY
         self.matcher.add("EMERGENT_BABY", [
-            # Dropped the baby (Trauma)
             [{"LEMMA": {"in": ["drop", "fall", "hit", "slip"]}}, {"OP": "*"}, {"LEMMA": "baby"}],
             [{"LEMMA": "baby"}, {"LEMMA": {"in": ["fall", "roll", "drop"]}}],
-
-            # Color / Tone
-            [{"LEMMA": "baby"}, {"OP": "*"}, {"LOWER": {"in": ["blue", "purple", "gray", "limp", "floppy", "pale"]}}],
-            
-            # Responsiveness
-            [{"LEMMA": "baby"}, {"OP": "*"}, {"LOWER": "wo"}, {"LOWER": "n't"}, {"LEMMA": "wake"}], # wo + n't wake
-            [{"LEMMA": "baby"}, {"OP": "*"}, {"LOWER": "unresponsive"}],
-            [{"LEMMA": "baby"}, {"OP": "*"}, {"LOWER": "not"}, {"LEMMA": "breathing"}]
+            [{"LEMMA": "baby"}, {"OP": "*"}, {"LOWER": {"in": ["blue", "purple", "gray", "limp", "floppy"]}}],
+            [{"LEMMA": "baby"}, {"OP": "*"}, {"LOWER": "unresponsive"}]
         ])
 
         # 3. HEAVY BLEEDING
-        # ------------------------------------------------------
         self.matcher.add("EMERGENT_BLEED", [
             [{"LEMMA": "gush"}], 
             [{"LOWER": "running"}, {"LOWER": "down"}, {"LOWER": "leg"}],
@@ -97,13 +68,12 @@ class TriageEngine:
             [{"LEMMA": "clot"}, {"OP": "*"}, {"LEMMA": {"in": ["golf", "baseball", "fist", "huge", "large"]}}]
         ])
 
-        # 4. NEURO / STROKE / SEIZURE
-        # ------------------------------------------------------
+        # 4. NEURO / STROKE
         self.matcher.add("EMERGENT_NEURO", [
             [{"LEMMA": "slur"}], 
             [{"LEMMA": "droop"}], 
             [{"LEMMA": "seizure"}], 
-            [{"LEMMA": "vision"}, {"OP": "*"}, {"LEMMA": {"in": ["blur", "black", "double", "spot", "star"]}}]
+            [{"LEMMA": "vision"}, {"OP": "*"}, {"LEMMA": {"in": ["blur", "black", "double", "spot"]}}]
         ])
 
         # --- B. LOGISTICS (The "Firewall") ---
@@ -135,23 +105,43 @@ class TriageEngine:
         ])
 
     def classify(self, text: str) -> TriageResult:
-        # Lowercase raw text to help spaCy with some capitalizations
-        doc = nlp(text.lower()) 
-        matches = self.matcher(doc)
+        # 1. Clean the text
+        t = (text or "").lower().strip()
+        t = t.replace("’", "'") # Normalize curly quotes
         
+        # ------------------------------------------------------------
+        # SAFETY OVERRIDE: "Dumb" String Matches (Bypasses AI)
+        # ------------------------------------------------------------
+        # If the server is logging this print, you KNOW the new code is live.
+        print(f"DEBUG_TRIAGE_V4: Checking '{t}'") 
+
+        # Breathing Override
+        if "cant breathe" in t or "can't breathe" in t or "cant breath" in t or "can't breath" in t:
+             return TriageResult(Routing.NURSE, Tier.EMERGENT, ["OVERRIDE_BREATH"])
+
+        # Dropped Baby Override
+        if "drop" in t and "baby" in t:
+             return TriageResult(Routing.NURSE, Tier.EMERGENT, ["OVERRIDE_BABY_DROP"])
+        
+        # ------------------------------------------------------------
+        # END OVERRIDE - Proceed to Smart NLP
+        # ------------------------------------------------------------
+
+        doc = nlp(t) 
+        matches = self.matcher(doc)
         detected_labels = set([nlp.vocab.strings[match_id] for match_id, start, end in matches])
         
-        # 1. CHECK EMERGENCIES FIRST
+        # 1. EMERGENCIES
         emergent_flags = [l for l in detected_labels if l.startswith("EMERGENT")]
         if emergent_flags:
             return TriageResult(Routing.NURSE, Tier.EMERGENT, list(detected_labels))
 
-        # 2. CHECK LOGISTICS
+        # 2. LOGISTICS
         logistics_flags = [l for l in detected_labels if l.startswith("LOGISTICS")]
         clinical_flags = [l for l in detected_labels if l.startswith("CLINICAL")]
         
         if logistics_flags and not clinical_flags:
             return TriageResult(Routing.CNA, Tier.ROUTINE, list(detected_labels))
 
-        # 3. DEFAULT TO NURSE
+        # 3. DEFAULT
         return TriageResult(Routing.NURSE, Tier.ROUTINE, list(detected_labels))
