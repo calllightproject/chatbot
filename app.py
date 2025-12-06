@@ -1213,23 +1213,48 @@ def classify_escalation_tier(note_text: str) -> str:
     if not text:
         return "routine"
 
-    # 0) SUPPLY-ONLY FAST PATH (never emergent)
+        # 0) SUPPLY-ONLY FAST PATH (never emergent)
     supply_tokens = [
-        "mesh underwear", "underwear", "peri bottle", "peribottle",
+        # Clothing / hygiene / basic supplies
+        "mesh underwear", "underwear",
+        "peri bottle", "peribottle",
         "pads", "pad", "blue pad", "chucks",
         "diaper", "diapers", "wipes", "wipe",
         "blanket", "blankets", "pillow", "pillows",
         "towel", "towels",
-        "snacks", "water", "ice", "ice chips",
-        "formula", "bottle", "bottles",
         "extra gown", "gown",
-        "help into the shower", "help me into the shower",
-        "help getting into the shower", "help me shower", "shower",
-        # bathroom help as a supply-style / CNA request
+        "socks", "non slip socks", "nonslip socks",
+        "slippers",
+
+        # Food / drink
+        "snacks", "snack",
+        "water", "ice", "ice chips",
+
+        # Baby supplies / accessories
+        "burp cloth", "burp clothes", "burp rag",
+        "baby hat", "hat for the baby",
+        "swaddle", "swaddle blanket",
+
+        # Feeding equipment
+        "formula", "bottle", "bottles",
+        "pump parts", "breast pump", "pumping supplies",
+
+        # Room / bathroom help as supply-style / CNA requests
         "bathroom", "toilet", "help to the bathroom",
         "help going to the bathroom", "help me to the bathroom",
         "help to the toilet", "help going to the toilet",
+        "help me get up to pee", "help me get up to the bathroom",
+
+        # Equipment / electronics that are *not* medical distress
+        "iv pole", "pole is stuck", "pole wont roll", "pole won't roll",
+        "tv remote", "remote isnt working", "remote isn't working",
+        "remote not working", "tv isnt working", "tv isn't working",
+        "charger", "phone charger", "charge my phone",
+        "bed control", "bed wont go up", "bed won't go up",
+        "bed wont go down", "bed won't go down",
+        "bedside table", "tray table"
     ]
+
     clinical_markers = [
         "pain", "hurts", "cramp", "cramps",
         "bleeding", "blood", "clot", "clots",
@@ -1399,143 +1424,124 @@ def classify_escalation_tier(note_text: str) -> str:
 
 def route_note_intelligently(note_text: str) -> str:
     """
-    Returns: 'nurse' or 'cna'
+    Decide whether a free-text note should go to the nurse or CNA.
 
-    Logic:
-      - Any 'emergent' tier request -> nurse
-      - Any headache (postpartum) -> nurse (clinical, not necessarily emergent)
-      - Any incision/stitches concern -> nurse (not always emergent)
-      - IV pump beeping / occlusion -> nurse (equipment, not emergent)
-      - Broken BP cuff / simple machine error with no symptoms -> CNA
-      - Mild swelling + comfort/supply only -> CNA
-      - Routine but clearly clinical -> nurse
-      - Pure supply/comfort -> CNA
-      - Bathroom/shower + faint/dizzy/pass out -> nurse (safety rule)
+    High-level rules:
+      - Any serious clinical concern (bleeding, neuro, breathing, chest, etc.) -> nurse
+      - Heavy bleeding phrases -> nurse
+      - All pure supply / equipment / clothing / baby-item issues -> CNA
+      - Otherwise -> CNA (safe to start low)
     """
     text = _normalize_text(note_text)
-    tier = classify_escalation_tier(text)
-    # ----- NEW: Supply-only override (force CNA routine) -----
-    supply_keywords = [
-        "ice water", "pillow", "pads", "sheet", "blanket",
-        "lotion", "charger", "snacks", "underwear",
-        "cold pack", "ice bag"
+    if not text:
+        return "nurse"  # default safe
+
+    # --- 1) Heavy bleeding (role must be nurse) ---
+    heavy_bleed_flags = [
+        "gushing", "pouring", "running down", "blood everywhere",
+        "soaked through", "soaking through", "soaked my pad", "soaked the pad",
+        "filled my pad in", "pad is full in",
+        "bright red all over", "filling the bed",
     ]
-
-    normalized = " " + text + " "
-
-
-    if any(f" {kw} " in normalized for kw in supply_keywords):
-        return "cna"
-
-
-    # 1) Any emergent tier -> nurse
-    if tier == "emergent":
+    if ("blood" in text or "bleeding" in text or "lochia" in text) and any(f in text for f in heavy_bleed_flags):
         return "nurse"
 
-    # 2) IV pump / pump / occlusion / alarm -> nurse (equipment issue, not emergent)
-    if any(k in text for k in ["iv pump", "pump", "occlusion", "alarm", "keeps beeping", "beeping"]):
+    # --- 2) Strong clinical danger markers -> always nurse ---
+    if _has_heart_breath_color_emergent(text) or _has_neuro_emergent(text) or _has_htn_emergent(text):
         return "nurse"
 
-    # 3) Broken blood pressure cuff ALONE -> CNA (non-emergent, non-clinical)
-    if ("blood pressure cuff" in text or "bp cuff" in text) and not any(
-        k in text for k in ["dizzy", "faint", "chest", "heart",
-                           "short of breath", "trouble breathing", "vision"]
-    ):
-        return "cna"
-
-    # Equipment keywords (for generic machine-only CNA rule later)
-    equipment_keywords = [
-        "iv pump", "pump", "occlusion",
-        "bp cuff", "blood pressure cuff",
-        "machine", "monitor", "device",
-        "beeping", "alarm",
-    ]
-
-    # Supply-only keywords
-    supply_keywords = [
-        "mesh underwear", "underwear", "peri bottle", "peribottle",
-        "pads", "pad", "ice pack", "snacks", "water", "blanket",
-        "pillows", "towel", "blue pad", "chucks", "diaper",
-        "wipe", "wipes", "extra gown",
-        "formula", "bottle", "bottles",
-        "help into the shower", "help me into the shower",
-        "help me shower", "help getting into the shower", "shower",
-    ]
-
-    # Clinical-ish keywords: symptoms / meds
-    clinical_keywords = [
-        "pain", "medication", "medicine", "nausea", "vomit", "vomiting",
-        "fever", "chills", "bleeding", "blood",
-        "dizzy", "faint", "lightheaded", "short of breath", "trouble breathing",
-        "heart", "chest", "headache", "vision", "numb", "tingling",
-        "swelling", "swollen",
-    ]
-
-    is_supply = any(k in text for k in supply_keywords)
-    is_clinical = any(k in text for k in clinical_keywords)
-
-    # Specific feature flags
-    headache_present = "headache" in text or "migraine" in text
-    swelling_present = ("swelling" in text) or ("swollen" in text) or ("puffy" in text)
-    incision_present = (
-        "incision" in text or "stitches" in text or "staples" in text or "wound" in text
-    )
-
-    # 4) Hard rule: bathroom/shower + faint/dizzy/pass out -> nurse, not CNA
-    if (("bathroom" in text) or ("shower" in text)) and (
-        "faint" in text or "pass out" in text or "dizzy" in text
-    ):
-        return "nurse"
-
-    # 5) Headache: always clinical (nurse), even if not emergent
-    if headache_present:
-        return "nurse"
-
-    # 6) Incision/stitches: always nurse (not always emergent)
-    if incision_present:
-        return "nurse"
-
-    # 7) Equipment-only issues (other machines) with NO symptoms → CNA
-    equipment_only_symptom_words = [
-        "pain", "hurts", "burning",
-        "bleeding", "blood",
-        "dizzy", "faint", "lightheaded",
-        "short of breath", "trouble breathing",
+    danger_markers = [
+        "bleeding", "blood", "clot", "clots",
+        "short of breath", "trouble breathing", "cant breathe", "can't breathe",
         "chest", "heart",
-        "fever", "chills",
-        "swelling", "swollen",
+        "dizzy", "dizziness", "lightheaded", "faint", "fainted", "about to pass out",
+        "headache", "migraine",
+        "vision", "blurry", "spots", "stars", "sparkles",
+        "seizure", "stroke",
         "numb", "tingling",
-        "headache",
-    ]
-    if any(k in text for k in equipment_keywords) and not any(
-        s in text for s in equipment_only_symptom_words
-    ):
-        # At this point, IV pump already returned 'nurse'; this mostly hits other machines.
-        return "cna"
-
-    # 8) Mild swelling + comfort/supply only -> CNA (per your rule)
-    serious_clinical_tokens = [
-        "short of breath", "trouble breathing", "chest", "heart",
-        "vision", "blurry vision", "double vision",
-        "bleeding", "blood",
+        "fever", "chills",
+        "incision", "stitches", "staples", "wound",
+        "blood pressure", "bp ",
         "severe pain", "really bad pain", "worst pain",
-        "dizzy", "faint", "lightheaded",
+    ]
+    if any(w in text for w in danger_markers):
+        return "nurse"
+
+    # --- 3) Pure supply / clothing / baby supplies / equipment => CNA ---
+    supply_or_equipment_tokens = [
+        # Clothing / hygiene / basic supplies
+        "mesh underwear", "underwear",
+        "peri bottle", "peribottle",
+        "pads", "pad", "blue pad", "chucks",
+        "diaper", "diapers", "wipes", "wipe",
+        "blanket", "blankets", "pillow", "pillows",
+        "towel", "towels",
+        "extra gown", "gown",
+        "socks", "non slip socks", "nonslip socks",
+        "slippers",
+
+        # Baby accessories
+        "burp cloth", "burp clothes", "burp rag",
+        "baby hat", "hat for the baby",
+        "swaddle", "swaddle blanket",
+        "onesie", "baby outfit",
+
+        # Food / drink / basic comfort
+        "snacks", "snack", "water", "ice", "ice chips",
+
+        # Feeding equipment
+        "formula", "bottle", "bottles",
+        "pump parts", "breast pump", "pumping supplies",
+
+        # Bathroom / mobility help
+        "bathroom", "toilet",
+        "help to the bathroom", "help going to the bathroom",
+        "help me to the bathroom", "help going to the toilet",
+        "help me get up to pee", "help me get up to the bathroom",
+        "help getting to the shower", "help into the shower",
+        "help me shower", "help me into the shower",
+
+        # Equipment / electronics
+        "iv pole", "pole is stuck", "pole wont roll", "pole won't roll",
+        "tv remote", "remote isnt working", "remote isn't working",
+        "remote not working", "tv isnt working", "tv isn't working",
+        "charger", "phone charger", "charge my phone",
+        "bed control", "bed wont go up", "bed won't go up",
+        "bed wont go down", "bed won't go down",
+        "bedside table", "tray table"
+    ]
+
+    # If any of these appear, and there is NO clinical danger word, treat as CNA.
+    clinical_danger_words = [
+        "bleeding", "blood", "clot", "clots",
+        "short of breath", "trouble breathing", "cant breathe", "can't breathe",
+        "chest", "heart",
+        "dizzy", "dizziness", "lightheaded", "faint", "fainted",
+        "headache", "migraine",
+        "seizure", "stroke",
         "numb", "tingling",
         "fever", "chills",
-        "incision", "stitches", "wound", "staples",
+        "incision", "stitches", "staples", "wound",
     ]
-    has_serious_clinical = any(tok in text for tok in serious_clinical_tokens)
 
-    if tier == "routine" and swelling_present and is_supply and not has_serious_clinical:
-        # Example: "my feet are a little swollen, can I get some socks and a blanket"
+    if any(tok in text for tok in supply_or_equipment_tokens) and not any(w in text for w in clinical_danger_words):
         return "cna"
 
-    # 9) Pure supply/comfort -> CNA
-    if is_supply and not is_clinical:
+    # --- 4) Mild, vague, non-clinical complaints can default low to CNA ---
+    # (e.g., "room is cold", "lights are too bright", "tv too loud")
+    comfort_only_tokens = [
+        "too hot", "too cold", "room is hot", "room is cold",
+        "lights are too bright", "light is too bright",
+        "noise is too loud", "too noisy",
+        "tv is too loud", "turn down the tv",
+        "room is dark", "turn on the light",
+        "curtains", "blinds",
+    ]
+    if any(tok in text for tok in comfort_only_tokens):
         return "cna"
 
-    # 🔟 Default: clinical or unclear goes to nurse
-    return "nurse"
+    # --- 5) Default: CNA (low risk) ---
+    return "cna"
 
 
 
@@ -2913,6 +2919,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
