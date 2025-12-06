@@ -1430,12 +1430,18 @@ def route_note_intelligently(note_text: str) -> str:
     - Anything with heart / breathing / neuro / BP red flags -> nurse
     - Everything else defaults to nurse.
     """
-    text = _normalize_text(note_text)
-    if not text:
+    # Keep it simple: just lower-case the raw text instead of using _normalize_text,
+    # so we don't accidentally strip useful words.
+    text = (note_text or "").lower()
+    if not text.strip():
         return "nurse"
 
     # 1) Hard-stop clinical red flags: ALWAYS nurse
-    if _has_heart_breath_color_emergent(text) or _has_neuro_emergent(text) or _has_htn_emergent(text):
+    if (
+        _has_heart_breath_color_emergent(text)
+        or _has_neuro_emergent(text)
+        or _has_htn_emergent(text)
+    ):
         return "nurse"
 
     # 2) Pure supply / environment / mobility help -> CNA
@@ -1455,10 +1461,11 @@ def route_note_intelligently(note_text: str) -> str:
         "bathroom", "toilet",
         "help going to the bathroom", "help to the bathroom",
         "help me to the bathroom", "help me to the toilet",
-        "help to the toilet", "help getting to the bathroom", "help getting to the toilet",
+        "help getting to the bathroom", "help getting to the toilet",
         "help going to the toilet",
         "shower", "help into the shower", "help me into the shower",
         "help getting into the shower", "help me shower",
+        "help getting to the shower",  # your exact test phrase pattern
 
         # Equipment / room environment
         "iv pole", "iv stand",
@@ -1492,13 +1499,14 @@ def route_note_intelligently(note_text: str) -> str:
         "seizure", "stroke",
     ]
 
-    if any(tok in text for tok in supply_cna_tokens) and not any(tok in text for tok in clinical_markers):
+    if any(tok in text for tok in supply_cna_tokens) and not any(
+        tok in text for tok in clinical_markers
+    ):
         # Pure supply / environment / mobility → CNA
         return "cna"
 
     # 3) Anything else (clinical or ambiguous) → nurse
     return "nurse"
-
 
 
 # --- Core Helper Functions ---
@@ -2874,6 +2882,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
