@@ -43,25 +43,30 @@ class TriageEngine:
         
         # --- A. EMERGENCIES (The "Iron Dome") ---
         
-        # 1. BREATHING (Aggressive matching for breath vs breathe)
+        # 1. BREATHING (BRUTE FORCE PATTERNS)
+        # We use LOWER checks to catch exact spellings/typos, bypassing grammar logic.
         # ------------------------------------------------------
         self.matcher.add("EMERGENT_BREATH", [
-            # "I can't breathe" (Contraction split: ca + n't)
-            [{"LOWER": "ca"}, {"LOWER": "n't"}, {"LEMMA": {"in": ["breath", "breathe"]}}],
+            # "I can't breathe" (Standard English splits into "ca" + "n't")
+            [{"LOWER": "ca"}, {"LOWER": "n't"}, {"LOWER": {"in": ["breathe", "breath", "breathing"]}}],
             
-            # "cant breathe" (Typo, no apostrophe)
-            [{"LOWER": "cant"}, {"LEMMA": {"in": ["breath", "breathe"]}}],
+            # "cant breathe" (Typo: one word)
+            [{"LOWER": "cant"}, {"LOWER": {"in": ["breathe", "breath", "breathing"]}}],
             
             # "cannot breathe"
-            [{"LOWER": "cannot"}, {"LEMMA": {"in": ["breath", "breathe"]}}],
+            [{"LOWER": "cannot"}, {"LOWER": {"in": ["breathe", "breath", "breathing"]}}],
             
-            # "hard to breathe" / "trouble breathing"
+            # "can not breathe" (Three words)
+            [{"LOWER": "can"}, {"LOWER": "not"}, {"LOWER": {"in": ["breathe", "breath", "breathing"]}}],
+
+            # "Hard to breathe" / "Short of breath"
             [{"LEMMA": {"in": ["hard", "trouble", "struggle", "difficult"]}}, {"OP": "*"}, {"LEMMA": {"in": ["breath", "breathe"]}}],
-            
-            # "short of breath"
             [{"LEMMA": "short"}, {"LOWER": "of"}, {"LEMMA": "breath"}],
             
-            # Gasping/Choking
+            # "No air"
+            [{"LOWER": "no"}, {"LOWER": "air"}],
+            
+            # Keywords
             [{"LEMMA": "gasp"}],
             [{"LEMMA": "suffocate"}],
             [{"LEMMA": "choke"}],
@@ -70,7 +75,7 @@ class TriageEngine:
         # 2. BABY SAFETY (Dropped, Blue, Limp)
         # ------------------------------------------------------
         self.matcher.add("EMERGENT_BABY", [
-            # Dropped the baby (Trauma) - NEW!
+            # Dropped the baby (Trauma)
             [{"LEMMA": {"in": ["drop", "fall", "hit", "slip"]}}, {"OP": "*"}, {"LEMMA": "baby"}],
             [{"LEMMA": "baby"}, {"LEMMA": {"in": ["fall", "roll", "drop"]}}],
 
