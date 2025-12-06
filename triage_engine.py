@@ -43,26 +43,48 @@ class TriageEngine:
         
         # --- A. EMERGENCIES (The "Iron Dome") ---
         
-        # Breathing Logic
+        # 1. BREATHING (Aggressive matching for breath vs breathe)
+        # ------------------------------------------------------
         self.matcher.add("EMERGENT_BREATH", [
-            # 1. The Contraction Split: "ca" + "n't" + "breathe" (Fixes "I can't breathe")
-            [{"LOWER": "ca"}, {"LOWER": "n't"}, {"LEMMA": "breathe"}],
+            # "I can't breathe" (Contraction split: ca + n't)
+            [{"LOWER": "ca"}, {"LOWER": "n't"}, {"LEMMA": {"in": ["breath", "breathe"]}}],
             
-            # 2. The Typos: "cant breathe" (No apostrophe)
-            [{"LOWER": "cant"}, {"LEMMA": "breathe"}],
+            # "cant breathe" (Typo, no apostrophe)
+            [{"LOWER": "cant"}, {"LEMMA": {"in": ["breath", "breathe"]}}],
             
-            # 3. The Full Words: "cannot breathe" or "can not breathe"
-            [{"LOWER": "cannot"}, {"LEMMA": "breathe"}],
-            [{"LOWER": "can"}, {"LOWER": "not"}, {"LEMMA": "breathe"}],
-
-            # 4. Other distress
+            # "cannot breathe"
+            [{"LOWER": "cannot"}, {"LEMMA": {"in": ["breath", "breathe"]}}],
+            
+            # "hard to breathe" / "trouble breathing"
+            [{"LEMMA": {"in": ["hard", "trouble", "struggle", "difficult"]}}, {"OP": "*"}, {"LEMMA": {"in": ["breath", "breathe"]}}],
+            
+            # "short of breath"
             [{"LEMMA": "short"}, {"LOWER": "of"}, {"LEMMA": "breath"}],
+            
+            # Gasping/Choking
             [{"LEMMA": "gasp"}],
             [{"LEMMA": "suffocate"}],
             [{"LEMMA": "choke"}],
         ])
 
-        # Heavy Bleeding
+        # 2. BABY SAFETY (Dropped, Blue, Limp)
+        # ------------------------------------------------------
+        self.matcher.add("EMERGENT_BABY", [
+            # Dropped the baby (Trauma) - NEW!
+            [{"LEMMA": {"in": ["drop", "fall", "hit", "slip"]}}, {"OP": "*"}, {"LEMMA": "baby"}],
+            [{"LEMMA": "baby"}, {"LEMMA": {"in": ["fall", "roll", "drop"]}}],
+
+            # Color / Tone
+            [{"LEMMA": "baby"}, {"OP": "*"}, {"LOWER": {"in": ["blue", "purple", "gray", "limp", "floppy", "pale"]}}],
+            
+            # Responsiveness
+            [{"LEMMA": "baby"}, {"OP": "*"}, {"LOWER": "wo"}, {"LOWER": "n't"}, {"LEMMA": "wake"}], # wo + n't wake
+            [{"LEMMA": "baby"}, {"OP": "*"}, {"LOWER": "unresponsive"}],
+            [{"LEMMA": "baby"}, {"OP": "*"}, {"LOWER": "not"}, {"LEMMA": "breathing"}]
+        ])
+
+        # 3. HEAVY BLEEDING
+        # ------------------------------------------------------
         self.matcher.add("EMERGENT_BLEED", [
             [{"LEMMA": "gush"}], 
             [{"LOWER": "running"}, {"LOWER": "down"}, {"LOWER": "leg"}],
@@ -70,18 +92,13 @@ class TriageEngine:
             [{"LEMMA": "clot"}, {"OP": "*"}, {"LEMMA": {"in": ["golf", "baseball", "fist", "huge", "large"]}}]
         ])
 
-        # Neuro/Stroke
+        # 4. NEURO / STROKE / SEIZURE
+        # ------------------------------------------------------
         self.matcher.add("EMERGENT_NEURO", [
             [{"LEMMA": "slur"}], 
             [{"LEMMA": "droop"}], 
             [{"LEMMA": "seizure"}], 
-            [{"LEMMA": "vision"}, {"OP": "*"}, {"LEMMA": {"in": ["blur", "black", "double", "spot"]}}]
-        ])
-
-        # Baby Emergencies (Blue/Limp)
-        self.matcher.add("EMERGENT_BABY", [
-            [{"LEMMA": "baby"}, {"OP": "*"}, {"LOWER": {"in": ["blue", "purple", "gray", "limp", "floppy"]}}],
-            [{"LEMMA": "baby"}, {"OP": "*"}, {"LOWER": "wo"}, {"LOWER": "n't"}, {"LEMMA": "wake"}] # "wo" + "n't" split
+            [{"LEMMA": "vision"}, {"OP": "*"}, {"LEMMA": {"in": ["blur", "black", "double", "spot", "star"]}}]
         ])
 
         # --- B. LOGISTICS (The "Firewall") ---
@@ -113,7 +130,8 @@ class TriageEngine:
         ])
 
     def classify(self, text: str) -> TriageResult:
-        doc = nlp(text)
+        # Lowercase raw text to help spaCy with some capitalizations
+        doc = nlp(text.lower()) 
         matches = self.matcher(doc)
         
         detected_labels = set([nlp.vocab.strings[match_id] for match_id, start, end in matches])
