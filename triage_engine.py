@@ -52,12 +52,12 @@ class TriageEngine:
             [{"LEMMA": {"in": ["gasp", "suffocate", "choke", "wheeze"]}}]
         ])
 
-        # 3. HEAVY BLEEDING (Bidirectional Clots)
+        # 3. HEAVY BLEEDING
         self.matcher.add("EMERGENT_BLEED", [
             [{"LEMMA": {"in": ["gush", "pour", "vomit", "throw"]}}, {"OP": "*"}, {"LEMMA": "blood"}], 
             [{"LOWER": "running"}, {"LOWER": "down"}, {"LOWER": "leg"}],
             [{"LEMMA": "soak"}, {"OP": "*"}, {"LEMMA": "pad"}], 
-            # Clot sizes (Noun -> Adj AND Adj -> Noun)
+            # Clot sizes
             [{"LEMMA": "clot"}, {"OP": "*"}, {"LEMMA": {"in": ["golf", "baseball", "fist", "huge", "large", "giant", "massive"]}}],
             [{"LEMMA": {"in": ["huge", "large", "giant", "massive"]}}, {"OP": "*"}, {"LEMMA": "clot"}] 
         ])
@@ -75,39 +75,40 @@ class TriageEngine:
             [{"LEMMA": {"in": ["face", "smile", "mouth"]}}, {"OP": "*"}, {"LEMMA": {"in": ["droop", "sag", "crook", "uneven", "numb"]}}],
             [{"LEMMA": "word"}, {"OP": "*"}, {"LEMMA": {"in": ["slur", "garble", "wrong", "stuck", "weird"]}}],
             [{"LEMMA": "word"}, {"OP": "*"}, {"LOWER": "wo"}, {"LOWER": "n't"}, {"LEMMA": "come"}],
+            [{"LEMMA": "speech"}, {"OP": "*"}, {"LEMMA": {"in": ["slur", "weird", "strange", "garble", "funny"]}}], # Added "FUNNY"
             [{"LEMMA": "can"}, {"LOWER": "not"}, {"LEMMA": "speak"}],
 
             # Vision (Bidirectional)
             [{"LEMMA": "vision"}, {"OP": "*"}, {"LEMMA": {"in": ["blur", "blurry", "blurred", "black", "double", "spot", "star", "flash", "fuzzy"]}}],
-            [{"LEMMA": {"in": ["blur", "blurry", "blurred", "black", "double", "fuzzy"]}}, {"OP": "*"}, {"LEMMA": {"in": ["vision", "see", "look", "everything"]}}], # "Everything looks fuzzy"
-            [{"LEMMA": {"in": ["blur", "blurry", "blurred", "fuzzy"]}}], # Catch-all adjective
+            [{"LEMMA": {"in": ["blur", "blurry", "blurred", "black", "double", "fuzzy"]}}, {"OP": "*"}, {"LEMMA": {"in": ["vision", "see", "look", "everything"]}}], 
+            [{"LEMMA": {"in": ["blur", "blurry", "blurred", "fuzzy"]}}], 
             
             # "Seeing" things
             [{"LEMMA": "see"}, {"OP": "*"}, {"LEMMA": {"in": ["spot", "star", "flash", "sparkle", "double"]}}],
             
-            # Headache Red Flags (Head AND Headache)
-            [{"LEMMA": {"in": ["headache", "head", "migraine"]}}, {"OP": "*"}, {"LEMMA": {"in": ["worst", "severe", "explode", "pounding", "pound", "killer", "blind"]}}],
-            [{"LEMMA": {"in": ["worst", "severe", "explode", "pounding", "pound", "killer", "blind"]}}, {"OP": "*"}, {"LEMMA": {"in": ["headache", "head", "migraine"]}}],
+            # Headache Red Flags
+            [{"LEMMA": "headache"}, {"OP": "*"}, {"LEMMA": {"in": ["worst", "severe", "explode", "pounding", "killer", "blind"]}}],
+            [{"LEMMA": {"in": ["worst", "severe", "explode", "pounding", "killer", "blind"]}}, {"OP": "*"}, {"LEMMA": {"in": ["headache", "head", "migraine"]}}],
             [{"LEMMA": "headache"}, {"OP": "*"}, {"LOWER": "wo"}, {"LOWER": "n't"}, {"LEMMA": "go"}], 
         ])
 
-        # 5. INFECTION (Pus/Dehiscence only - Smell moved to Routine)
+        # 5. INFECTION / SEPSIS / DEHISCENCE
         self.matcher.add("EMERGENT_INFECTION", [
             [{"LEMMA": {"in": ["pus", "ooze", "drain", "leak"]}}], 
-            # Dehiscence (Bidirectional)
+            # Dehiscence
             [{"LEMMA": {"in": ["stitch", "incision", "staple", "wound"]}}, {"OP": "*"}, {"LEMMA": {"in": ["open", "pop", "split", "tear", "leak", "gape", "gaping"]}}], 
             [{"LEMMA": {"in": ["open", "pop", "split", "tear", "leak", "gape", "gaping"]}}, {"OP": "*"}, {"LEMMA": {"in": ["stitch", "incision", "staple", "wound"]}}],
         ])
 
-        # 6. PAIN LOCATIONS (Bidirectional DVT & Preeclampsia)
+        # 6. PAIN LOCATIONS (Bidirectional)
         self.matcher.add("EMERGENT_PAIN_LOC", [
-            # Calf/Leg DVT (Bidirectional - Fixes "Hot red calf")
+            # Calf/Leg DVT
             [{"LEMMA": {"in": ["calf", "leg"]}}, {"OP": "*"}, {"LEMMA": {"in": ["hot", "red", "swollen", "swell", "pain", "hurts"]}}],
             [{"LEMMA": {"in": ["hot", "red", "swollen", "swell", "pain", "hurts"]}}, {"OP": "*"}, {"LEMMA": {"in": ["calf", "leg"]}}],
             
             # Preeclampsia (Upper Belly/Ribs)
-            [{"LEMMA": {"in": ["pain", "hurt", "severe"]}}, {"OP": "*"}, {"LEMMA": {"in": ["rib", "ribs"]}}], # "Severe rib pain"
-            [{"LEMMA": {"in": ["upper", "top", "high"]}}, {"OP": "*"}, {"LEMMA": {"in": ["belly", "stomach", "abdomen"]}}, {"OP": "*"}, {"LEMMA": {"in": ["pain", "hurt"]}}], # "Upper right belly pain"
+            [{"LEMMA": {"in": ["pain", "hurt", "severe"]}}, {"OP": "*"}, {"LEMMA": {"in": ["rib", "ribs"]}}],
+            [{"LEMMA": {"in": ["upper", "top", "high"]}}, {"OP": "*"}, {"LEMMA": {"in": ["belly", "stomach", "abdomen"]}}, {"OP": "*"}, {"LEMMA": {"in": ["pain", "hurt"]}}], 
             [{"LEMMA": {"in": ["pain", "hurt"]}}, {"OP": "*"}, {"LEMMA": {"in": ["upper", "top", "high"]}}, {"OP": "*"}, {"LEMMA": {"in": ["belly", "stomach", "abdomen"]}}]
         ])
 
@@ -131,7 +132,7 @@ class TriageEngine:
             [{"LOWER": {"in": ["mesh", "underwear", "panties", "chux", "pad", "pads", "liner", "liners"]}}],
             [{"LOWER": {"in": ["peri", "bottle"]}}],
             [{"LOWER": {"in": ["tv", "remote", "charger", "phone", "wifi", "bed"]}}],
-            [{"LEMMA": {"in": ["pump", "flange", "part"]}}], 
+            # REMOVED: pump, flange, part (Now defaults to Nurse)
         ])
 
         self.matcher.add("LOGISTICS_ACT", [
@@ -157,7 +158,7 @@ class TriageEngine:
             [{"LEMMA": "motrin"}],
             [{"LEMMA": "incision"}],
             [{"LEMMA": "stitch"}],
-            # Smells moved here (Routine Clinical)
+            # Smells (Routine Clinical)
             [{"LEMMA": "smell"}, {"OP": "*"}, {"LEMMA": {"in": ["rot", "dead", "foul", "meat", "bad", "weird"]}}], 
             [{"LEMMA": "foul"}, {"OP": "*"}, {"LEMMA": "smell"}],
         ])
