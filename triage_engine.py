@@ -37,7 +37,7 @@ class TriageEngine:
         # 1. HEART & CHEST (Bidirectional)
         self.matcher.add("EMERGENT_CHEST", [
             # "Chest" -> "Pain"
-            [{"LOWER": "chest"}, {"OP": "*"}, {"LEMMA": {"in": ["pain", "hurt", "pressure", "tight", "heavy", "crush", "discomfort", "squeeze"]}}],
+            [{"LOWER": "chest"}, {"OP": "*"}, {"LEMMA": {"in": ["pain", "hurt", "pressure", "tight", "heavy", "crush", "discomfort"]}}],
             # "Pain" -> "Chest"
             [{"LEMMA": {"in": ["pain", "hurt", "pressure", "tight", "heavy", "crush"]}}, {"OP": "*"}, {"LOWER": "chest"}],
             # Heart specific
@@ -57,7 +57,8 @@ class TriageEngine:
             [{"LEMMA": {"in": ["gush", "pour", "vomit", "throw"]}}, {"OP": "*"}, {"LEMMA": "blood"}], 
             [{"LOWER": "running"}, {"LOWER": "down"}, {"LOWER": "leg"}],
             [{"LEMMA": "soak"}, {"OP": "*"}, {"LEMMA": "pad"}], 
-            [{"LEMMA": "clot"}, {"OP": "*"}, {"LEMMA": {"in": ["golf", "baseball", "fist", "huge", "large"]}}]
+            # Clot sizes (Added HUGE/GIANT)
+            [{"LEMMA": "clot"}, {"OP": "*"}, {"LEMMA": {"in": ["golf", "baseball", "fist", "huge", "large", "giant", "massive"]}}]
         ])
 
         # 4. NEURO / STROKE / VISION / DIZZY
@@ -66,24 +67,25 @@ class TriageEngine:
             [{"LEMMA": "slur"}], 
             [{"LEMMA": {"in": ["seizure", "seize", "seizing", "convulse", "twitch"]}}],
             [{"LEMMA": "faint"}],
+            [{"LOWER": "pass"}, {"LOWER": "out"}], # Added "pass out"
             [{"LEMMA": {"in": ["dizzy", "lightheaded", "woozy"]}}], 
             
-            # Face/Smile (Droop, Crooked)
+            # Face/Smile/Speech
             [{"LEMMA": {"in": ["face", "smile", "mouth"]}}, {"OP": "*"}, {"LEMMA": {"in": ["droop", "sag", "crook", "uneven", "numb"]}}],
+            [{"LEMMA": "word"}, {"OP": "*"}, {"LEMMA": {"in": ["slur", "garble", "wrong", "stuck", "weird"]}}],
+            [{"LEMMA": "speech"}, {"OP": "*"}, {"LEMMA": {"in": ["slur", "weird", "strange", "garble"]}}],
 
-            # Speech / Words
-            [{"LEMMA": "word"}, {"OP": "*"}, {"LEMMA": {"in": ["slur", "garble", "wrong", "stuck"]}}],
-            [{"LEMMA": "word"}, {"OP": "*"}, {"LOWER": "wo"}, {"LOWER": "n't"}, {"LEMMA": "come"}], # "Words won't come out"
-            [{"LEMMA": "can"}, {"LOWER": "not"}, {"LEMMA": "speak"}],
-
-            # Vision (Bidirectional with expanded keywords)
-            [{"LEMMA": "vision"}, {"OP": "*"}, {"LEMMA": {"in": ["blur", "blurry", "blurred", "black", "double", "spot", "star", "flash"]}}],
-            [{"LEMMA": {"in": ["blur", "blurry", "blurred", "black", "double"]}}, {"OP": "*"}, {"LEMMA": "vision"}], 
+            # Vision (Implicit & Explicit)
+            # Explicit: "Vision is blurry"
+            [{"LEMMA": "vision"}, {"OP": "*"}, {"LEMMA": {"in": ["blur", "blurry", "blurred", "black", "double", "spot", "star", "flash", "fuzzy"]}}],
+            # Implicit: "Everything looks blurry"
+            [{"LEMMA": {"in": ["blur", "blurry", "blurred", "black", "double", "fuzzy"]}}, {"OP": "*"}, {"LEMMA": {"in": ["look", "see", "vision"]}}], 
+            [{"LEMMA": {"in": ["blur", "blurry", "blurred", "fuzzy"]}}], # Standalone adjective catch
             
             # "Seeing" things
             [{"LEMMA": "see"}, {"OP": "*"}, {"LEMMA": {"in": ["spot", "star", "flash", "sparkle", "double"]}}],
             
-            # Headache Red Flags (Bidirectional)
+            # Headache Red Flags
             [{"LEMMA": "headache"}, {"OP": "*"}, {"LEMMA": {"in": ["worst", "severe", "explode", "pounding", "killer", "blind"]}}],
             [{"LEMMA": {"in": ["worst", "severe", "explode", "pounding", "killer", "blind"]}}, {"OP": "*"}, {"LEMMA": "headache"}],
             [{"LEMMA": "headache"}, {"OP": "*"}, {"LOWER": "wo"}, {"LOWER": "n't"}, {"LEMMA": "go"}], 
@@ -98,10 +100,11 @@ class TriageEngine:
             [{"LEMMA": {"in": ["stitch", "incision", "staple", "wound"]}}, {"OP": "*"}, {"LEMMA": {"in": ["open", "pop", "split", "tear", "leak"]}}], 
         ])
 
-        # 6. PAIN LOCATIONS (DVT & Preeclampsia)
+        # 6. PAIN LOCATIONS (Bidirectional)
         self.matcher.add("EMERGENT_PAIN_LOC", [
-            # Calf/Leg DVT
-            [{"LEMMA": {"in": ["calf", "leg"]}}, {"OP": "*"}, {"LEMMA": {"in": ["hot", "red", "swollen", "swell", "pain"]}}],
+            # Calf/Leg DVT (Bidirectional)
+            [{"LEMMA": {"in": ["calf", "leg"]}}, {"OP": "*"}, {"LEMMA": {"in": ["hot", "red", "swollen", "swell", "pain", "hurts"]}}],
+            [{"LEMMA": {"in": ["pain", "hurts"]}}, {"OP": "*"}, {"LEMMA": {"in": ["calf", "leg"]}}],
             
             # Preeclampsia (Upper Belly/Ribs)
             [{"LEMMA": "pain"}, {"OP": "*"}, {"LEMMA": {"in": ["rib", "ribs"]}}],
@@ -109,12 +112,12 @@ class TriageEngine:
             [{"LEMMA": "pain"}, {"OP": "*"}, {"LEMMA": "upper"}, {"LEMMA": {"in": ["belly", "stomach", "abdomen"]}}]
         ])
 
-        # 7. BABY SAFETY
+        # 7. BABY SAFETY (Expanded)
         self.matcher.add("EMERGENT_BABY", [
             # Color
             [{"LEMMA": "baby"}, {"OP": "*"}, {"LOWER": {"in": ["blue", "purple", "gray", "grey", "limp", "floppy", "pale", "stiff", "sweat", "sweating", "clammy"]}}],
-            # Lethargy
-            [{"LEMMA": "baby"}, {"OP": "*"}, {"LEMMA": {"in": ["lethargic", "unresponsive", "listless"]}}],
+            # Lethargy/Seizures (Added SHAKING)
+            [{"LEMMA": "baby"}, {"OP": "*"}, {"LEMMA": {"in": ["lethargic", "unresponsive", "listless", "shake", "shaking", "twitch", "seize"]}}],
             [{"LEMMA": "hard"}, {"OP": "*"}, {"LEMMA": "wake"}, {"OP": "*"}, {"LEMMA": "baby"}],
         ])
 
@@ -129,6 +132,7 @@ class TriageEngine:
             [{"LOWER": {"in": ["mesh", "underwear", "panties", "chux", "pad", "pads", "liner", "liners"]}}],
             [{"LOWER": {"in": ["peri", "bottle"]}}],
             [{"LOWER": {"in": ["tv", "remote", "charger", "phone", "wifi", "bed"]}}],
+            [{"LEMMA": {"in": ["pump", "flange", "part"]}}], # Breast pump parts
         ])
 
         self.matcher.add("LOGISTICS_ACT", [
@@ -137,7 +141,10 @@ class TriageEngine:
             [{"LEMMA": "commode"}],
             [{"LEMMA": "shower"}],
             [{"LEMMA": "walk"}],
-            [{"LEMMA": "help"}, {"LOWER": "up"}]
+            [{"LEMMA": "help"}, {"LOWER": "up"}],
+            # Room Environment
+            [{"LEMMA": {"in": ["room", "temperature", "thermostat"]}}],
+            [{"LOWER": {"in": ["freezing", "cold", "hot", "burning", "boiling"]}}]
         ])
         
         # =========================================================
