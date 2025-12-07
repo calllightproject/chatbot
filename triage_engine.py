@@ -37,7 +37,7 @@ class TriageEngine:
         # 1. HEART & CHEST (Bidirectional)
         self.matcher.add("EMERGENT_CHEST", [
             # "Chest" -> "Pain"
-            [{"LOWER": "chest"}, {"OP": "*"}, {"LEMMA": {"in": ["pain", "hurt", "pressure", "tight", "heavy", "crush", "discomfort"]}}],
+            [{"LOWER": "chest"}, {"OP": "*"}, {"LEMMA": {"in": ["pain", "hurt", "pressure", "tight", "heavy", "crush", "discomfort", "squeeze"]}}],
             # "Pain" -> "Chest"
             [{"LEMMA": {"in": ["pain", "hurt", "pressure", "tight", "heavy", "crush"]}}, {"OP": "*"}, {"LOWER": "chest"}],
             # Heart specific
@@ -62,21 +62,30 @@ class TriageEngine:
 
         # 4. NEURO / STROKE / VISION / DIZZY
         self.matcher.add("EMERGENT_NEURO", [
+            # General Neuro
             [{"LEMMA": "slur"}], 
-            [{"LEMMA": "droop"}], 
             [{"LEMMA": {"in": ["seizure", "seize", "seizing", "convulse", "twitch"]}}],
             [{"LEMMA": "faint"}],
             [{"LEMMA": {"in": ["dizzy", "lightheaded", "woozy"]}}], 
             
-            # Vision (Expanded "Blurry" logic)
-            [{"LEMMA": "vision"}, {"OP": "*"}, {"LEMMA": {"in": ["blur", "black", "double", "spot", "star", "flash"]}}],
-            [{"LOWER": {"in": ["blur", "blurred", "blurry"]}}, {"LEMMA": "vision"}], 
+            # Face/Smile (Droop, Crooked)
+            [{"LEMMA": {"in": ["face", "smile", "mouth"]}}, {"OP": "*"}, {"LEMMA": {"in": ["droop", "sag", "crook", "uneven", "numb"]}}],
+
+            # Speech / Words
+            [{"LEMMA": "word"}, {"OP": "*"}, {"LEMMA": {"in": ["slur", "garble", "wrong", "stuck"]}}],
+            [{"LEMMA": "word"}, {"OP": "*"}, {"LOWER": "wo"}, {"LOWER": "n't"}, {"LEMMA": "come"}], # "Words won't come out"
+            [{"LEMMA": "can"}, {"LOWER": "not"}, {"LEMMA": "speak"}],
+
+            # Vision (Bidirectional with expanded keywords)
+            [{"LEMMA": "vision"}, {"OP": "*"}, {"LEMMA": {"in": ["blur", "blurry", "blurred", "black", "double", "spot", "star", "flash"]}}],
+            [{"LEMMA": {"in": ["blur", "blurry", "blurred", "black", "double"]}}, {"OP": "*"}, {"LEMMA": "vision"}], 
             
             # "Seeing" things
             [{"LEMMA": "see"}, {"OP": "*"}, {"LEMMA": {"in": ["spot", "star", "flash", "sparkle", "double"]}}],
             
-            # Headache Red Flags
-            [{"LEMMA": "headache"}, {"OP": "*"}, {"LEMMA": {"in": ["worst", "severe", "explode", "pounding"]}}],
+            # Headache Red Flags (Bidirectional)
+            [{"LEMMA": "headache"}, {"OP": "*"}, {"LEMMA": {"in": ["worst", "severe", "explode", "pounding", "killer", "blind"]}}],
+            [{"LEMMA": {"in": ["worst", "severe", "explode", "pounding", "killer", "blind"]}}, {"OP": "*"}, {"LEMMA": "headache"}],
             [{"LEMMA": "headache"}, {"OP": "*"}, {"LOWER": "wo"}, {"LOWER": "n't"}, {"LEMMA": "go"}], 
         ])
 
@@ -94,7 +103,7 @@ class TriageEngine:
             # Calf/Leg DVT
             [{"LEMMA": {"in": ["calf", "leg"]}}, {"OP": "*"}, {"LEMMA": {"in": ["hot", "red", "swollen", "swell", "pain"]}}],
             
-            # Preeclampsia (Upper Belly/Ribs) - New!
+            # Preeclampsia (Upper Belly/Ribs)
             [{"LEMMA": "pain"}, {"OP": "*"}, {"LEMMA": {"in": ["rib", "ribs"]}}],
             [{"LEMMA": "upper"}, {"LEMMA": {"in": ["belly", "stomach", "abdomen"]}}], 
             [{"LEMMA": "pain"}, {"OP": "*"}, {"LEMMA": "upper"}, {"LEMMA": {"in": ["belly", "stomach", "abdomen"]}}]
@@ -103,7 +112,7 @@ class TriageEngine:
         # 7. BABY SAFETY
         self.matcher.add("EMERGENT_BABY", [
             # Color
-            [{"LEMMA": "baby"}, {"OP": "*"}, {"LOWER": {"in": ["blue", "purple", "gray", "grey", "limp", "floppy", "pale", "stiff"]}}],
+            [{"LEMMA": "baby"}, {"OP": "*"}, {"LOWER": {"in": ["blue", "purple", "gray", "grey", "limp", "floppy", "pale", "stiff", "sweat", "sweating", "clammy"]}}],
             # Lethargy
             [{"LEMMA": "baby"}, {"OP": "*"}, {"LEMMA": {"in": ["lethargic", "unresponsive", "listless"]}}],
             [{"LEMMA": "hard"}, {"OP": "*"}, {"LEMMA": "wake"}, {"OP": "*"}, {"LEMMA": "baby"}],
@@ -185,17 +194,13 @@ class TriageEngine:
         clinical_flags = [l for l in detected_labels if l.startswith("CLINICAL")]
 
         # GAS PAIN DOWNGRADE Logic
-        # If we found Emergent Pain (like "Upper Belly"), but the user explicitly said "Gas", downgrade it.
         if emergent_flags and "gas" in t:
-            # Only downgrade if it's strictly a pain location match, not breathing/bleeding
             if all(f == "EMERGENT_PAIN_LOC" for f in emergent_flags):
                 return TriageResult(Routing.NURSE, Tier.ROUTINE, ["DOWNGRADED_GAS_PAIN"])
 
-        # Default Emergent Logic
         if emergent_flags:
             return TriageResult(Routing.NURSE, Tier.EMERGENT, list(detected_labels))
 
-        # Logistics Firewall
         if logistics_flags and not clinical_flags:
             return TriageResult(Routing.CNA, Tier.ROUTINE, list(detected_labels))
 
