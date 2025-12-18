@@ -18,7 +18,6 @@ button_data = {
 
     # --- Main Menu Options ---
     "main_buttons": [
-        "Tengo una emergencia",
         "Mi bomba de IV está sonando",
         "Necesito medicamentos",
         "Necesito suministros",
@@ -317,3 +316,4 @@ button_data = {
         "note": "No es obligatorio, pero alguien del personal debe acompañarle. Si enfermería está ocupada, le llevará personal de traslado."
     }
 }
+
