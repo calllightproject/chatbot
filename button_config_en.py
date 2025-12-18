@@ -16,7 +16,6 @@ button_data = {
 
     # --- Main Menu Options ---
     "main_buttons": [
-        "I'm having an emergency",
         "My IV pump is beeping",
         "I need medication",
         "I need supplies",
@@ -303,3 +302,4 @@ button_data = {
         "note": "No, but a staff member has to go with you. If the nursing staff is busy, a transport worker will be the one to escort you out."
     }
 }
+
