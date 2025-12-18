@@ -10,7 +10,6 @@ button_data = {
 
     # --- Main Menu Options (Bereavement) ---
     "main_buttons": [
-        "I'm having an emergency",
         "My IV pump is beeping",
         "I need medication",
         "I need supplies",
@@ -117,4 +116,5 @@ button_data = {
     "When will I get my discharge paperwork?": {"note": "Once the OB-GYN has put in their notes and discharge orders, your nurse can print out paperwork."},
     "Do I have to take a wheelchair?": {"note": "No, but a staff member has to go with you. If the nursing staff is busy, a transport worker will be the one to escort you out."}
 }
+
 
