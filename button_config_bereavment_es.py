@@ -11,7 +11,6 @@ button_data = {
 
     # --- Main Menu Options (Bereavement) ---
     "main_buttons": [
-        "Tengo una emergencia",
         "Mi bomba de IV está sonando",
         "Necesito medicamentos",
         "Necesito suministros",
@@ -118,4 +117,5 @@ button_data = {
     "¿Cuándo recibiré mis papeles de alta?": {"note": "Una vez que el ginecólogo ingrese notas y órdenes de alta, su enfermera imprimirá la documentación."},
     "¿Tengo que usar una silla de ruedas?": {"note": "No es obligatorio, pero alguien del personal debe acompañarle. Si enfermería está ocupada, le llevará personal de traslado."}
 }
+
 
