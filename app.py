@@ -16,6 +16,13 @@ from sqlalchemy.exc import ProgrammingError
 from werkzeug.security import generate_password_hash, check_password_hash
 from triage_engine import TriageEngine
 
+from datetime import timedelta
+
+def get_arizona_time():
+    utc_now = datetime.now(timezone.utc)
+    # Subtract 7 hours to get Arizona time
+    arizona_time = utc_now - timedelta(hours=7)
+    return arizona_time
 
 # --- App Configuration ---
 app = Flask(__name__, template_folder='templates')
@@ -1012,7 +1019,8 @@ def analytics():
 # --- Assignments (shift-aware; CNA zones; strict nurse filtering) ---
 @app.route('/assignments', methods=['GET', 'POST'])
 def assignments():
-    today = date.today()
+    # UPDATED: Use Arizona time for date logic
+    today = get_arizona_time().date()
 
     # Normalize the shift (default day)
     if request.method == 'GET':
@@ -1138,7 +1146,7 @@ def assignments():
                 SELECT zone, cna_name
                 FROM cna_coverage
                 WHERE assignment_date = :date AND shift = :shift;
-            """)).fetchall()
+            """), {"date": today, "shift": shift}).fetchall()
             zmap = {(r[0] or '').lower(): r[1] for r in rows}
             cna_front_val = zmap.get('front') or 'unassigned'
             cna_back_val  = zmap.get('back')  or 'unassigned'
@@ -1163,7 +1171,8 @@ def assignments():
 def room_reset():
     """Mark a room as 'reset' (new patient) and clear its nurse assignment for today's selected shift."""
     try:
-        today = date.today()
+        # UPDATED: Use Arizona time for date logic
+        today = get_arizona_time().date()
         shift = (request.form.get('shift') or 'day').lower()
         room = (request.form.get('room') or '').strip()
 
@@ -1322,11 +1331,12 @@ def manager_dashboard():
 
     return render_template('manager_dashboard.html', staff=staff_list, audit_log=audit_log)
 
-# --- Staff Portal (pilot PIN) -----------------------------------------------
 def _infer_shift_now() -> str:
-    """Return 'day' from 07:00–18:59, else 'night'."""
-    now = datetime.now()
+    """Return 'day' from 07:00–18:59 AZ Time, else 'night'."""
+    # UPDATED: Use Arizona time
+    now = get_arizona_time()
     return 'day' if time(7, 0) <= now.time() < time(19, 0) else 'night'
+    
 
 @app.route('/staff-portal', methods=['GET', 'POST'])
 def staff_portal():
@@ -1380,7 +1390,8 @@ def staff_dashboard_for_nurse(staff_name):
       - scope=all: all active requests (to help others)
       - shift=day|night (defaults based on current time)
     """
-    today = date.today()
+    # UPDATED: Use Arizona time for date logic
+    today = get_arizona_time().date()
 
     # Shift param or inferred
     shift = (request.args.get('shift') or _infer_shift_now()).strip().lower()
@@ -1470,24 +1481,11 @@ def staff_dashboard_for_nurse(staff_name):
         toggle_url=toggle_url
     )
 
-@app.get("/debug/ping_patient")
-def debug_ping_patient():
-    room = request.args.get("room", "").strip()
-    status = request.args.get("status", "ack").strip().lower()  # ack|omw|asap
-    if not _valid_room(room):
-        return jsonify({"ok": False, "error": "invalid room"}), 400
-    emit_patient_event("request:status", room, {
-        "request_id": "debug",
-        "status": status,
-        "nurse": "Debug",
-        "ts": datetime.now(timezone.utc).isoformat()
-    })
-    return jsonify({"ok": True, "room": room, "status": status})
-
 @app.route('/api/active_requests')
 def api_active_requests():
     """JSON: returns active requests for manager or for a nurse's scope."""
-    today = date.today()
+    # UPDATED: Use Arizona time for date logic
+    today = get_arizona_time().date()
     staff_name = (request.args.get('staff_name') or '').strip()
     shift = (request.args.get('shift') or '').strip().lower()
     scope = (request.args.get('scope') or '').strip().lower()
@@ -1564,16 +1562,21 @@ def api_active_requests():
 @app.route("/debug/assignments_today")
 def debug_assignments_today():
     """Quick snapshot of today's assignments for BOTH shifts."""
-    from datetime import date
+    # OLD: from datetime import date
+    # NEW: Use your helper
     rows = []
     try:
+        # Use Arizona date here so debug matches the real dashboard
+        today = get_arizona_time().date() 
+        
         with engine.connect() as connection:
             res = connection.execute(text("""
                 SELECT assignment_date, shift, room_number, staff_name
                 FROM assignments
                 WHERE assignment_date = :d
                 ORDER BY shift, room_number;
-            """), {"d": date.today()}).fetchall()
+            """), {"d": today}).fetchall()
+            
             rows = [dict(assignment_date=str(r[0]),
                          shift=r[1],
                          room=r[2],
@@ -1806,6 +1809,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
