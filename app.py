@@ -40,11 +40,6 @@ def add_no_cache_headers(response):
     return response
 
 
-# --- Room Configuration ---
-ALL_ROOMS = [str(room) for room in range(231, 260)]
-VALID_ROOMS = set(ALL_ROOMS)
-
-# (Removed conflicting /room/<room_number> route here)
 
 # --- Database Configuration ---
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -134,6 +129,21 @@ def setup_database():
                     );
                 """))
 
+                # --- NEW: Rooms Configuration Table (Stop-Gap Feature) ---
+                connection.execute(text("""
+                    CREATE TABLE IF NOT EXISTS rooms (
+                        room_number VARCHAR(20) PRIMARY KEY
+                    );
+                """))
+                
+                # Check if we need to seed default rooms (Safety: ensures app works immediately)
+                room_count = connection.execute(text("SELECT COUNT(*) FROM rooms")).scalar()
+                if room_count == 0:
+                    print("Seeding default rooms 231-260 into database...")
+                    # Insert 231 through 259 (range stops before 260)
+                    for r in range(231, 260):
+                        connection.execute(text("INSERT INTO rooms (room_number) VALUES (:r)"), {"r": str(r)})
+
                 print("CREATE TABLE statements complete.")
 
                 # ---------------- Idempotent hardening ----------------
@@ -216,6 +226,25 @@ def setup_database():
         print(f"CRITICAL ERROR during database setup: {e}")
 
 setup_database()
+
+# --- NEW: Load Configurable Rooms ---
+def load_rooms_from_db():
+    try:
+        with engine.connect() as connection:
+            # Sort by room_number so they appear in order
+            result = connection.execute(text("SELECT room_number FROM rooms ORDER BY room_number ASC"))
+            # Return a simple list of strings ['231', '232', ...]
+            return [row[0] for row in result]
+    except Exception as e:
+        print(f"CRITICAL WARNING: Could not load rooms from DB: {e}")
+        # Fallback if DB fails, so the app doesn't crash during a demo
+        return [str(r) for r in range(231, 260)]
+
+# Initialize the global variables the rest of the app expects
+ALL_ROOMS = load_rooms_from_db()
+VALID_ROOMS = set(ALL_ROOMS)
+
+print(f"System loaded {len(ALL_ROOMS)} rooms from the database.")
 
 # --- Localized label -> English maps for structured buttons ---
 ES_TO_EN = {
@@ -374,7 +403,6 @@ def migrate_schema():
         print("Schema migration OK.")
     except Exception as e:
         print(f"Schema migration error: {e}")
-
 def send_email_alert(subject, body, room_number):
     """Safe/no-op email alert. Will quietly skip if creds aren’t set."""
     try:
@@ -1778,6 +1806,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
