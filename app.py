@@ -968,6 +968,15 @@ def debug_signed_room_url():
         "signed_url": f"/chat?room={room}&sig={sig}"
     })
 
+@app.get("/debug/env_check")
+def debug_env_check():
+    val = os.getenv("ROOM_QR_SECRET")
+    return jsonify({
+        "has_ROOM_QR_SECRET": bool(val),
+        "len": len(val) if val else 0
+    })
+
+
 # --- Analytics ---
 @app.route('/analytics')
 def analytics():
@@ -1894,6 +1903,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
