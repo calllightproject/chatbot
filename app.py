@@ -350,7 +350,7 @@ def migrate_schema():
     except Exception as e:
         print(f"Schema migration error: {e}")
 def send_email_alert(subject, body, room_number):
-    """Safe/no-op email alert. Will quietly skip if creds aren’t set."""
+    """Safe/no-op email alert. Will quietly skip if creds aren't set."""
     try:
         sender_email = os.getenv("EMAIL_USER")
         sender_password = os.getenv("EMAIL_PASSWORD")
@@ -1856,5 +1856,6 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
