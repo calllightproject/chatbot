@@ -954,6 +954,8 @@ def dashboard():
                            nurse_context=False)
 
 
+print("DEBUG ROUTE LOADED: /debug/signed_room_url")
+
 @app.get("/debug/signed_room_url")
 def debug_signed_room_url():
     room = (request.args.get("room") or "").strip()
@@ -1892,5 +1894,6 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
