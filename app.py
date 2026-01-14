@@ -819,10 +819,13 @@ def handle_complete_request(data):
     except Exception as e:
         print(f"Error complete_request: {e}")
 
+# Run DB setup on import (so it runs under Gunicorn/Render too)
+setup_database()
+migrate_schema()
+
 # --- Startup ---
 if __name__ == "__main__":
-    setup_database()
-    migrate_schema()
     port = int(os.getenv('PORT', 5000))
     print(f"Starting server on port {port}...")
     socketio.run(app, host='0.0.0.0', port=port, debug=False, use_reloader=False)
+
