@@ -129,22 +129,126 @@ def setup_database():
                     );
                 """))
 
-                # --- NEW: Rooms Configuration Table (Stop-Gap Feature) ---
+                # --- Rooms Registry (Banner-ready foundation) ---
+                # Create full table (safe for fresh DBs)
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS rooms (
-                        room_number VARCHAR(20) PRIMARY KEY
+                        room_number VARCHAR(20) PRIMARY KEY,
+                        unit VARCHAR(64),
+                        is_active BOOLEAN NOT NULL DEFAULT FALSE,
+                        activated_by VARCHAR(128),
+                        activated_at TIMESTAMPTZ,
+                        expires_at TIMESTAMPTZ,
+                        banner_location_id VARCHAR(64),
+                        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                     );
                 """))
-                
-                # Check if we need to seed default rooms (Safety: ensures app works immediately)
+
+                # Hardening for older DBs where rooms table already existed with only room_number
+                # (Postgres supports ADD COLUMN IF NOT EXISTS. SQLite may throw; we ignore safely.)
+                try:
+                    connection.execute(text("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS unit VARCHAR(64);"))
+                    connection.execute(text("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT FALSE;"))
+                    connection.execute(text("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS activated_by VARCHAR(128);"))
+                    connection.execute(text("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS activated_at TIMESTAMPTZ;"))
+                    connection.execute(text("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;"))
+                    connection.execute(text("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS banner_location_id VARCHAR(64);"))
+                    connection.execute(text("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();"))
+                except Exception as e:
+                    print(f"WARN: rooms hardening skipped/failed (non-fatal): {e}")
+
+                # Seed default rooms (exists-only; starts INACTIVE by default)
                 room_count = connection.execute(text("SELECT COUNT(*) FROM rooms")).scalar()
                 if room_count == 0:
                     print("Seeding default rooms 231-260 into database...")
-                    # Insert 231 through 259 (range stops before 260)
-                    for r in range(231, 260):
-                        connection.execute(text("INSERT INTO rooms (room_number) VALUES (:r)"), {"r": str(r)})
+                    for r in range(231, 261):  # 231..260 inclusive
+                        connection.execute(text("""
+                            INSERT INTO rooms (room_number, unit, is_active)
+                            VALUES (:r, :unit, FALSE)
+                            ON CONFLICT (room_number) DO NOTHING;
+                        """), {"r": str(r), "unit": "Postpartum"})
 
                 print("CREATE TABLE statements complete.")
+
+                # ---------------- Idempotent hardening ----------------
+
+                # Ensure 'shift' column exists on older DBs (harmless if already there)
+                try:
+                    connection.execute(text("""
+                        ALTER TABLE assignments
+                        ADD COLUMN IF NOT EXISTS shift VARCHAR(10) NOT NULL DEFAULT 'day';
+                    """))
+                    connection.execute(text("""
+                        ALTER TABLE assignments
+                        ALTER COLUMN shift DROP DEFAULT;
+                    """))
+                except Exception:
+                    pass
+
+                # Ensure correct UNIQUE(date, shift, room) on assignments
+                try:
+                    connection.execute(text("""
+                        DO $$
+                        BEGIN
+                          IF NOT EXISTS (
+                            SELECT 1
+                            FROM   pg_constraint
+                            WHERE  conname = 'assignments_uniq_date_shift_room'
+                          ) THEN
+                            ALTER TABLE assignments
+                            ADD CONSTRAINT assignments_uniq_date_shift_room
+                            UNIQUE (assignment_date, shift, room_number);
+                          END IF;
+                        END$$;
+                    """))
+                except Exception:
+                    pass
+
+                # Backfill safe defaults
+                try:
+                    connection.execute(text("""
+                        UPDATE room_state
+                        SET tags = COALESCE(tags, '[]'::jsonb);
+                    """))
+                except Exception:
+                    pass
+
+                try:
+                    connection.execute(text("""
+                        UPDATE staff
+                        SET languages = COALESCE(languages, '["en"]');
+                    """))
+                except Exception:
+                    pass
+
+                # Ensure PIN columns exist on older DBs
+                try:
+                    connection.execute(text("""
+                        ALTER TABLE staff
+                        ADD COLUMN IF NOT EXISTS pin_hash TEXT;
+                    """))
+                    connection.execute(text("""
+                        ALTER TABLE staff
+                        ADD COLUMN IF NOT EXISTS pin_set_at TIMESTAMPTZ;
+                    """))
+                except Exception:
+                    pass
+
+        # Legacy safety: make sure deferral_timestamp exists
+        try:
+            with engine.connect() as connection:
+                with connection.begin():
+                    connection.execute(text("""
+                        ALTER TABLE requests
+                        ADD COLUMN IF NOT EXISTS deferral_timestamp TIMESTAMPTZ;
+                    """))
+        except Exception:
+            pass
+
+        print("Database setup complete. Tables are ready.")
+    except Exception as e:
+        print(f"CRITICAL ERROR during database setup: {e}")
+
 
                 # ---------------- Idempotent hardening ----------------
 
@@ -1806,3 +1910,4 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
