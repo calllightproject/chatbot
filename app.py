@@ -616,9 +616,11 @@ def _emit_received_for(room_number: str, user_text: str, kind: str):
 
 def _qr_secret() -> str:
     secret = os.getenv("ROOM_QR_SECRET", "")
+    print(f"[env] ROOM_QR_SECRET present={bool(secret)} len={len(secret) if secret else 0}")
     if not secret:
         raise RuntimeError("ROOM_QR_SECRET is not set (Render + local env var required).")
     return secret
+
 
 def sign_room(room_number: str) -> str:
     msg = str(room_number).strip().encode("utf-8")
@@ -1903,6 +1905,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
