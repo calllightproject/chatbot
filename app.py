@@ -5,6 +5,9 @@ import os
 import json
 import smtplib
 import importlib
+import hmac
+import hashlib
+from datetime import timedelta
 
 from datetime import datetime, date, time, timezone
 from email.message import EmailMessage
@@ -130,7 +133,6 @@ def setup_database():
                 """))
 
                 # --- Rooms Registry (Banner-ready foundation) ---
-                # Create full table (safe for fresh DBs)
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS rooms (
                         room_number VARCHAR(20) PRIMARY KEY,
@@ -145,7 +147,6 @@ def setup_database():
                 """))
 
                 # Hardening for older DBs where rooms table already existed with only room_number
-                # (Postgres supports ADD COLUMN IF NOT EXISTS. SQLite may throw; we ignore safely.)
                 try:
                     connection.execute(text("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS unit VARCHAR(64);"))
                     connection.execute(text("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT FALSE;"))
@@ -189,166 +190,7 @@ def setup_database():
                 try:
                     connection.execute(text("""
                         DO $$
-                        BEGIN
-                          IF NOT EXISTS (
-                            SELECT 1
-                            FROM   pg_constraint
-                            WHERE  conname = 'assignments_uniq_date_shift_room'
-                          ) THEN
-                            ALTER TABLE assignments
-                            ADD CONSTRAINT assignments_uniq_date_shift_room
-                            UNIQUE (assignment_date, shift, room_number);
-                          END IF;
-                        END$$;
-                    """))
-                except Exception:
-                    pass
 
-                # Backfill safe defaults
-                try:
-                    connection.execute(text("""
-                        UPDATE room_state
-                        SET tags = COALESCE(tags, '[]'::jsonb);
-                    """))
-                except Exception:
-                    pass
-
-                try:
-                    connection.execute(text("""
-                        UPDATE staff
-                        SET languages = COALESCE(languages, '["en"]');
-                    """))
-                except Exception:
-                    pass
-
-                # Ensure PIN columns exist on older DBs
-                try:
-                    connection.execute(text("""
-                        ALTER TABLE staff
-                        ADD COLUMN IF NOT EXISTS pin_hash TEXT;
-                    """))
-                    connection.execute(text("""
-                        ALTER TABLE staff
-                        ADD COLUMN IF NOT EXISTS pin_set_at TIMESTAMPTZ;
-                    """))
-                except Exception:
-                    pass
-
-        # Legacy safety: make sure deferral_timestamp exists
-        try:
-            with engine.connect() as connection:
-                with connection.begin():
-                    connection.execute(text("""
-                        ALTER TABLE requests
-                        ADD COLUMN IF NOT EXISTS deferral_timestamp TIMESTAMPTZ;
-                    """))
-        except Exception:
-            pass
-
-        print("Database setup complete. Tables are ready.")
-    except Exception as e:
-        print(f"CRITICAL ERROR during database setup: {e}")
-
-
-                # ---------------- Idempotent hardening ----------------
-
-                # Ensure 'shift' column exists on older DBs (harmless if already there)
-                try:
-                    connection.execute(text("""
-                        ALTER TABLE assignments
-                        ADD COLUMN IF NOT EXISTS shift VARCHAR(10) NOT NULL DEFAULT 'day';
-                    """))
-                    connection.execute(text("""
-                        ALTER TABLE assignments
-                        ALTER COLUMN shift DROP DEFAULT;
-                    """))
-                except Exception:
-                    pass
-
-                # Ensure correct UNIQUE(date, shift, room) on assignments
-                try:
-                    connection.execute(text("""
-                        DO $$
-                        BEGIN
-                          IF NOT EXISTS (
-                            SELECT 1
-                            FROM   pg_constraint
-                            WHERE  conname = 'assignments_uniq_date_shift_room'
-                          ) THEN
-                            ALTER TABLE assignments
-                            ADD CONSTRAINT assignments_uniq_date_shift_room
-                            UNIQUE (assignment_date, shift, room_number);
-                          END IF;
-                        END$$;
-                    """))
-                except Exception:
-                    pass
-
-                # Backfill safe defaults
-                try:
-                    connection.execute(text("""
-                        UPDATE room_state
-                        SET tags = COALESCE(tags, '[]'::jsonb);
-                    """))
-                except Exception:
-                    pass
-
-                try:
-                    connection.execute(text("""
-                        UPDATE staff
-                        SET languages = COALESCE(languages, '["en"]');
-                    """))
-                except Exception:
-                    pass
-
-                # Ensure PIN columns exist on older DBs
-                try:
-                    connection.execute(text("""
-                        ALTER TABLE staff
-                        ADD COLUMN IF NOT EXISTS pin_hash TEXT;
-                    """))
-                    connection.execute(text("""
-                        ALTER TABLE staff
-                        ADD COLUMN IF NOT EXISTS pin_set_at TIMESTAMPTZ;
-                    """))
-                except Exception:
-                    pass
-
-        # Legacy safety: make sure deferral_timestamp exists
-        try:
-            with engine.connect() as connection:
-                with connection.begin():
-                    connection.execute(text("""
-                        ALTER TABLE requests
-                        ADD COLUMN IF NOT EXISTS deferral_timestamp TIMESTAMPTZ;
-                    """))
-        except Exception:
-            pass
-
-        print("Database setup complete. Tables are ready.")
-    except Exception as e:
-        print(f"CRITICAL ERROR during database setup: {e}")
-
-setup_database()
-
-# --- NEW: Load Configurable Rooms ---
-def load_rooms_from_db():
-    try:
-        with engine.connect() as connection:
-            # Sort by room_number so they appear in order
-            result = connection.execute(text("SELECT room_number FROM rooms ORDER BY room_number ASC"))
-            # Return a simple list of strings ['231', '232', ...]
-            return [row[0] for row in result]
-    except Exception as e:
-        print(f"CRITICAL WARNING: Could not load rooms from DB: {e}")
-        # Fallback if DB fails, so the app doesn't crash during a demo
-        return [str(r) for r in range(231, 260)]
-
-# Initialize the global variables the rest of the app expects
-ALL_ROOMS = load_rooms_from_db()
-VALID_ROOMS = set(ALL_ROOMS)
-
-print(f"System loaded {len(ALL_ROOMS)} rooms from the database.")
 
 # --- Localized label -> English maps for structured buttons ---
 ES_TO_EN = {
@@ -756,6 +598,70 @@ def _emit_received_for(room_number: str, user_text: str, kind: str):
             })
     except Exception as e:
         print(f"WARN: could not emit request:received for room {room_number}: {e}")
+
+
+# ---------------------------
+# Step 1 Security Helpers: Signed QR + Room Active Gate
+# ---------------------------
+
+def _qr_secret() -> str:
+    secret = os.getenv("ROOM_QR_SECRET", "")
+    if not secret:
+        raise RuntimeError("ROOM_QR_SECRET is not set (Render + local env var required).")
+    return secret
+
+def sign_room(room_number: str) -> str:
+    msg = str(room_number).strip().encode("utf-8")
+    key = _qr_secret().encode("utf-8")
+    return hmac.new(key, msg, hashlib.sha256).hexdigest()
+
+def verify_room_sig(room_number: str, sig: str) -> bool:
+    if not room_number or not sig:
+        return False
+    expected = sign_room(room_number)
+    return hmac.compare_digest(expected, sig)
+
+def get_room_record(room_number: str):
+    try:
+        with engine.connect() as conn:
+            return conn.execute(text("""
+                SELECT room_number, unit, is_active, activated_at, expires_at
+                FROM rooms
+                WHERE room_number = :r
+                LIMIT 1;
+            """), {"r": str(room_number).strip()}).fetchone()
+    except Exception as e:
+        print(f"ERROR reading room record {room_number}: {e}")
+        return None
+
+def is_room_active(room_number: str) -> bool:
+    row = get_room_record(room_number)
+    if not row:
+        return False
+
+    # support tuple rows and attribute rows
+    is_active = row.is_active if hasattr(row, "is_active") else row[2]
+    expires_at = row.expires_at if hasattr(row, "expires_at") else row[4]
+
+    if not bool(is_active):
+        return False
+
+    # auto-expire if needed
+    if expires_at and expires_at < datetime.now(timezone.utc):
+        try:
+            with engine.connect() as conn:
+                with conn.begin():
+                    conn.execute(text("""
+                        UPDATE rooms
+                        SET is_active = FALSE
+                        WHERE room_number = :r;
+                    """), {"r": str(room_number).strip()})
+        except Exception as e:
+            print(f"WARN auto-expire failed for room {room_number}: {e}")
+        return False
+
+    return True
+
 
 @app.route("/chat", methods=["GET", "POST"])
 def handle_chat():
@@ -1574,6 +1480,46 @@ def staff_dashboard_for_nurse(staff_name):
         toggle_url=toggle_url
     )
 
+def _require_admin_pin():
+    pin = os.getenv("ADMIN_PIN")  # set in Render env vars
+    if not pin:
+        return  # if not set, allow (dev only)
+    provided = (request.headers.get("X-Admin-Pin") or "").strip()
+    if provided != pin:
+        abort(403)
+
+@app.post("/admin/activate_room")
+def admin_activate_room():
+    _require_admin_pin()
+    data = request.get_json(force=True) or {}
+    room = str(data.get("room", "")).strip()
+    hours = int(data.get("hours", 24))
+
+    if not _valid_room(room):
+        return jsonify({"ok": False, "error": "invalid_room"}), 400
+
+    now = datetime.now(timezone.utc)
+    exp = now + timedelta(hours=hours)
+
+    try:
+        with engine.connect() as conn:
+            with conn.begin():
+                conn.execute(text("""
+                    INSERT INTO rooms (room_number, unit, is_active, activated_at, expires_at)
+                    VALUES (:r, :unit, TRUE, :now, :exp)
+                    ON CONFLICT (room_number) DO UPDATE
+                    SET unit = EXCLUDED.unit,
+                        is_active = TRUE,
+                        activated_at = EXCLUDED.activated_at,
+                        expires_at = EXCLUDED.expires_at;
+                """), {"r": room, "unit": "Postpartum", "now": now, "exp": exp})
+
+        log_to_audit_trail("Room Activated", f"Room {room} activated until {exp.isoformat()}")
+        return jsonify({"ok": True, "room": room, "expires_at": exp.isoformat()})
+    except Exception as e:
+        print(f"ERROR activating room {room}: {e}")
+        return jsonify({"ok": False, "error": "db_error"}), 500
+
 @app.get("/debug/ping_patient")
 def debug_ping_patient():
     room = request.args.get("room", "").strip()
@@ -1910,4 +1856,5 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
