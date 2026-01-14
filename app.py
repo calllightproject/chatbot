@@ -8,6 +8,7 @@ import importlib
 import hmac
 import hashlib
 from datetime import timedelta
+from collections import defaultdict
 
 from datetime import datetime, date, time, timezone
 from email.message import EmailMessage
@@ -185,11 +186,6 @@ def setup_database():
                     """))
                 except Exception:
                     pass
-
-                # Ensure correct UNIQUE(date, shift, room) on assignments
-                try:
-                    connection.execute(text("""
-                        DO $$
 
 
 # --- Localized label -> English maps for structured buttons ---
@@ -1856,7 +1852,3 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
-
-
-
-
