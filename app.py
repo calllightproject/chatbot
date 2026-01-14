@@ -1543,39 +1543,6 @@ def admin_activate_room():
         print(f"ERROR activating room {room}: {e}")
         return jsonify({"ok": False, "error": "db_error"}), 500
 
-
-@app.post("/admin/activate_room")
-def admin_activate_room():
-    _require_admin_pin()
-    data = request.get_json(force=True) or {}
-    room = str(data.get("room", "")).strip()
-    hours = int(data.get("hours", 24))
-
-    if not _valid_room(room):
-        return jsonify({"ok": False, "error": "invalid_room"}), 400
-
-    now = datetime.now(timezone.utc)
-    exp = now + timedelta(hours=hours)
-
-    try:
-        with engine.connect() as conn:
-            with conn.begin():
-                conn.execute(text("""
-                    INSERT INTO rooms (room_number, unit, is_active, activated_at, expires_at)
-                    VALUES (:r, :unit, TRUE, :now, :exp)
-                    ON CONFLICT (room_number) DO UPDATE
-                    SET unit = EXCLUDED.unit,
-                        is_active = TRUE,
-                        activated_at = EXCLUDED.activated_at,
-                        expires_at = EXCLUDED.expires_at;
-                """), {"r": room, "unit": "Postpartum", "now": now, "exp": exp})
-
-        return jsonify({"ok": True, "room": room, "expires_at": exp.isoformat()})
-    except Exception as e:
-        print(f"ERROR activating room {room}: {e}")
-        return jsonify({"ok": False, "error": "db_error"}), 500
-
-
 @app.get("/debug/ping_patient")
 def debug_ping_patient():
     room = request.args.get("room", "").strip()
@@ -1912,3 +1879,4 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
