@@ -953,6 +953,19 @@ def dashboard():
                            active_requests=active_requests,
                            nurse_context=False)
 
+
+@app.get("/debug/signed_room_url")
+def debug_signed_room_url():
+    room = (request.args.get("room") or "").strip()
+    if not _valid_room(room):
+        return jsonify({"ok": False, "error": "invalid_room"}), 400
+    sig = sign_room(room)
+    return jsonify({
+        "ok": True,
+        "room": room,
+        "signed_url": f"/chat?room={room}&sig={sig}"
+    })
+
 # --- Analytics ---
 @app.route('/analytics')
 def analytics():
@@ -1879,4 +1892,5 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
