@@ -682,7 +682,39 @@ def handle_chat():
     if qp in ("standard", "bereavement"):
         session["pathway"] = qp
 
+    # Resolve room number from ?room=, session, or POST
+    room_number = _current_room()
+
+    # --- Gate 1: if room came from URL, require signed QR ---
+    room_qp = (request.args.get("room") or "").strip()
+    sig = (request.args.get("sig") or "").strip()
+    if room_qp:
+        if not verify_room_sig(room_qp, sig):
+            return "Invalid QR code. Please re-scan the QR code in your room.", 403
+
+    # --- Gate 2: room must be active (Encounter-like behavior) ---
+    if room_number and not is_room_active(room_number):
+        return f"Room {room_number} is not active right now. Please ask staff for help or re-scan later.", 403
+
+    # If POST carried a room value, persist it (works even if the URL lacks ?room=)
+    room_from_form = (request.form.get("room") or "").strip() if request.method == "POST" else ""
+    if room_from_form and _valid_room(room_from_form):
+        session["room_number"] = room_from_form
+        room_number = room_from_form
+
+    # Keep session in sync with the resolved room
+    if room_number and session.get("room_number") != room_number:
+        session["room_number"] = room_number
+
+    # --- Force the normal onboarding flow even if user hits /chat directly ---
+    if not session.get("language"):
+        # preserve room + sig in the redirect
+        return redirect(url_for("language_selector", room=room_number, sig=sig) if room_number else url_for("language_selector"))
+
     pathway = session.get("pathway", "standard")
+    if pathway == "standard" and session.get("is_first_baby") is None:
+        return redirect(url_for("demographics", room=room_number, sig=sig) if room_number else url_for("demographics"))
+
     lang = session.get("language", "en")
 
     # Load the correct button config module based on pathway + language
@@ -701,32 +733,6 @@ def handle_chat():
             "Please contact support."
         )
 
-    # Resolve room number from ?room=, session, or POST
-    room_number = _current_room()
-
-        # --- Gate 1: if room came from URL, require signed QR ---
-    room_qp = (request.args.get("room") or "").strip()
-    sig = (request.args.get("sig") or "").strip()
-    if room_qp:
-        if not verify_room_sig(room_qp, sig):
-            return "Invalid QR code. Please re-scan the QR code in your room.", 403
-
-    # --- Gate 2: room must be active (Encounter-like behavior) ---
-    if room_number and not is_room_active(room_number):
-        return f"Room {room_number} is not active right now. Please ask staff for help or re-scan later.", 403
-
-
-
-    # If POST carried a room value, persist it (works even if the URL lacks ?room=)
-    room_from_form = (request.form.get("room") or "").strip() if request.method == "POST" else ""
-    if room_from_form and _valid_room(room_from_form):
-        session["room_number"] = room_from_form
-        room_number = room_from_form
-
-    # Keep session in sync with the resolved room
-    if room_number and session.get("room_number") != room_number:
-        session["room_number"] = room_number
-
     if request.method == "POST":
         # ===========================================
         # 1) Free-text note path  (CUSTOM NOTE BOX)
@@ -735,32 +741,23 @@ def handle_chat():
         if request.form.get("action") == "send_note":
             note_text = (request.form.get("custom_note") or "").strip()
             if note_text:
-                # --- NEW LOGIC START ---
-                # 1. Classify using spaCy
                 classification = triage.classify(note_text)
-                
-                # 2. Extract results (lowercase to match your system's expectations)
                 role = classification.routing.value.lower()  # "nurse" or "cna"
                 tier = classification.tier.value.lower()     # "routine" or "emergent"
-                
-                # 3. Get notification message based on role
                 reply_message = button_data.get(f"{role}_notification", "Your request has been sent.")
 
-                # 4. Process Request (Pass the explicit tier we just calculated)
                 session["reply"] = process_request(
                     role=role,
                     subject="Custom Patient Note",
                     user_input=note_text,
                     reply_message=reply_message,
-                    tier_override=tier,       # ✅ Pass the calculated tier (emergent/routine)
-                    classify_from_text=False, # ✅ Disable old logic, we just did it above
+                    tier_override=tier,
+                    classify_from_text=False,
                     from_button=False,
                 )
-                # --- NEW LOGIC END ---
 
                 session["options"] = button_data["main_buttons"]
 
-                # Notify patient page that the request was received
                 if room_number:
                     _emit_received_for(room_number, note_text, kind="note")
             else:
@@ -769,15 +766,12 @@ def handle_chat():
 
         # ===========================================
         # 2) Button click path
-        #    -> NO emergent scoring, except explicit emergency button
         # ===========================================
         else:
             user_input = (request.form.get("user_input") or "").strip()
             back_text = button_data.get("back_text", "⬅ Back")
 
-            # ----------------------------
             # HARD-CODED EMERGENCY BUTTON
-            # ----------------------------
             if user_input == "I'm having an emergency":
                 request_text = "Patient pressed EMERGENCY button: 'I'm having an emergency'."
                 session["reply"] = process_request(
@@ -785,17 +779,15 @@ def handle_chat():
                     subject="EMERGENCY – patient pressed emergency button",
                     user_input=request_text,
                     reply_message=button_data.get("nurse_notification", "Your nurse has been notified."),
-                    tier_override="emergent",   # ✅ FORCE emergent
-                    classify_from_text=False,   # don't re-score text
+                    tier_override="emergent",
+                    classify_from_text=False,
                     from_button=True,
                 )
                 session["options"] = button_data["main_buttons"]
                 if room_number:
                     _emit_received_for(room_number, request_text, kind="option")
 
-            # ----------------------------
             # SPECIAL FLOW: Shower follow-up
-            # ----------------------------
             elif user_input == "Can I take a shower?":
                 session["reply"] = (
                     "Usually yes — but please check with your nurse if you have an IV, "
@@ -815,8 +807,8 @@ def handle_chat():
                     subject="Shower permission request",
                     user_input=request_text,
                     reply_message=button_data.get("nurse_notification", "Your request has been sent."),
-                    tier_override=None,        # nurse, but not emergent
-                    classify_from_text=False,  # ✅ BUTTON: no emergent scoring
+                    tier_override=None,
+                    classify_from_text=False,
                     from_button=True,
                 )
                 session["options"] = button_data["main_buttons"]
@@ -827,18 +819,13 @@ def handle_chat():
                 session["reply"] = "Okay — if you change your mind, just let me know anytime."
                 session["options"] = button_data["main_buttons"]
 
-            # ----------------------------
             # Back / Home
-            # ----------------------------
             elif user_input == back_text:
                 session.pop("reply", None)
                 session.pop("options", None)
-                return redirect(url_for("handle_chat", room=room_number) if room_number else url_for("handle_chat"))
+                return redirect(url_for("handle_chat", room=room_number, sig=sig) if room_number else url_for("handle_chat"))
 
-            # ----------------------------
             # Standard known-button handling via button_data
-            # ALL of these should be NON-emergent
-            # ----------------------------
             elif user_input in button_data:
                 button_info = button_data[user_input]
                 session["reply"] = button_info.get("question") or button_info.get("note", "")
@@ -859,14 +846,13 @@ def handle_chat():
                         button_data.get(f"{role}_notification", "Your request has been sent.")
                     )
 
-                    # BUTTON request: NEVER emergent via classifier
                     session["reply"] = process_request(
                         role=role,
                         subject=subject,
                         user_input=user_input,
                         reply_message=notification_message,
-                        tier_override=None,        # no forced emergent
-                        classify_from_text=False,  # ✅ BUTTON: no emergent scoring
+                        tier_override=None,
+                        classify_from_text=False,
                         from_button=True,
                     )
                     session["options"] = button_data["main_buttons"]
@@ -874,9 +860,7 @@ def handle_chat():
                     if room_number:
                         _emit_received_for(room_number, user_input, kind="option")
 
-            # ----------------------------
             # Unknown input
-            # ----------------------------
             else:
                 session["reply"] = button_data.get(
                     "fallback_unrecognized",
@@ -885,7 +869,7 @@ def handle_chat():
                 session["options"] = button_data["main_buttons"]
 
         # Always redirect after POST (PRG)
-        return redirect(url_for("handle_chat", room=room_number) if room_number else url_for("handle_chat"))
+        return redirect(url_for("handle_chat", room=room_number, sig=sig) if room_number else url_for("handle_chat"))
 
     # --- GET: render page ---
     reply = session.pop("reply", button_data["greeting"])
@@ -895,8 +879,9 @@ def handle_chat():
         reply=reply,
         options=options,
         button_data=button_data,
-        room_number=room_number,  # used by chat.html Socket.IO connect
+        room_number=room_number,
     )
+
 @app.route("/reset-language")
 def reset_language():
     """
@@ -1905,6 +1890,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
