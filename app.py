@@ -5,10 +5,6 @@ import os
 import json
 import smtplib
 import importlib
-import hmac
-import hashlib
-from datetime import timedelta
-from collections import defaultdict
 
 from datetime import datetime, date, time, timezone
 from email.message import EmailMessage
@@ -53,6 +49,7 @@ if not DATABASE_URL:
 
 engine = create_engine(DATABASE_URL, pool_recycle=280, pool_pre_ping=True)
 
+# --- Database Setup ---
 def setup_database():
     try:
         with engine.connect() as connection:
@@ -107,17 +104,19 @@ def setup_database():
                     );
                 """))
 
+                # CNA coverage (front/back per shift)
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS cna_coverage (
                         id SERIAL PRIMARY KEY,
                         assignment_date DATE NOT NULL,
                         shift VARCHAR(10) NOT NULL,
-                        zone VARCHAR(20) NOT NULL,
+                        zone VARCHAR(20) NOT NULL,   -- 'front' / 'back'
                         cna_name VARCHAR(255),
                         UNIQUE (assignment_date, shift, zone)
                     );
                 """))
 
+                # Room state: reset marker + future tags (JSONB)
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS room_state (
                         id SERIAL PRIMARY KEY,
@@ -130,7 +129,8 @@ def setup_database():
                     );
                 """))
 
-                # Rooms Registry
+                # --- Rooms Registry (Banner-ready foundation) ---
+                # Create full table (safe for fresh DBs)
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS rooms (
                         room_number VARCHAR(20) PRIMARY KEY,
@@ -144,7 +144,8 @@ def setup_database():
                     );
                 """))
 
-                # Hardening for older DBs
+                # Hardening for older DBs where rooms table already existed with only room_number
+                # (Postgres supports ADD COLUMN IF NOT EXISTS. SQLite may throw; we ignore safely.)
                 try:
                     connection.execute(text("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS unit VARCHAR(64);"))
                     connection.execute(text("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT FALSE;"))
@@ -156,23 +157,22 @@ def setup_database():
                 except Exception as e:
                     print(f"WARN: rooms hardening skipped/failed (non-fatal): {e}")
 
-                # Seed rooms (Postgres safe)
-                try:
-                    room_count = connection.execute(text("SELECT COUNT(*) FROM rooms")).scalar()
-                    if room_count == 0:
-                        print("Seeding default rooms 231-260 into database...")
-                        for r in range(231, 261):
-                            connection.execute(text("""
-                                INSERT INTO rooms (room_number, unit, is_active)
-                                VALUES (:r, :unit, FALSE)
-                                ON CONFLICT (room_number) DO NOTHING;
-                            """), {"r": str(r), "unit": "Postpartum"})
-                except Exception as e:
-                    print(f"WARN: room seed failed (non-fatal): {e}")
+                # Seed default rooms (exists-only; starts INACTIVE by default)
+                room_count = connection.execute(text("SELECT COUNT(*) FROM rooms")).scalar()
+                if room_count == 0:
+                    print("Seeding default rooms 231-260 into database...")
+                    for r in range(231, 261):  # 231..260 inclusive
+                        connection.execute(text("""
+                            INSERT INTO rooms (room_number, unit, is_active)
+                            VALUES (:r, :unit, FALSE)
+                            ON CONFLICT (room_number) DO NOTHING;
+                        """), {"r": str(r), "unit": "Postpartum"})
 
                 print("CREATE TABLE statements complete.")
 
-                # Ensure 'shift' column exists on older DBs
+                # ---------------- Idempotent hardening ----------------
+
+                # Ensure 'shift' column exists on older DBs (harmless if already there)
                 try:
                     connection.execute(text("""
                         ALTER TABLE assignments
@@ -181,6 +181,55 @@ def setup_database():
                     connection.execute(text("""
                         ALTER TABLE assignments
                         ALTER COLUMN shift DROP DEFAULT;
+                    """))
+                except Exception:
+                    pass
+
+                # Ensure correct UNIQUE(date, shift, room) on assignments
+                try:
+                    connection.execute(text("""
+                        DO $$
+                        BEGIN
+                          IF NOT EXISTS (
+                            SELECT 1
+                            FROM   pg_constraint
+                            WHERE  conname = 'assignments_uniq_date_shift_room'
+                          ) THEN
+                            ALTER TABLE assignments
+                            ADD CONSTRAINT assignments_uniq_date_shift_room
+                            UNIQUE (assignment_date, shift, room_number);
+                          END IF;
+                        END$$;
+                    """))
+                except Exception:
+                    pass
+
+                # Backfill safe defaults
+                try:
+                    connection.execute(text("""
+                        UPDATE room_state
+                        SET tags = COALESCE(tags, '[]'::jsonb);
+                    """))
+                except Exception:
+                    pass
+
+                try:
+                    connection.execute(text("""
+                        UPDATE staff
+                        SET languages = COALESCE(languages, '["en"]');
+                    """))
+                except Exception:
+                    pass
+
+                # Ensure PIN columns exist on older DBs
+                try:
+                    connection.execute(text("""
+                        ALTER TABLE staff
+                        ADD COLUMN IF NOT EXISTS pin_hash TEXT;
+                    """))
+                    connection.execute(text("""
+                        ALTER TABLE staff
+                        ADD COLUMN IF NOT EXISTS pin_set_at TIMESTAMPTZ;
                     """))
                 except Exception:
                     pass
@@ -201,6 +250,105 @@ def setup_database():
         print(f"CRITICAL ERROR during database setup: {e}")
 
 
+                # ---------------- Idempotent hardening ----------------
+
+                # Ensure 'shift' column exists on older DBs (harmless if already there)
+                try:
+                    connection.execute(text("""
+                        ALTER TABLE assignments
+                        ADD COLUMN IF NOT EXISTS shift VARCHAR(10) NOT NULL DEFAULT 'day';
+                    """))
+                    connection.execute(text("""
+                        ALTER TABLE assignments
+                        ALTER COLUMN shift DROP DEFAULT;
+                    """))
+                except Exception:
+                    pass
+
+                # Ensure correct UNIQUE(date, shift, room) on assignments
+                try:
+                    connection.execute(text("""
+                        DO $$
+                        BEGIN
+                          IF NOT EXISTS (
+                            SELECT 1
+                            FROM   pg_constraint
+                            WHERE  conname = 'assignments_uniq_date_shift_room'
+                          ) THEN
+                            ALTER TABLE assignments
+                            ADD CONSTRAINT assignments_uniq_date_shift_room
+                            UNIQUE (assignment_date, shift, room_number);
+                          END IF;
+                        END$$;
+                    """))
+                except Exception:
+                    pass
+
+                # Backfill safe defaults
+                try:
+                    connection.execute(text("""
+                        UPDATE room_state
+                        SET tags = COALESCE(tags, '[]'::jsonb);
+                    """))
+                except Exception:
+                    pass
+
+                try:
+                    connection.execute(text("""
+                        UPDATE staff
+                        SET languages = COALESCE(languages, '["en"]');
+                    """))
+                except Exception:
+                    pass
+
+                # Ensure PIN columns exist on older DBs
+                try:
+                    connection.execute(text("""
+                        ALTER TABLE staff
+                        ADD COLUMN IF NOT EXISTS pin_hash TEXT;
+                    """))
+                    connection.execute(text("""
+                        ALTER TABLE staff
+                        ADD COLUMN IF NOT EXISTS pin_set_at TIMESTAMPTZ;
+                    """))
+                except Exception:
+                    pass
+
+        # Legacy safety: make sure deferral_timestamp exists
+        try:
+            with engine.connect() as connection:
+                with connection.begin():
+                    connection.execute(text("""
+                        ALTER TABLE requests
+                        ADD COLUMN IF NOT EXISTS deferral_timestamp TIMESTAMPTZ;
+                    """))
+        except Exception:
+            pass
+
+        print("Database setup complete. Tables are ready.")
+    except Exception as e:
+        print(f"CRITICAL ERROR during database setup: {e}")
+
+setup_database()
+
+# --- NEW: Load Configurable Rooms ---
+def load_rooms_from_db():
+    try:
+        with engine.connect() as connection:
+            # Sort by room_number so they appear in order
+            result = connection.execute(text("SELECT room_number FROM rooms ORDER BY room_number ASC"))
+            # Return a simple list of strings ['231', '232', ...]
+            return [row[0] for row in result]
+    except Exception as e:
+        print(f"CRITICAL WARNING: Could not load rooms from DB: {e}")
+        # Fallback if DB fails, so the app doesn't crash during a demo
+        return [str(r) for r in range(231, 260)]
+
+# Initialize the global variables the rest of the app expects
+ALL_ROOMS = load_rooms_from_db()
+VALID_ROOMS = set(ALL_ROOMS)
+
+print(f"System loaded {len(ALL_ROOMS)} rooms from the database.")
 
 # --- Localized label -> English maps for structured buttons ---
 ES_TO_EN = {
@@ -360,7 +508,7 @@ def migrate_schema():
     except Exception as e:
         print(f"Schema migration error: {e}")
 def send_email_alert(subject, body, room_number):
-    """Safe/no-op email alert. Will quietly skip if creds arent set."""
+    """Safe/no-op email alert. Will quietly skip if creds aren’t set."""
     try:
         sender_email = os.getenv("EMAIL_USER")
         sender_password = os.getenv("EMAIL_PASSWORD")
@@ -609,72 +757,6 @@ def _emit_received_for(room_number: str, user_text: str, kind: str):
     except Exception as e:
         print(f"WARN: could not emit request:received for room {room_number}: {e}")
 
-
-# ---------------------------
-# Step 1 Security Helpers: Signed QR + Room Active Gate
-# ---------------------------
-
-def _qr_secret() -> str:
-    secret = os.getenv("ROOM_QR_SECRET", "")
-    print(f"[env] ROOM_QR_SECRET present={bool(secret)} len={len(secret) if secret else 0}")
-    if not secret:
-        raise RuntimeError("ROOM_QR_SECRET is not set (Render + local env var required).")
-    return secret
-
-
-def sign_room(room_number: str) -> str:
-    msg = str(room_number).strip().encode("utf-8")
-    key = _qr_secret().encode("utf-8")
-    return hmac.new(key, msg, hashlib.sha256).hexdigest()
-
-def verify_room_sig(room_number: str, sig: str) -> bool:
-    if not room_number or not sig:
-        return False
-    expected = sign_room(room_number)
-    return hmac.compare_digest(expected, sig)
-
-def get_room_record(room_number: str):
-    try:
-        with engine.connect() as conn:
-            return conn.execute(text("""
-                SELECT room_number, unit, is_active, activated_at, expires_at
-                FROM rooms
-                WHERE room_number = :r
-                LIMIT 1;
-            """), {"r": str(room_number).strip()}).fetchone()
-    except Exception as e:
-        print(f"ERROR reading room record {room_number}: {e}")
-        return None
-
-def is_room_active(room_number: str) -> bool:
-    row = get_room_record(room_number)
-    if not row:
-        return False
-
-    # support tuple rows and attribute rows
-    is_active = row.is_active if hasattr(row, "is_active") else row[2]
-    expires_at = row.expires_at if hasattr(row, "expires_at") else row[4]
-
-    if not bool(is_active):
-        return False
-
-    # auto-expire if needed
-    if expires_at and expires_at < datetime.now(timezone.utc):
-        try:
-            with engine.connect() as conn:
-                with conn.begin():
-                    conn.execute(text("""
-                        UPDATE rooms
-                        SET is_active = FALSE
-                        WHERE room_number = :r;
-                    """), {"r": str(room_number).strip()})
-        except Exception as e:
-            print(f"WARN auto-expire failed for room {room_number}: {e}")
-        return False
-
-    return True
-
-
 @app.route("/chat", methods=["GET", "POST"])
 def handle_chat():
     # --- Resolve pathway: allow URL override, otherwise honor existing session ---
@@ -682,39 +764,7 @@ def handle_chat():
     if qp in ("standard", "bereavement"):
         session["pathway"] = qp
 
-    # Resolve room number from ?room=, session, or POST
-    room_number = _current_room()
-
-    # --- Gate 1: if room came from URL, require signed QR ---
-   ####### room_qp = (request.args.get("room") or "").strip()
-    ####sig = (request.args.get("sig") or "").strip()
-    ######if room_qp:
-        ####if not verify_room_sig(room_qp, sig):
-            ###return "Invalid QR code. Please re-scan the QR code in your room.", 403
-
-    # --- Gate 2: room must be active (Encounter-like behavior) ---
-    #if room_number and not is_room_active(room_number):
-     #   return f"Room {room_number} is not active right now. Please ask staff for help or re-scan later.", 403
-
-    # If POST carried a room value, persist it (works even if the URL lacks ?room=)
-    room_from_form = (request.form.get("room") or "").strip() if request.method == "POST" else ""
-    if room_from_form and _valid_room(room_from_form):
-        session["room_number"] = room_from_form
-        room_number = room_from_form
-
-    # Keep session in sync with the resolved room
-    if room_number and session.get("room_number") != room_number:
-        session["room_number"] = room_number
-
-    # --- Force the normal onboarding flow even if user hits /chat directly ---
-    if not session.get("language"):
-        # preserve room + sig in the redirect
-        return redirect(url_for("language_selector", room=room_number, sig=sig) if room_number else url_for("language_selector"))
-
     pathway = session.get("pathway", "standard")
-    if pathway == "standard" and session.get("is_first_baby") is None:
-        return redirect(url_for("demographics", room=room_number, sig=sig) if room_number else url_for("demographics"))
-
     lang = session.get("language", "en")
 
     # Load the correct button config module based on pathway + language
@@ -733,6 +783,19 @@ def handle_chat():
             "Please contact support."
         )
 
+    # Resolve room number from ?room=, session, or POST
+    room_number = _current_room()
+
+    # If POST carried a room value, persist it (works even if the URL lacks ?room=)
+    room_from_form = (request.form.get("room") or "").strip() if request.method == "POST" else ""
+    if room_from_form and _valid_room(room_from_form):
+        session["room_number"] = room_from_form
+        room_number = room_from_form
+
+    # Keep session in sync with the resolved room
+    if room_number and session.get("room_number") != room_number:
+        session["room_number"] = room_number
+
     if request.method == "POST":
         # ===========================================
         # 1) Free-text note path  (CUSTOM NOTE BOX)
@@ -741,23 +804,32 @@ def handle_chat():
         if request.form.get("action") == "send_note":
             note_text = (request.form.get("custom_note") or "").strip()
             if note_text:
+                # --- NEW LOGIC START ---
+                # 1. Classify using spaCy
                 classification = triage.classify(note_text)
+                
+                # 2. Extract results (lowercase to match your system's expectations)
                 role = classification.routing.value.lower()  # "nurse" or "cna"
                 tier = classification.tier.value.lower()     # "routine" or "emergent"
+                
+                # 3. Get notification message based on role
                 reply_message = button_data.get(f"{role}_notification", "Your request has been sent.")
 
+                # 4. Process Request (Pass the explicit tier we just calculated)
                 session["reply"] = process_request(
                     role=role,
                     subject="Custom Patient Note",
                     user_input=note_text,
                     reply_message=reply_message,
-                    tier_override=tier,
-                    classify_from_text=False,
+                    tier_override=tier,       # ✅ Pass the calculated tier (emergent/routine)
+                    classify_from_text=False, # ✅ Disable old logic, we just did it above
                     from_button=False,
                 )
+                # --- NEW LOGIC END ---
 
                 session["options"] = button_data["main_buttons"]
 
+                # Notify patient page that the request was received
                 if room_number:
                     _emit_received_for(room_number, note_text, kind="note")
             else:
@@ -766,12 +838,15 @@ def handle_chat():
 
         # ===========================================
         # 2) Button click path
+        #    -> NO emergent scoring, except explicit emergency button
         # ===========================================
         else:
             user_input = (request.form.get("user_input") or "").strip()
             back_text = button_data.get("back_text", "⬅ Back")
 
+            # ----------------------------
             # HARD-CODED EMERGENCY BUTTON
+            # ----------------------------
             if user_input == "I'm having an emergency":
                 request_text = "Patient pressed EMERGENCY button: 'I'm having an emergency'."
                 session["reply"] = process_request(
@@ -779,15 +854,17 @@ def handle_chat():
                     subject="EMERGENCY – patient pressed emergency button",
                     user_input=request_text,
                     reply_message=button_data.get("nurse_notification", "Your nurse has been notified."),
-                    tier_override="emergent",
-                    classify_from_text=False,
+                    tier_override="emergent",   # ✅ FORCE emergent
+                    classify_from_text=False,   # don't re-score text
                     from_button=True,
                 )
                 session["options"] = button_data["main_buttons"]
                 if room_number:
                     _emit_received_for(room_number, request_text, kind="option")
 
+            # ----------------------------
             # SPECIAL FLOW: Shower follow-up
+            # ----------------------------
             elif user_input == "Can I take a shower?":
                 session["reply"] = (
                     "Usually yes — but please check with your nurse if you have an IV, "
@@ -807,8 +884,8 @@ def handle_chat():
                     subject="Shower permission request",
                     user_input=request_text,
                     reply_message=button_data.get("nurse_notification", "Your request has been sent."),
-                    tier_override=None,
-                    classify_from_text=False,
+                    tier_override=None,        # nurse, but not emergent
+                    classify_from_text=False,  # ✅ BUTTON: no emergent scoring
                     from_button=True,
                 )
                 session["options"] = button_data["main_buttons"]
@@ -819,13 +896,18 @@ def handle_chat():
                 session["reply"] = "Okay — if you change your mind, just let me know anytime."
                 session["options"] = button_data["main_buttons"]
 
+            # ----------------------------
             # Back / Home
+            # ----------------------------
             elif user_input == back_text:
                 session.pop("reply", None)
                 session.pop("options", None)
-                return redirect(url_for("handle_chat", room=room_number, sig=sig) if room_number else url_for("handle_chat"))
+                return redirect(url_for("handle_chat", room=room_number) if room_number else url_for("handle_chat"))
 
+            # ----------------------------
             # Standard known-button handling via button_data
+            # ALL of these should be NON-emergent
+            # ----------------------------
             elif user_input in button_data:
                 button_info = button_data[user_input]
                 session["reply"] = button_info.get("question") or button_info.get("note", "")
@@ -846,13 +928,14 @@ def handle_chat():
                         button_data.get(f"{role}_notification", "Your request has been sent.")
                     )
 
+                    # BUTTON request: NEVER emergent via classifier
                     session["reply"] = process_request(
                         role=role,
                         subject=subject,
                         user_input=user_input,
                         reply_message=notification_message,
-                        tier_override=None,
-                        classify_from_text=False,
+                        tier_override=None,        # no forced emergent
+                        classify_from_text=False,  # ✅ BUTTON: no emergent scoring
                         from_button=True,
                     )
                     session["options"] = button_data["main_buttons"]
@@ -860,7 +943,9 @@ def handle_chat():
                     if room_number:
                         _emit_received_for(room_number, user_input, kind="option")
 
+            # ----------------------------
             # Unknown input
+            # ----------------------------
             else:
                 session["reply"] = button_data.get(
                     "fallback_unrecognized",
@@ -869,7 +954,7 @@ def handle_chat():
                 session["options"] = button_data["main_buttons"]
 
         # Always redirect after POST (PRG)
-        return redirect(url_for("handle_chat", room=room_number, sig=sig) if room_number else url_for("handle_chat"))
+        return redirect(url_for("handle_chat", room=room_number) if room_number else url_for("handle_chat"))
 
     # --- GET: render page ---
     reply = session.pop("reply", button_data["greeting"])
@@ -879,9 +964,8 @@ def handle_chat():
         reply=reply,
         options=options,
         button_data=button_data,
-        room_number=room_number,
+        room_number=room_number,  # used by chat.html Socket.IO connect
     )
-
 @app.route("/reset-language")
 def reset_language():
     """
@@ -939,30 +1023,6 @@ def dashboard():
     return render_template("dashboard.html",
                            active_requests=active_requests,
                            nurse_context=False)
-
-
-print("DEBUG ROUTE LOADED: /debug/signed_room_url")
-
-@app.get("/debug/signed_room_url")
-def debug_signed_room_url():
-    room = (request.args.get("room") or "").strip()
-    if not _valid_room(room):
-        return jsonify({"ok": False, "error": "invalid_room"}), 400
-    sig = sign_room(room)
-    return jsonify({
-        "ok": True,
-        "room": room,
-        "signed_url": f"/chat?room={room}&sig={sig}"
-    })
-
-@app.get("/debug/env_check")
-def debug_env_check():
-    val = os.getenv("ROOM_QR_SECRET")
-    return jsonify({
-        "has_ROOM_QR_SECRET": bool(val),
-        "len": len(val) if val else 0
-    })
-
 
 # --- Analytics ---
 @app.route('/analytics')
@@ -1514,46 +1574,6 @@ def staff_dashboard_for_nurse(staff_name):
         toggle_url=toggle_url
     )
 
-def _require_admin_pin():
-    pin = os.getenv("ADMIN_PIN")  # set in Render env vars
-    if not pin:
-        return  # if not set, allow (dev only)
-    provided = (request.headers.get("X-Admin-Pin") or "").strip()
-    if provided != pin:
-        abort(403)
-
-@app.post("/admin/activate_room")
-def admin_activate_room():
-    _require_admin_pin()
-    data = request.get_json(force=True) or {}
-    room = str(data.get("room", "")).strip()
-    hours = int(data.get("hours", 24))
-
-    if not _valid_room(room):
-        return jsonify({"ok": False, "error": "invalid_room"}), 400
-
-    now = datetime.now(timezone.utc)
-    exp = now + timedelta(hours=hours)
-
-    try:
-        with engine.connect() as conn:
-            with conn.begin():
-                conn.execute(text("""
-                    INSERT INTO rooms (room_number, unit, is_active, activated_at, expires_at)
-                    VALUES (:r, :unit, TRUE, :now, :exp)
-                    ON CONFLICT (room_number) DO UPDATE
-                    SET unit = EXCLUDED.unit,
-                        is_active = TRUE,
-                        activated_at = EXCLUDED.activated_at,
-                        expires_at = EXCLUDED.expires_at;
-                """), {"r": room, "unit": "Postpartum", "now": now, "exp": exp})
-
-        log_to_audit_trail("Room Activated", f"Room {room} activated until {exp.isoformat()}")
-        return jsonify({"ok": True, "room": room, "expires_at": exp.isoformat()})
-    except Exception as e:
-        print(f"ERROR activating room {room}: {e}")
-        return jsonify({"ok": False, "error": "db_error"}), 500
-
 @app.get("/debug/ping_patient")
 def debug_ping_patient():
     room = request.args.get("room", "").strip()
@@ -1890,10 +1910,3 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
-
-
-
-
-
-
-
