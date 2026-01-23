@@ -686,15 +686,15 @@ def handle_chat():
     room_number = _current_room()
 
     # --- Gate 1: if room came from URL, require signed QR ---
-    room_qp = (request.args.get("room") or "").strip()
-    sig = (request.args.get("sig") or "").strip()
-    if room_qp:
-        if not verify_room_sig(room_qp, sig):
-            return "Invalid QR code. Please re-scan the QR code in your room.", 403
+   ####### room_qp = (request.args.get("room") or "").strip()
+    ####sig = (request.args.get("sig") or "").strip()
+    ######if room_qp:
+        ####if not verify_room_sig(room_qp, sig):
+            ###return "Invalid QR code. Please re-scan the QR code in your room.", 403
 
     # --- Gate 2: room must be active (Encounter-like behavior) ---
-    if room_number and not is_room_active(room_number):
-        return f"Room {room_number} is not active right now. Please ask staff for help or re-scan later.", 403
+    #if room_number and not is_room_active(room_number):
+     #   return f"Room {room_number} is not active right now. Please ask staff for help or re-scan later.", 403
 
     # If POST carried a room value, persist it (works even if the URL lacks ?room=)
     room_from_form = (request.form.get("room") or "").strip() if request.method == "POST" else ""
@@ -1890,6 +1890,7 @@ def handle_complete_request(data):
 # --- App Startup ---
 if __name__ == "__main__":
     socketio.run(app, host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=False, use_reloader=False)
+
 
 
 
