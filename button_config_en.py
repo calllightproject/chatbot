@@ -5,7 +5,7 @@ button_data = {
     "custom_note_placeholder": "If your request isn’t listed or you need more than one item, please type a short message in the box below.",
     "send_note_button": "Send Note",
     "cna_notification": "✅ Your care team has been notified.",
-    "nurse_notification": "✅ Your care team has been notified",
+    "nurse_notification": "✅ Your care team has been notified.",
     "back_text": "⬅ Back",
     "demographic_question": "Is this your first baby?",
     "demographic_yes": "Yes",
@@ -41,7 +41,7 @@ button_data = {
     "I need help breastfeeding": {
         "action": "Notify Nurse",
         "escalation_tier": "routine",
-        "note": "✅ Your nurse has been notified. In the meantime, you can prepare by making sure your baby has a clean diaper and is undressed for skin-to-skin contact."
+        "note": "✅ Your care team has been notified. In the meantime, you can prepare by making sure your baby has a clean diaper and is undressed for skin-to-skin contact."
     },
 
     "Blood sugar": {
