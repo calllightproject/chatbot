@@ -284,8 +284,8 @@
 
         item.classList.remove('status-new', 'status-warn', 'status-urgent');
         if (ts) {
-          if (minutes >= 10) item.classList.add('status-urgent');
-          else if (minutes >= 5) item.classList.add('status-warn');
+          if (minutes >= 5) item.classList.add('status-urgent');
+          else if (minutes >= 2) item.classList.add('status-warn');
           else item.classList.add('status-new');
         }
       });
