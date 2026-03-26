@@ -52,7 +52,6 @@
       margin-left: 10px;
     }
 
-    /* Top banner that now shows dynamic nurse updates */
     .bot-reply {
       background-color: #ebf0fa;
       padding: 15px;
@@ -67,10 +66,9 @@
       transition: background-color 0.3s ease;
     }
 
-    /* 🔔 Brief highlight when status changes */
     @keyframes bannerPulse {
       0%   { background-color: #ebf0fa; }
-      30%  { background-color: #ffeaa7; }  /* soft yellow */
+      30%  { background-color: #ffeaa7; }
       60%  { background-color: #fff3c4; }
       100% { background-color: #ebf0fa; }
     }
@@ -142,7 +140,6 @@
       background-color: #093582;
     }
 
-    /* Connection-only status chip */
     #live-status {
       margin-top: 10px;
       padding: 8px;
@@ -164,26 +161,39 @@
       opacity: 0.9;
       font-size: 14px;
     }
+
+    /* ✅ NEW: Safety fallback */
+    .call-fallback {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      right: 10px;
+      font-size: 12px;
+      color: #555;
+      text-align: center;
+      background-color: #f8f8f8;
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid #e1e1e2;
+      z-index: 1000;
+    }
   </style>
 </head>
+
 <body>
   <div class="chat-box">
     <div class="header">
       <h2>Postpartum CareConnect</h2>
-      <!-- Pass room_number so reset-language keeps the room in the URL/session logic -->
       <a href="{{ url_for('reset_language', room=room_number) }}" class="language-link">Change Language</a>
     </div>
 
-    <!-- Greeting banner that will be replaced by live nurse replies -->
-    <div class="bot-reply" aria-live="polite" aria-atomic="true">
+    <div class="bot-reply">
       <p id="greeting-text" data-default="{{ reply }}">{{ reply }}</p>
     </div>
 
-    <!-- Connection confirmation only -->
     <div id="live-status"></div>
 
     <div class="options">
-      <!-- Keep ?room= in POST action -->
       <form method="POST" action="{{ url_for('handle_chat', room=room_number) }}" style="display: contents;">
         {% for option in options %}
           <button type="submit" name="user_input" value="{{ option }}">{{ option }}</button>
@@ -192,154 +202,59 @@
     </div>
 
     <div class="note-section">
-      <!-- Keep ?room= in POST action -->
       <form method="POST" action="{{ url_for('handle_chat', room=room_number) }}">
         <input type="hidden" name="action" value="send_note">
-        <label for="custom_note" class="note-label">
-          {{ button_data.get(
-            'custom_note_placeholder',
-            "If your request isn’t listed or you need more than one item, please type a short message in the box below."
-          ) }}
+        <label class="note-label">
+          If your request isn’t listed, type a message below.
         </label>
         <div class="note-form">
-          <textarea id="custom_note"
-                    name="custom_note"
-                    rows="2"
-                    placeholder="{{ button_data.get('empty_custom_note', 'Type your message here...') }}"></textarea>
-          <button type="submit">{{ button_data.get('send_note_button', 'Send Note') }}</button>
+          <textarea name="custom_note" rows="2" placeholder="Type here..."></textarea>
+          <button type="submit">Send</button>
         </div>
       </form>
     </div>
-
-    <!-- Socket.IO -->
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-    <script>
-      // ---------- room resolution ----------
-      const TEMPLATE_ROOM = "{{ room_number or '' }}";
-      const urlParams = new URLSearchParams(location.search);
-      const urlRoomRaw = urlParams.get('room') || '';
-      const urlRoom = /^\d+$/.test(urlRoomRaw) ? urlRoomRaw : '';
-      const ROOM_NUMBER = (TEMPLATE_ROOM && TEMPLATE_ROOM !== 'None') ? TEMPLATE_ROOM : urlRoom;
-
-      const statusEl = document.getElementById('live-status');
-      const greetingEl = document.getElementById('greeting-text');
-
-      function toast(msg) {
-        const el = document.createElement('div');
-        el.className = 'toast';
-        el.textContent = msg;
-        document.body.appendChild(el);
-        setTimeout(() => el.remove(), 2800);
-      }
-
-      const defaultGreeting = greetingEl?.dataset?.default || (greetingEl?.textContent ?? "Hello! How can I help you?");
-      function setGreeting(msg) { if (greetingEl) greetingEl.textContent = msg; }
-      function resetGreeting() { if (greetingEl) greetingEl.textContent = defaultGreeting; }
-
-      // 🔔 Soft flash for the top banner
-      function flashBanner() {
-        const banner = document.querySelector(".bot-reply");
-        if (!banner) return;
-        banner.classList.remove("flash");  // reset if still active
-        void banner.offsetWidth;           // force restart animation
-        banner.classList.add("flash");
-      }
-
-      function showLiveConnected() {
-        statusEl.textContent = "Live updates enabled for Room " + (ROOM_NUMBER || "—");
-        statusEl.style.display = 'block';
-      }
-      function showReconnecting() {
-        statusEl.textContent = "Reconnecting…";
-        statusEl.style.display = 'block';
-      }
-      function showConnectError(err) {
-        const msg = "Connection error" + (err ? (": " + err) : "");
-        statusEl.textContent = msg;
-        statusEl.style.display = 'block';
-      }
-
-      if (!ROOM_NUMBER) showConnectError("No room number found. Try /chat?room=241");
-
-      const patientSocket = io('/patient', {
-        query: { room_id: ROOM_NUMBER || '' },
-        transports: ['websocket','polling'],
-        reconnection: true,
-        reconnectionAttempts: 10,
-        reconnectionDelayMax: 5000
-      });
-
-      patientSocket.on('connect', () => {
-        if (ROOM_NUMBER) {
-          patientSocket.emit('patient:join', { room_id: String(ROOM_NUMBER) });
-        }
-      });
-
-      patientSocket.on('patient:joined', (payload) => {
-        if (String(payload.room_id) === String(ROOM_NUMBER)) {
-          showLiveConnected();
-          resetGreeting();
-          cancelNudge();
-        }
-      });
-
-      patientSocket.on('patient:error', err => showConnectError("Room join failed."));
-      patientSocket.on('connect_error', err => showConnectError(err?.message || "unknown"));
-
-      let nudgeTimer = null;
-      function cancelNudge() {
-        if (nudgeTimer) {
-          clearTimeout(nudgeTimer);
-          nudgeTimer = null;
-        }
-      }
-      function startNudge(ms) {
-        cancelNudge();
-        nudgeTimer = setTimeout(() => {
-          toast("Still in queue — a team member will be with you soon.");
-        }, ms);
-      }
-
-      patientSocket.on('request:received', data => {
-        if (String(data.room_id) !== String(ROOM_NUMBER)) return;
-        setGreeting("We received your request and are coordinating support.");
-        toast("Request received.");
-        flashBanner();  // highlight banner
-        startNudge(6 * 60 * 1000);
-      });
-
-      patientSocket.on('request:status', data => {
-        if (String(data.room_id) !== String(ROOM_NUMBER)) return;
-        cancelNudge();
-        const who = data.nurse ? ` (${data.nurse})` : "";
-        const status = (data.status || "").toLowerCase();
-
-        if (status === "ack") {
-          setGreeting(`Your request has been acknowledged${who}.`);
-          toast("Request acknowledged.");
-          flashBanner();
-        } else if (status === "omw") {
-          setGreeting(`Your nurse/CNA is on the way${who}.`);
-          toast("On the way.");
-          flashBanner();
-        } else if (status === "asap") {
-          setGreeting(`Your nurse/CNA is in another room and will be with you as soon as possible${who}.`);
-          toast("They’ll be there ASAP.");
-          flashBanner();
-        }
-      });
-
-      patientSocket.on('request:done', data => {
-        if (String(data.room_id) !== String(ROOM_NUMBER)) return;
-        cancelNudge();
-        setGreeting("All set — your request has been marked complete.");
-        toast("Request completed.");
-        flashBanner();
-        setTimeout(resetGreeting, 8000);
-      });
-
-      patientSocket.on('disconnect', showReconnecting);
-    </script>
   </div>
+
+  <!-- Socket.IO -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script>
+    const ROOM_NUMBER = "{{ room_number }}";
+    const greetingEl = document.getElementById('greeting-text');
+
+    function setGreeting(msg) {
+      greetingEl.textContent = msg;
+    }
+
+    const socket = io('/patient');
+
+    socket.on('connect', () => {
+      socket.emit('patient:join', { room_id: ROOM_NUMBER });
+    });
+
+    socket.on('request:received', () => {
+      setGreeting("We received your request and are coordinating support.");
+    });
+
+    socket.on('request:status', (data) => {
+      if (data.status === "ack") {
+        setGreeting("Your request has been acknowledged.");
+      } else if (data.status === "omw") {
+        setGreeting("A team member is on the way.");
+      }
+    });
+
+    socket.on('request:done', () => {
+      setGreeting("All set — your request has been completed.");
+    });
+  </script>
+
+  <!-- ✅ NEW: Safety fallback message -->
+  <div class="call-fallback">
+    ⚠️ For urgent needs, use the red call light or dial:
+    <br>
+    <strong>1-6666</strong> (hospital phone) or 
+    <strong>602-747-3666</strong> (cell)
+  </div>
+
 </body>
 </html>
