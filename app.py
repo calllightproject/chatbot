@@ -749,7 +749,7 @@ def handle_chat():
                     role="nurse",
                     subject="EMERGENCY – patient pressed emergency button",
                     user_input=request_text,
-                    reply_message=button_data.get("nurse_notification", "Your nurse has been notified."),
+                    reply_message=button_data.get("nurse_notification", "Your care team has been notified."),
                     tier_override="emergent",   # ✅ FORCE emergent
                     classify_from_text=False,   # don't re-score text
                     from_button=True,
