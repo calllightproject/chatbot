@@ -162,19 +162,19 @@
       font-size: 14px;
     }
 
-    /* ✅ NEW: Safety fallback */
+    /* ✅ UPDATED: Better urgent fallback styling */
     .call-fallback {
       position: fixed;
       bottom: 10px;
       left: 10px;
       right: 10px;
-      font-size: 12px;
-      color: #555;
+      font-size: 13px;
+      color: #444;
       text-align: center;
-      background-color: #f8f8f8;
-      padding: 8px;
+      background-color: #fff8e1;
+      padding: 10px;
       border-radius: 8px;
-      border: 1px solid #e1e1e2;
+      border: 1px solid #f0d98c;
       z-index: 1000;
     }
   </style>
@@ -239,7 +239,7 @@
       if (data.status === "ack") {
         setGreeting("Your request has been acknowledged.");
       } else if (data.status === "omw") {
-        setGreeting("A team member is on the way.");
+        setGreeting("A care team member is on the way.");
       }
     });
 
@@ -248,9 +248,9 @@
     });
   </script>
 
-  <!-- ✅ NEW: Safety fallback message -->
+  <!-- ✅ UPDATED urgent footer -->
   <div class="call-fallback">
-    ⚠️ For urgent needs, use the red call light or dial:
+    ⚠️ <strong>For urgent needs</strong>, use the red call light or dial:
     <br>
     <strong>1-6666</strong> (hospital phone) or 
     <strong>602-747-3666</strong> (cell)
