@@ -64,7 +64,7 @@
     #requests-list { list-style:none; padding:0; margin:16px 0 0 0; }
     .request-item {
       display:flex; align-items:center; border:1px solid #ddd; padding:15px; margin-bottom:10px;
-      border-radius:8px; background-color:#fff; gap:15px; transition: background-color .5s ease, opacity .3s.ease;
+      border-radius:8px; background-color:#fff; gap:15px; transition: background-color .5s ease, opacity .3s ease;
     }
     .request-item.cna   { border-left: 6px solid var(--accent-blue); }
     .request-item.nurse { border-left: 6px solid #d43f27; }
@@ -84,9 +84,16 @@
     .complete-btn  { background-color: #6c757d; }
     .request-item button:disabled { opacity:.5; cursor:not-allowed; }
 
-    .status-new    { background-color: #eefcf1; }
-    .status-warn   { background-color: #fff5dd; }
-    .status-urgent { background-color: #fde8e8; }
+    /* Updated timer colors */
+    .status-new {
+      background-color: #e6f4ea;
+    }
+    .status-warn {
+      background-color: #fff3cd;
+    }
+    .status-urgent {
+      background-color: #f8d7da;
+    }
 
     .toolbar { display:flex; align-items:center; gap:10px; margin-top:8px; }
     .muted { font-size:.85rem; color:#64748b; }
@@ -274,19 +281,27 @@
     function updateAllTimersAndColors() {
       const items = document.querySelectorAll('#requests-list .request-item');
       const now = new Date();
+
       items.forEach(item => {
         const raw = item.dataset.timestamp || '';
         const ts = raw ? new Date(raw) : null;
         const minutes = ts ? Math.floor((now - ts) / 60000) : 0;
 
         const tsEl = item.querySelector('.timestamp');
-        if (tsEl) tsEl.textContent = ts ? (minutes > 0 ? `${minutes}m ago` : 'Just now') : '';
+        if (tsEl) {
+          tsEl.textContent = ts ? (minutes > 0 ? `${minutes}m ago` : 'Just now') : '';
+        }
 
         item.classList.remove('status-new', 'status-warn', 'status-urgent');
+
         if (ts) {
-          if (minutes >= 5) item.classList.add('status-urgent');
-          else if (minutes >= 2) item.classList.add('status-warn');
-          else item.classList.add('status-new');
+          if (minutes >= 5) {
+            item.classList.add('status-urgent');
+          } else if (minutes >= 2) {
+            item.classList.add('status-warn');
+          } else {
+            item.classList.add('status-new');
+          }
         }
       });
     }
@@ -435,7 +450,7 @@
       if (item) {
         item.classList.remove('cna');
         item.classList.add('nurse');
-        item.dataset.role = 'nurse';  // keep dataset in sync
+        item.dataset.role = 'nurse';
         const roleSpan = item.querySelector('.role-span');
         if (roleSpan) roleSpan.textContent = 'For: NURSE';
         const deferBtn = item.querySelector('.defer-btn');
@@ -446,48 +461,42 @@
     });
 
     socket.on('remove_request', function(data) {
-  let el = null;
+      let el = null;
 
-  // 1) Try to find by id
-  if (data.id) el = document.getElementById(data.id);
+      if (data.id) el = document.getElementById(data.id);
 
-  // 2) Fallback: match by room + normalized request text
-  if (!el && (data.request || data.room)) {
-    const items = document.querySelectorAll('#requests-list .request-item');
-    el = Array.from(items).find(li => {
-      const sameText = data.request
-        ? (li.dataset.request || '') === normalizeText(data.request)
-        : true;
-      const sameRoom = data.room
-        ? (li.dataset.room || '') === data.room
-        : true;
-      return sameText && sameRoom;
-    });
-  }
-
-  if (el) {
-    // Clear local status caches
-    clearStatusFor(el.dataset.id, el.dataset.room, el.dataset.request);
-
-    el.style.opacity = '0';
-    setTimeout(() => {
-      el.remove();
-
-      // 🔹 NEW: also drop the composite-key cache entry so it
-      // doesn't “ghost” back in on a later refresh.
-      if (data.room && data.request) {
-        LocalStatusByKey.delete(
-          makeCompositeKey(data.room, data.request || "")
-        );
+      if (!el && (data.request || data.room)) {
+        const items = document.querySelectorAll('#requests-list .request-item');
+        el = Array.from(items).find(li => {
+          const sameText = data.request
+            ? (li.dataset.request || '') === normalizeText(data.request)
+            : true;
+          const sameRoom = data.room
+            ? (li.dataset.room || '') === data.room
+            : true;
+          return sameText && sameRoom;
+        });
       }
 
-      toggleEmptyState();
-    }, 300);
-  } else {
-    toggleEmptyState();
-  }
-});
+      if (el) {
+        clearStatusFor(el.dataset.id, el.dataset.room, el.dataset.request);
 
+        el.style.opacity = '0';
+        setTimeout(() => {
+          el.remove();
+
+          if (data.room && data.request) {
+            LocalStatusByKey.delete(
+              makeCompositeKey(data.room, data.request || "")
+            );
+          }
+
+          toggleEmptyState();
+        }, 300);
+      } else {
+        toggleEmptyState();
+      }
+    });
 
     socket.on('request_status', function(data) {
       const id = data?.id;
@@ -683,9 +692,6 @@
       toggleEmptyState();
     }
 
-    /* -----------------------
-       VISIBILITY REFRESH
-       ----------------------- */
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") {
         pollActiveRequests();
@@ -695,4 +701,3 @@
   </script>
 </body>
 </html>
-
