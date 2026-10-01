@@ -924,6 +924,7 @@ def dashboard():
 @app.route('/analytics')
 def analytics():
     demo_mode = request.args.get("demo") == "1"
+
     avg_response_time = "N/A"
     top_requests_labels, top_requests_values = [], []
     most_requested_labels, most_requested_values = [], []
@@ -967,7 +968,7 @@ def analytics():
             most_requested_labels = [row[0] for row in most_requested_result]
             most_requested_values = [row[1] for row in most_requested_result]
 
-                        requests_by_hour_labels = [f"{h}:00" for h in range(24)]
+            requests_by_hour_labels = [f"{h}:00" for h in range(24)]
 
             if demo_mode:
                 requests_by_hour_values = [
@@ -989,7 +990,9 @@ def analytics():
                 for hour, count in requests_by_hour_result:
                     hourly_counts[int(hour)] = count
 
-                requests_by_hour_values = [hourly_counts[h] for h in range(24)]
+                requests_by_hour_values = [
+                    hourly_counts[h] for h in range(24)
+                ]
 
             first_baby_result = connection.execute(text("""
                 SELECT user_input, COUNT(id) AS count
