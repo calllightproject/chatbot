@@ -931,13 +931,17 @@ def analytics():
     multi_baby_labels, multi_baby_values = [], []
     try:
         with engine.connect() as connection:
-            avg_time_result = connection.execute(text("""
-                SELECT AVG(EXTRACT(EPOCH FROM (completion_timestamp - timestamp))) as avg_seconds
+                        median_ack_result = connection.execute(text("""
+                SELECT PERCENTILE_CONT(0.5)
+                WITHIN GROUP (
+                    ORDER BY EXTRACT(EPOCH FROM (acknowledgement_timestamp - timestamp))
+                )
                 FROM requests
-                WHERE completion_timestamp IS NOT NULL;
+                WHERE acknowledgement_timestamp IS NOT NULL;
             """)).scalar_one_or_none()
-            if avg_time_result is not None:
-                minutes, seconds = divmod(int(avg_time_result), 60)
+
+            if median_ack_result is not None:
+                minutes, seconds = divmod(int(median_ack_result), 60)
                 avg_response_time = f"{minutes}m {seconds}s"
 
             top_requests_result = connection.execute(text("""
