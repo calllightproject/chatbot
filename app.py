@@ -967,20 +967,29 @@ def analytics():
             most_requested_labels = [row[0] for row in most_requested_result]
             most_requested_values = [row[1] for row in most_requested_result]
 
-            requests_by_hour_result = connection.execute(text("""
-                SELECT EXTRACT(HOUR FROM timestamp) AS hour, COUNT(id)
-                FROM requests
-                GROUP BY hour
-                ORDER BY hour;
-            """)).fetchall()
+                        requests_by_hour_labels = [f"{h}:00" for h in range(24)]
 
-            hourly_counts = defaultdict(int)
+            if demo_mode:
+                requests_by_hour_values = [
+                    12, 10, 8, 7, 6, 7,
+                    10, 22, 31, 40, 48, 44,
+                    38, 34, 32, 35, 39, 42,
+                    37, 30, 25, 20, 16, 13
+                ]
+            else:
+                requests_by_hour_result = connection.execute(text("""
+                    SELECT EXTRACT(HOUR FROM timestamp) AS hour, COUNT(id)
+                    FROM requests
+                    GROUP BY hour
+                    ORDER BY hour;
+                """)).fetchall()
 
-            for hour, count in requests_by_hour_result:
-                hourly_counts[int(hour)] = count
+                hourly_counts = defaultdict(int)
 
-            requests_by_hour_labels = [f"{h}:00" for h in range(24)]
-            requests_by_hour_values = [hourly_counts[h] for h in range(24)]
+                for hour, count in requests_by_hour_result:
+                    hourly_counts[int(hour)] = count
+
+                requests_by_hour_values = [hourly_counts[h] for h in range(24)]
 
             first_baby_result = connection.execute(text("""
                 SELECT user_input, COUNT(id) AS count
