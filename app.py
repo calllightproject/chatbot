@@ -1697,6 +1697,27 @@ def handle_acknowledge(data):
             role = "nurse"
 
         print(f"[acknowledge_request] RESOLVED room={room_number} status={status} role={role}")
+                # Save the FIRST staff response time for analytics
+        request_id = data.get("request_id")
+        if request_id:
+            now_utc = datetime.now(timezone.utc)
+
+            with engine.connect() as connection:
+                with connection.begin():
+                    connection.execute(
+                        text("""
+                            UPDATE requests
+                            SET acknowledgement_timestamp = COALESCE(
+                                acknowledgement_timestamp,
+                                :now
+                            )
+                            WHERE request_id = :request_id;
+                        """),
+                        {
+                            "now": now_utc,
+                            "request_id": request_id
+                        }
+                    )
 
         # 5) emit to patient
         if room_number and _valid_room(str(room_number)):
