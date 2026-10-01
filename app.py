@@ -211,17 +211,16 @@ def setup_database():
                 except Exception:
                     pass
 
-        # Legacy safety: make sure deferral_timestamp exists
+                # Make sure acknowledgement_timestamp exists
         try:
             with engine.connect() as connection:
                 with connection.begin():
                     connection.execute(text("""
                         ALTER TABLE requests
-                        ADD COLUMN IF NOT EXISTS deferral_timestamp TIMESTAMPTZ;
+                        ADD COLUMN IF NOT EXISTS acknowledgement_timestamp TIMESTAMPTZ;
                     """))
-        except Exception:
-            pass
-
+        except Exception as e:
+            print(f"WARNING: Could not add acknowledgement_timestamp: {e}")
         print("Database setup complete. Tables are ready.")
     except Exception as e:
         print(f"CRITICAL ERROR during database setup: {e}")
