@@ -923,6 +923,7 @@ def dashboard():
 # --- Analytics ---
 @app.route('/analytics')
 def analytics():
+    demo_mode = request.args.get("demo") == "1"
     avg_response_time = "N/A"
     top_requests_labels, top_requests_values = [], []
     most_requested_labels, most_requested_values = [], []
