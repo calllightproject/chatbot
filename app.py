@@ -5,6 +5,7 @@ import os
 import json
 import smtplib
 import importlib
+from collections import defaultdict
 
 from datetime import datetime, date, time, timezone
 from email.message import EmailMessage
