@@ -814,11 +814,19 @@ def handle_chat():
                 elif not session["options"]:
                     session["options"] = button_data["main_buttons"]
 
-                # Action button -> notify CNA/Nurse + log
+              # Action button -> notify CNA/Nurse + log
                 if "action" in button_info:
                     action = button_info["action"]
-                    role = "cna" if action == "Notify CNA" else "nurse"
+
+                    cna_actions = {
+                        "Notify CNA",
+                        "Notificar al asistente de enfermería",
+                        "通知护理助理"
+                    }
+
+                    role = "cna" if action in cna_actions else "nurse"
                     subject = f"{role.upper()} Request"
+
                     notification_message = button_info.get(
                         "note",
                         button_data.get(f"{role}_notification", "Your request has been sent.")
@@ -830,15 +838,14 @@ def handle_chat():
                         subject=subject,
                         user_input=user_input,
                         reply_message=notification_message,
-                        tier_override=None,        # no forced emergent
-                        classify_from_text=False,  # ✅ BUTTON: no emergent scoring
+                        tier_override=None,
+                        classify_from_text=False,
                         from_button=True,
                     )
                     session["options"] = button_data["main_buttons"]
 
                     if room_number:
                         _emit_received_for(room_number, user_input, kind="option")
-
             # ----------------------------
             # Unknown input
             # ----------------------------
