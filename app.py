@@ -863,12 +863,13 @@ def handle_chat():
     reply = session.pop("reply", button_data["greeting"])
     options = session.pop("options", button_data["main_buttons"])
     return render_template(
-        "chat.html",
-        reply=reply,
-        options=options,
-        button_data=button_data,
-        room_number=room_number,  # used by chat.html Socket.IO connect
-    )
+    "chat.html",
+    reply=reply,
+    options=options,
+    button_data=button_data,
+    room_number=room_number,
+    lang=lang,
+)
 @app.route("/reset-language")
 def reset_language():
     """
