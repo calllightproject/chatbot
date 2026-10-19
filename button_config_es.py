@@ -6,8 +6,8 @@ button_data = {
     "empty_custom_note": "Por favor, escriba un mensaje en el cuadro.",
     "send_note_button": "Enviar nota",
     "back_text": "⬅ Regresar",
-    "cna_notification": "✅ Se ha notificado al asistente de enfermería.",
-    "nurse_notification": "✅ Se ha notificado a la enfermera.",
+    "cna_notification": "✅ Se ha notificado a su equipo de atención.",
+    "nurse_notification": "✅ Se ha notificado a su equipo de atención.",
     "demographic_question": "¿Es este su primer bebé?",
     "demographic_yes": "Sí",
     "demographic_no": "No",
@@ -43,7 +43,7 @@ button_data = {
     "Necesito ayuda para amamantar": {
         "action": "Notificar a la enfermera",
         "escalation_tier": "routine",
-        "note": "✅ Se ha notificado a su enfermera. Mientras tanto, puede prepararse asegurándose de que su bebé tenga un pañal limpio y esté desvestido para el contacto piel con piel."
+        "note": "✅ Se ha notificado a su equipo de atención. Mientras tanto, puede prepararse asegurándose de que su bebé tenga un pañal limpio y esté desvestido para el contacto piel con piel."
     },
 
     "Azúcar en la sangre": {
