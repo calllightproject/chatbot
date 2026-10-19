@@ -1,9 +1,11 @@
+
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ lang | default('en') }}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Postpartum CareConnect</title>
+
   <style>
     :root {
       --core-blue: #00205b;
@@ -14,7 +16,8 @@
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+                   Roboto, Helvetica, Arial, sans-serif;
       padding: 20px;
       background-color: var(--light-gray-background);
       color: var(--neutral-gray-text);
@@ -98,6 +101,8 @@
       background-color: #093582;
     }
 
+    /* Free-text note styling retained for future use */
+
     .note-section {
       border-top: 1px solid #e1e1e2;
       padding-top: 20px;
@@ -162,7 +167,6 @@
       font-size: 14px;
     }
 
-    /* ✅ UPDATED: Better urgent fallback styling */
     .call-fallback {
       position: fixed;
       bottom: 10px;
@@ -181,80 +185,207 @@
 </head>
 
 <body>
+
   <div class="chat-box">
+
     <div class="header">
       <h2>Postpartum CareConnect</h2>
-      <a href="{{ url_for('reset_language', room=room_number) }}" class="language-link">Change Language</a>
+
+      <a href="{{ url_for('reset_language', room=room_number) }}"
+         class="language-link">
+        {% if lang == 'es' %}
+          Cambiar idioma
+        {% elif lang == 'zh' %}
+          切换语言
+        {% else %}
+          Change Language
+        {% endif %}
+      </a>
     </div>
 
-    <div class="bot-reply">
+    <!-- Patient greeting and live care team notifications -->
+
+    <div class="bot-reply" role="status" aria-live="polite" aria-atomic="true">
       <p id="greeting-text" data-default="{{ reply }}">{{ reply }}</p>
     </div>
 
     <div id="live-status"></div>
 
+    <!-- Preset patient request buttons -->
+
     <div class="options">
-      <form method="POST" action="{{ url_for('handle_chat', room=room_number) }}" style="display: contents;">
+      <form method="POST"
+            action="{{ url_for('handle_chat', room=room_number) }}"
+            style="display: contents;">
+
         {% for option in options %}
-          <button type="submit" name="user_input" value="{{ option }}">{{ option }}</button>
+          <button type="submit"
+                  name="user_input"
+                  value="{{ option }}">
+            {{ option }}
+          </button>
         {% endfor %}
+
       </form>
     </div>
+
     <!--
+      FREE-TEXT MESSAGE BOX DISABLED
+
+      Retained for potential future use.
+      To reactivate, remove the surrounding HTML comment.
+
     <div class="note-section">
-      <form method="POST" action="{{ url_for('handle_chat', room=room_number) }}">
+      <form method="POST"
+            action="{{ url_for('handle_chat', room=room_number) }}">
+
         <input type="hidden" name="action" value="send_note">
+
         <label class="note-label">
-          If your request isn’t listed, type a message below.
+          If your request isn't listed, type a message below.
         </label>
+
         <div class="note-form">
-          <textarea name="custom_note" rows="2" placeholder="Type here..."></textarea>
+          <textarea name="custom_note"
+                    rows="2"
+                    placeholder="Type here..."></textarea>
+
           <button type="submit">Send</button>
         </div>
+
       </form>
     </div>
+
+    END DISABLED FREE-TEXT SECTION
+    -->
+
   </div>
-  -->  
 
-  <!-- Socket.IO -->
+  <!-- Socket.IO library -->
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script>
-    const ROOM_NUMBER = "{{ room_number }}";
-    const greetingEl = document.getElementById('greeting-text');
 
-    function setGreeting(msg) {
-      greetingEl.textContent = msg;
+  <script>
+    const ROOM_NUMBER = {{ room_number | tojson }};
+    const LANGUAGE = {{ lang | default('en') | tojson }};
+
+    const greetingEl = document.getElementById("greeting-text");
+
+    // Care team notifications in the patient's selected language.
+
+    const messages = {
+      en: {
+        received: "Your care team has been notified.",
+        ack: "Your care team has acknowledged your request.",
+        omw: "A member of your care team is on the way.",
+        done: "Your request has been completed.",
+        asap: "Your care team is aware of your request."
+      },
+
+      es: {
+        received: "Se ha notificado a su equipo de atención.",
+        ack: "Su equipo de atención ha confirmado su solicitud.",
+        omw: "Un miembro de su equipo de atención está en camino.",
+        done: "Su solicitud ha sido completada.",
+        asap: "Su equipo de atención está al tanto de su solicitud."
+      },
+
+      zh: {
+        received: "已通知您的护理团队。",
+        ack: "您的护理团队已确认您的请求。",
+        omw: "一名护理团队成员正在赶来。",
+        done: "您的请求已处理完成。",
+        asap: "您的护理团队已知悉您的请求。"
+      }
+    };
+
+    const msg = messages[LANGUAGE] || messages.en;
+
+    function setGreeting(text) {
+      greetingEl.textContent = text;
+
+      const banner = greetingEl.closest(".bot-reply");
+
+      if (banner) {
+        banner.classList.remove("flash");
+
+        // Restart animation when another notification arrives.
+        void banner.offsetWidth;
+
+        banner.classList.add("flash");
+      }
     }
 
-    const socket = io('/patient');
+    // Connect patient to their room-specific Socket.IO channel.
 
-    socket.on('connect', () => {
-      socket.emit('patient:join', { room_id: ROOM_NUMBER });
+    const socket = io("/patient");
+
+    socket.on("connect", () => {
+      socket.emit("patient:join", {
+        room_id: ROOM_NUMBER
+      });
     });
 
-    socket.on('request:received', () => {
-      setGreeting("We received your request and are coordinating support.");
+    // Request received
+
+    socket.on("request:received", () => {
+      setGreeting(msg.received);
     });
 
-    socket.on('request:status', (data) => {
+    // Request acknowledged / team member on the way
+
+    socket.on("request:status", (data) => {
       if (data.status === "ack") {
-        setGreeting("Your request has been acknowledged.");
+        setGreeting(msg.ack);
       } else if (data.status === "omw") {
-        setGreeting("A care team member is on the way.");
+        setGreeting(msg.omw);
+      } else if (data.status === "asap") {
+        setGreeting(msg.asap);
       }
     });
 
-    socket.on('request:done', () => {
-      setGreeting("All set — your request has been completed.");
+    // Request completed
+
+    socket.on("request:done", () => {
+      setGreeting(msg.done);
     });
+
   </script>
 
-  <!-- ✅ UPDATED urgent footer -->
+  <!-- Urgent needs instructions -->
+
   <div class="call-fallback">
-    ⚠️ <strong>For urgent needs</strong>, use the red call light or dial:
+    {% if lang == 'es' %}
+      ⚠️ <strong>Para necesidades urgentes</strong>,
+      use el botón rojo de llamada o marque:
+    {% elif lang == 'zh' %}
+      ⚠️ <strong>如有紧急需求</strong>，
+      请使用红色呼叫按钮或拨打：
+    {% else %}
+      ⚠️ <strong>For urgent needs</strong>,
+      use the red call light or dial:
+    {% endif %}
+
     <br>
-    <strong>1-6666</strong> (hospital phone) or 
-    <strong>602-747-3666</strong> (cell)
+
+    <strong>1-6666</strong>
+    {% if lang == 'es' %}
+      (teléfono del hospital)
+    {% elif lang == 'zh' %}
+      （医院电话）
+    {% else %}
+      (hospital phone)
+    {% endif %}
+
+    or
+
+    <strong>602-747-3666</strong>
+    {% if lang == 'es' %}
+      (celular)
+    {% elif lang == 'zh' %}
+      （手机）
+    {% else %}
+      (cell)
+    {% endif %}
   </div>
 
 </body>
